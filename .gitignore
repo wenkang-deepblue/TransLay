@@ -1,0 +1,14 @@
+# Docs
+Docs/
+
+# AUD Files
+*AUD*.*
+
+# DS_Store
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
