@@ -1,0 +1,12 @@
+{
+  "name": "translay",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "echo \"No tests configured yet\"",
+    "test:integration": "echo \"No integration tests configured yet\""
+  }
+}

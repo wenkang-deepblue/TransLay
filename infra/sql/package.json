@@ -1,0 +1,11 @@
+{
+  "name": "@translay/infra-sql",
+  "private": true,
+  "scripts": {
+    "migrate": "node migrate.mjs",
+    "migrate:status": "node migrate.mjs --status"
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
+  }
+}

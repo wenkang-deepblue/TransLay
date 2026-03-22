@@ -12,3 +12,14 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# node
+node_modules/
+
+# Build artifacts
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
