@@ -8,11 +8,18 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "express": "^4.21.0"
+    "@google-cloud/tasks": "^6.2.1",
+    "@translay/shared-config": "*",
+    "@translay/shared-contracts": "*",
+    "@translay/shared-domain": "*",
+    "express": "^4.21.0",
+    "ioredis": "^5.10.1",
+    "pg": "^8.20.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
+    "@types/pg": "^8.20.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }

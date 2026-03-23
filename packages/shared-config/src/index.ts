@@ -43,6 +43,11 @@ export function loadConfig() {
     cloudTasks: {
       queueName: optionalEnv("CLOUD_TASKS_QUEUE_NAME", "YOUR_CLOUD_TASKS_QUEUE"),
       location: optionalEnv("CLOUD_TASKS_LOCATION", "us-central1"),
+      workerUrl: optionalEnv("WORKER_URL", ""),
+      invokerServiceAccount: optionalEnv(
+        "CLOUD_TASKS_INVOKER_SA",
+        ""
+      ),
     },
 
     session: {

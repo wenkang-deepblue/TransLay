@@ -1,33 +1,73 @@
 import express, { type Request, type Response, type NextFunction } from "express";
+import { loadConfig } from "@translay/shared-config";
+import { getPool, shutdownPool } from "./db/pool";
+import { getRedis, shutdownRedis } from "./cache/redis";
+import { googleAuthMiddleware } from "./middleware/auth";
+import { portalSessionMiddleware } from "./middleware/session";
+import { healthHandler } from "./modules/health/handler";
+import { entitlementHandler } from "./modules/entitlement/handler";
+import {
+  sessionStartHandler,
+  sessionConsumeHandler,
+  sessionMeHandler,
+  sessionLogoutHandler,
+} from "./modules/session/handler";
+import { createJobHandler, getJobHandler } from "./modules/jobs/handler";
+import { asyncHandler } from "./utils/async-handler";
 
+const config = loadConfig();
 const app = express();
+const pool = getPool(config);
+const redis = getRedis(config);
 
-const portRaw = parseInt(process.env.PORT ?? "8080", 10);
-if (isNaN(portRaw) || portRaw < 1 || portRaw > 65535) {
-  throw new Error(`Invalid PORT: ${process.env.PORT}`);
-}
-const PORT = portRaw;
+// Body parsing — limit size to prevent abuse
+app.use(express.json({ limit: "1mb" }));
 
-app.use(express.json());
+// Trust proxy headers (Cloud Run sits behind a load balancer)
+app.set("trust proxy", true);
 
-app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, time: new Date().toISOString() });
-});
+// --- Public routes (no auth) ---
+app.get("/api/health", asyncHandler(healthHandler(pool, redis)));
 
-// Global error handler — returns structured JSON, never raw stack traces.
+// --- Portal routes (session cookie auth) ---
+const portalSession = portalSessionMiddleware(redis, config);
+app.post("/api/session/consume", asyncHandler(sessionConsumeHandler(pool, redis, config)));
+app.get("/api/session/me", portalSession, asyncHandler(sessionMeHandler(pool)));
+app.post("/api/session/logout", portalSession, asyncHandler(sessionLogoutHandler(redis, config)));
+
+// --- Add-on routes (Google token auth) ---
+const googleAuth = googleAuthMiddleware(pool, redis);
+app.get("/api/entitlement", googleAuth, asyncHandler(entitlementHandler(pool)));
+app.post("/api/session/start", googleAuth, asyncHandler(sessionStartHandler(redis, config)));
+app.post("/api/jobs", googleAuth, asyncHandler(createJobHandler(pool, redis, config)));
+app.get("/api/jobs/:jobId", googleAuth, asyncHandler(getJobHandler(pool, redis)));
+
+// I9: Generic error code in response, stack trace logged server-side only
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("Unhandled error:", err.message);
+  console.error("Unhandled error:", err.stack ?? err.message);
   res.status(500).json({
-    error: "JOB_INTERNAL_ERROR",
+    error: "INTERNAL_ERROR",
     message: "Internal server error",
   });
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`TransLay control-plane listening on port ${PORT}`);
+// --- Start server ---
+const server = app.listen(config.port, () => {
+  console.log(`TransLay control-plane listening on port ${config.port}`);
 });
 
 server.on("error", (err) => {
   console.error("Server failed to start:", err);
   process.exit(1);
 });
+
+// S3: Promise.allSettled ensures one failing cleanup doesn't block the other
+async function shutdown() {
+  console.log("Shutting down...");
+  server.close();
+  await Promise.allSettled([shutdownPool(), shutdownRedis()]);
+  process.exit(0);
+}
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
