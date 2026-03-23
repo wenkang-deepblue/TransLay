@@ -20,9 +20,24 @@ function requireIntEnv(name: string, raw: string): number {
 }
 
 export function loadConfig() {
+  const nodeEnv = optionalEnv("NODE_ENV", "development");
+  const sessionSecret = requireEnv("SESSION_SECRET");
+
+  // S10: SESSION_SECRET must be at least 32 characters
+  if (sessionSecret.length < 32) {
+    throw new Error("SESSION_SECRET must be at least 32 characters");
+  }
+
+  const workerUrl = optionalEnv("WORKER_URL", "");
+
+  // S10: WORKER_URL must be set in production
+  if (nodeEnv === "production" && !workerUrl) {
+    throw new Error("WORKER_URL is required in production");
+  }
+
   return {
     port: requireIntEnv("PORT", optionalEnv("PORT", "8080")),
-    nodeEnv: optionalEnv("NODE_ENV", "development"),
+    nodeEnv,
 
     gcpProjectId: requireEnv("GCP_PROJECT_ID"),
     gcpRegion: optionalEnv("GCP_REGION", "us-central1"),
@@ -43,7 +58,7 @@ export function loadConfig() {
     cloudTasks: {
       queueName: optionalEnv("CLOUD_TASKS_QUEUE_NAME", "YOUR_CLOUD_TASKS_QUEUE"),
       location: optionalEnv("CLOUD_TASKS_LOCATION", "us-central1"),
-      workerUrl: optionalEnv("WORKER_URL", ""),
+      workerUrl,
       invokerServiceAccount: optionalEnv(
         "CLOUD_TASKS_INVOKER_SA",
         ""
@@ -51,7 +66,7 @@ export function loadConfig() {
     },
 
     session: {
-      secret: requireEnv("SESSION_SECRET"),
+      secret: sessionSecret,
       cookieName: "translay_sid",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     },

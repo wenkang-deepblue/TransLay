@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Google Sans', Roboto, Arial, sans-serif;
+      font-size: 13px;
+      color: #202124;
+      padding: 16px;
+      background: #fff;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .header-logo {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: #4285f4;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .header-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #202124;
+    }
+
+    /* ── Document info ── */
+    .doc-info {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      font-size: 12px;
+      color: #5f6368;
+    }
+    .doc-name {
+      font-weight: 500;
+      color: #202124;
+      word-break: break-word;
+    }
+    .doc-host {
+      margin-top: 2px;
+      text-transform: capitalize;
+    }
+
+    /* ── Entitlement bar ── */
+    .entitlement-bar {
+      background: #e8f0fe;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      font-size: 12px;
+    }
+    .entitlement-bar.pro { background: #e6f4ea; }
+    .plan-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+    .plan-badge.free { background: #d2e3fc; color: #1967d2; }
+    .plan-badge.pro { background: #ceead6; color: #137333; }
+    .usage-row {
+      margin-top: 6px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #5f6368;
+    }
+    .cancel-notice {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #ea8600;
+    }
+
+    /* ── Form sections ── */
+    .section { margin-bottom: 14px; }
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #5f6368;
+      margin-bottom: 6px;
+    }
+    select, input[type="text"] {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #dadce0;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #202124;
+      background: #fff;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    select:focus, input[type="text"]:focus {
+      border-color: #4285f4;
+    }
+    .custom-lang-input {
+      margin-top: 6px;
+      display: none;
+    }
+    .custom-lang-input.visible { display: block; }
+
+    /* ── Range expression ── */
+    .range-input {
+      margin-top: 6px;
+      display: none;
+    }
+    .range-input.visible { display: block; }
+    .range-hint {
+      font-size: 11px;
+      color: #5f6368;
+      margin-top: 3px;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-primary {
+      background: #4285f4;
+      color: #fff;
+    }
+    .btn-primary:hover:not(:disabled) { background: #3367d6; }
+    .btn-secondary {
+      background: #f1f3f4;
+      color: #202124;
+      margin-top: 8px;
+    }
+    .btn-secondary:hover:not(:disabled) { background: #e8eaed; }
+
+    /* ── Progress area ── */
+    .progress-area {
+      display: none;
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 8px;
+      background: #f8f9fa;
+    }
+    .progress-area.visible { display: block; }
+    .progress-bar-track {
+      height: 4px;
+      background: #e0e0e0;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: #4285f4;
+      border-radius: 2px;
+      transition: width 0.3s;
+      width: 0%;
+    }
+    .progress-status {
+      font-size: 12px;
+      color: #5f6368;
+    }
+    .progress-detail {
+      font-size: 11px;
+      color: #80868b;
+      margin-top: 2px;
+    }
+
+    /* ── Result area ── */
+    .result-area {
+      display: none;
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 8px;
+    }
+    .result-area.visible { display: block; }
+    .result-area.success { background: #e6f4ea; color: #137333; }
+    .result-area.error { background: #fce8e6; color: #c5221f; }
+    .result-link {
+      display: inline-block;
+      margin-top: 8px;
+      color: #1967d2;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .result-link:hover { text-decoration: underline; }
+
+    /* ── Coming Soon overlay ── */
+    .coming-soon-overlay {
+      display: none;
+      text-align: center;
+      padding: 40px 16px;
+    }
+    .coming-soon-overlay.visible { display: block; }
+    .coming-soon-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+    .coming-soon-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .coming-soon-text {
+      font-size: 13px;
+      color: #5f6368;
+    }
+
+    /* ── Loading spinner ── */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #5f6368;
+    }
+    .spinner {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #4285f4;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error banner ── */
+    .error-banner {
+      display: none;
+      background: #fce8e6;
+      color: #c5221f;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+    .error-banner.visible { display: block; }
+  </style>
+</head>
+<body>
+
+  <!-- Loading state -->
+  <div id="loadingView" class="loading">
+    <div class="spinner"></div>
+    <p style="margin-top:12px;">Loading TransLay...</p>
+  </div>
+
+  <!-- Coming Soon (Docs/Sheets) -->
+  <div id="comingSoonView" class="coming-soon-overlay">
+    <div class="coming-soon-icon">&#128218;</div>
+    <div class="coming-soon-title">Coming Soon</div>
+    <div class="coming-soon-text">
+      TransLay support for <span id="comingSoonHost">this document type</span>
+      is coming soon. Currently, only Google Slides™ is supported.
+    </div>
+  </div>
+
+  <!-- Main content (Slides) -->
+  <div id="mainView" style="display:none;">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-logo">T</div>
+      <div class="header-title">TransLay</div>
+    </div>
+
+    <!-- Document info -->
+    <div class="doc-info">
+      <div class="doc-name" id="docName">—</div>
+      <div class="doc-host" id="docHost">—</div>
+    </div>
+
+    <!-- Entitlement bar -->
+    <div class="entitlement-bar" id="entitlementBar">
+      <span class="plan-badge free" id="planBadge">FREE</span>
+      <div class="usage-row" id="usageSlides" style="display:none;">
+        <span>Slides</span>
+        <span id="usageSlidesText">0 / 50</span>
+      </div>
+      <div class="usage-row" id="usageDocs" style="display:none;">
+        <span>Docs pages</span>
+        <span id="usageDocsText">0 / 10</span>
+      </div>
+      <div class="usage-row" id="usageSheets" style="display:none;">
+        <span>Sheets cells</span>
+        <span id="usageSheetsText">0 / 25,000</span>
+      </div>
+      <div class="cancel-notice" id="cancelNotice" style="display:none;"></div>
+    </div>
+
+    <!-- Error banner -->
+    <div class="error-banner" id="errorBanner"></div>
+
+    <!-- Source Language -->
+    <div class="section">
+      <div class="section-label">Source Language</div>
+      <select id="sourceLang" disabled>
+        <option value="auto">Auto-detect</option>
+      </select>
+    </div>
+
+    <!-- Target Language -->
+    <div class="section">
+      <div class="section-label">Target Language</div>
+      <select id="targetLang">
+        <!-- Populated dynamically -->
+      </select>
+      <div class="custom-lang-input" id="customLangWrap">
+        <input type="text" id="customLangInput" placeholder="e.g., Thai, Hindi, Swahili...">
+      </div>
+    </div>
+
+    <!-- Range Mode -->
+    <div class="section">
+      <div class="section-label">Translation Range</div>
+      <select id="rangeMode">
+        <option value="current">Current slide</option>
+        <option value="entire" selected>Entire presentation</option>
+        <option value="custom">Custom pages</option>
+      </select>
+      <div class="range-input" id="rangeInputWrap">
+        <input type="text" id="rangeExpression" placeholder="e.g., 1,3,5-7">
+        <div class="range-hint">Enter page numbers separated by commas. Use dash for ranges.</div>
+      </div>
+    </div>
+
+    <!-- Output Mode -->
+    <div class="section">
+      <div class="section-label">Output Mode</div>
+      <select id="outputMode">
+        <option value="append_in_file">Append translated slides after originals</option>
+        <option value="create_new_file">Create a new presentation</option>
+      </select>
+    </div>
+
+    <!-- Translate button -->
+    <button class="btn btn-primary" id="translateBtn" onclick="handleTranslate()">
+      Translate
+    </button>
+
+    <!-- Upgrade / Manage button -->
+    <button class="btn btn-secondary" id="upgradeBtn" onclick="handleUpgrade()">
+      Upgrade to Pro
+    </button>
+
+    <!-- Progress area -->
+    <div class="progress-area" id="progressArea">
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progressBarFill"></div>
+      </div>
+      <div class="progress-status" id="progressStatus">Preparing...</div>
+      <div class="progress-detail" id="progressDetail"></div>
+    </div>
+
+    <!-- Result area -->
+    <div class="result-area" id="resultArea">
+      <div id="resultMessage"></div>
+      <a id="resultLink" class="result-link" href="#" target="_blank" style="display:none;">Open translated document</a>
+    </div>
+
+  </div>
+
+  <script>
+    // ── State ──
+    var state = {
+      hostType: null,
+      documentId: null,
+      documentName: null,
+      isSupported: false,
+      entitlement: null,
+      entitlementFetchedAt: 0,
+      entitlementCacheTtl: 300,
+      currentJobId: null,
+      pollTimer: null,
+      pollStartedAt: 0,
+      presetLanguages: []
+    };
+
+    // ── Initialization ──
+    google.script.run
+      .withSuccessHandler(onInitData)
+      .withFailureHandler(function(err) {
+        showError('Failed to initialize: ' + err.message);
+        hideLoading();
+      })
+      .getInitData();
+
+    function onInitData(data) {
+      state.hostType = data.hostType;
+      state.documentId = data.documentId;
+      state.documentName = data.documentName;
+      state.isSupported = data.isSupported;
+      state.presetLanguages = data.presetLanguages || [];
+      state.entitlementCacheTtl = data.entitlementCacheTtl || 300;
+
+      if (!data.hostType) {
+        showError('Could not detect document type.');
+        hideLoading();
+        return;
+      }
+
+      // Docs/Sheets → Coming Soon
+      if (!data.isSupported) {
+        hideLoading();
+        var hostLabel = data.hostType === 'docs' ? 'Google Docs™' : 'Google Sheets™';
+        document.getElementById('comingSoonHost').textContent = hostLabel;
+        document.getElementById('comingSoonView').classList.add('visible');
+        return;
+      }
+
+      // Populate UI
+      document.getElementById('docName').textContent = data.documentName || '—';
+      document.getElementById('docHost').textContent = 'Google Slides™';
+
+      populateLanguages(data.presetLanguages);
+      updateRangeHint(data);
+
+      hideLoading();
+      document.getElementById('mainView').style.display = 'block';
+
+      // Fetch entitlement
+      refreshEntitlement();
+    }
+
+    // ── Language dropdown ──
+    function populateLanguages(languages) {
+      var sel = document.getElementById('targetLang');
+      sel.innerHTML = '';
+      for (var i = 0; i < languages.length; i++) {
+        var opt = document.createElement('option');
+        // UI shows name only, value is name (server resolves to code)
+        opt.value = languages[i].name;
+        opt.textContent = languages[i].name;
+        sel.appendChild(opt);
+      }
+      // Custom option
+      var customOpt = document.createElement('option');
+      customOpt.value = '__custom__';
+      customOpt.textContent = 'Custom language...';
+      sel.appendChild(customOpt);
+
+      sel.addEventListener('change', function() {
+        var wrap = document.getElementById('customLangWrap');
+        if (sel.value === '__custom__') {
+          wrap.classList.add('visible');
+          document.getElementById('customLangInput').focus();
+        } else {
+          wrap.classList.remove('visible');
+        }
+      });
+    }
+
+    // ── Range mode ──
+    document.getElementById('rangeMode').addEventListener('change', function() {
+      var wrap = document.getElementById('rangeInputWrap');
+      if (this.value === 'custom') {
+        wrap.classList.add('visible');
+      } else {
+        wrap.classList.remove('visible');
+      }
+    });
+
+    function updateRangeHint(data) {
+      if (data.hostType === 'slides' && data.slideCount > 0) {
+        var hint = document.querySelector('.range-hint');
+        hint.textContent = 'Total slides: ' + data.slideCount + '. Enter slide numbers separated by commas. Use dash for ranges.';
+      }
+    }
+
+    // ── Entitlement ──
+    function refreshEntitlement(force) {
+      var now = Date.now() / 1000;
+      if (!force && state.entitlement && (now - state.entitlementFetchedAt) < state.entitlementCacheTtl) {
+        renderEntitlement(state.entitlement);
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler(function(data) {
+          state.entitlement = data;
+          state.entitlementFetchedAt = Date.now() / 1000;
+          renderEntitlement(data);
+        })
+        .withFailureHandler(function(err) {
+          showError('Failed to load account info: ' + err.message);
+        })
+        .fetchEntitlement();
+    }
+
+    function renderEntitlement(ent) {
+      if (!ent) return;
+
+      var bar = document.getElementById('entitlementBar');
+      var badge = document.getElementById('planBadge');
+      var upgradeBtn = document.getElementById('upgradeBtn');
+
+      var isPro = ent.access === 'pro';
+      bar.className = 'entitlement-bar' + (isPro ? ' pro' : '');
+      badge.className = 'plan-badge ' + (isPro ? 'pro' : 'free');
+      badge.textContent = isPro ? 'PRO' : 'FREE';
+
+      // Usage display
+      var usage = ent.usage;
+      if (usage && !usage.unlimited) {
+        document.getElementById('usageSlides').style.display = 'flex';
+        document.getElementById('usageSlidesText').textContent =
+          usage.slides_used + ' / ' + usage.slides_limit;
+
+        document.getElementById('usageDocs').style.display = 'flex';
+        document.getElementById('usageDocsText').textContent =
+          usage.docs_pages_used + ' / ' + usage.docs_pages_limit;
+
+        document.getElementById('usageSheets').style.display = 'flex';
+        document.getElementById('usageSheetsText').textContent =
+          usage.sheets_cells_used.toLocaleString() + ' / ' + usage.sheets_cells_limit.toLocaleString();
+      } else if (usage && usage.unlimited) {
+        document.getElementById('usageSlides').style.display = 'none';
+        document.getElementById('usageDocs').style.display = 'none';
+        document.getElementById('usageSheets').style.display = 'none';
+      }
+
+      // Cancel notice
+      var notice = document.getElementById('cancelNotice');
+      if (ent.subscription && ent.subscription.cancel_at_period_end) {
+        var endDate = new Date(ent.subscription.current_period_end);
+        var formatted = endDate.getFullYear() + '-' +
+          String(endDate.getMonth() + 1).padStart(2, '0') + '-' +
+          String(endDate.getDate()).padStart(2, '0');
+        notice.textContent = 'Your subscription has been canceled. Access continues until ' + formatted + '.';
+        notice.style.display = 'block';
+      } else {
+        notice.style.display = 'none';
+      }
+
+      // Upgrade button text
+      if (isPro) {
+        upgradeBtn.textContent = 'Manage Subscription';
+        upgradeBtn.onclick = function() { handleManageSubscription(); };
+      } else {
+        upgradeBtn.textContent = 'Upgrade to Pro';
+        upgradeBtn.onclick = function() { handleUpgrade(); };
+      }
+    }
+
+    // ── Translate ──
+    function handleTranslate() {
+      clearError();
+      hideResult();
+
+      // Gather target language
+      var targetLangSel = document.getElementById('targetLang');
+      var targetLang = targetLangSel.value;
+      if (targetLang === '__custom__') {
+        targetLang = document.getElementById('customLangInput').value.trim();
+        if (!targetLang) {
+          showError('Please enter a target language.');
+          return;
+        }
+      }
+
+      // Gather range
+      var rangeMode = document.getElementById('rangeMode').value;
+      var rangeExpression = null;
+      if (rangeMode === 'custom') {
+        rangeExpression = document.getElementById('rangeExpression').value.trim();
+        if (!rangeExpression) {
+          showError('Please enter a page range.');
+          return;
+        }
+      }
+
+      var outputMode = document.getElementById('outputMode').value;
+
+      var jobRequest = {
+        host_type: state.hostType,
+        document_id: state.documentId,
+        document_name: state.documentName,
+        source_language_mode: 'auto',
+        target_language_input: targetLang,
+        output_mode: outputMode,
+        range_mode: rangeMode,
+        range_expression: rangeExpression,
+        idempotency_key: null // Generated server-side
+      };
+
+      // Generate idempotency key server-side
+      setTranslating(true);
+      showProgress(0, 'Submitting job...', '');
+
+      google.script.run
+        .withSuccessHandler(function(key) {
+          jobRequest.idempotency_key = key;
+          submitJob(jobRequest);
+        })
+        .withFailureHandler(function(err) {
+          setTranslating(false);
+          showError('Failed to prepare request: ' + err.message);
+        })
+        .generateIdempotencyKey(
+          state.hostType, state.documentId, targetLang, outputMode,
+          rangeExpression || ''
+        );
+    }
+
+    function submitJob(jobRequest) {
+      google.script.run
+        .withSuccessHandler(function(resp) {
+          state.currentJobId = resp.job_id;
+          showProgress(5, 'Job accepted', 'Waiting to start...');
+          startPolling(resp.job_id);
+        })
+        .withFailureHandler(function(err) {
+          setTranslating(false);
+          hideProgress();
+          var msg = err.message || 'Failed to create translation job.';
+          if (msg.indexOf('[UNSUPPORTED_LANGUAGE]') !== -1) {
+            showError('Language not recognized. Please try again.');
+          } else if (msg.indexOf('[QUOTA_EXCEEDED]') !== -1) {
+            showError('Usage quota exceeded. Upgrade to Pro for more capacity.');
+          } else if (msg.indexOf('[CONCURRENT_JOB_RUNNING]') !== -1) {
+            showError('A translation job is already in progress. Please wait for it to finish.');
+          } else if (msg.indexOf('[IDEMPOTENT_REPLAY]') !== -1) {
+            showError('This translation has already been submitted.');
+          } else {
+            showError(msg);
+          }
+        })
+        .createJob(jobRequest);
+    }
+
+    // ── Job polling ──
+    var POLL_TIMEOUT_MS = 10 * 60 * 1000; // I4: 10 minute polling timeout, but for testing, we set it to 10 seconds
+
+    function startPolling(jobId) {
+      if (state.pollTimer) clearInterval(state.pollTimer);
+      state.pollStartedAt = Date.now();
+      state.pollTimer = setInterval(function() {
+        if (Date.now() - state.pollStartedAt > POLL_TIMEOUT_MS) {
+          stopPolling();
+          setTranslating(false);
+          hideProgress();
+          showResult(false, 'Translation timed out. Please check your document or try again.', null);
+          return;
+        }
+        pollJob(jobId);
+      }, 3000);
+    }
+
+    function stopPolling() {
+      if (state.pollTimer) {
+        clearInterval(state.pollTimer);
+        state.pollTimer = null;
+      }
+    }
+
+    function pollJob(jobId) {
+      google.script.run
+        .withSuccessHandler(function(resp) {
+          if (resp.status === 'completed') {
+            stopPolling();
+            setTranslating(false);
+            showProgress(100, 'Completed', '');
+            showResult(true, 'Translation completed successfully.', resp.output_document_url);
+            // Refresh entitlement after job completion (usage changed)
+            refreshEntitlement(true);
+          } else if (resp.status === 'failed') {
+            stopPolling();
+            setTranslating(false);
+            hideProgress();
+            showResult(false, resp.message || 'Translation failed.', null);
+          } else {
+            // In progress
+            var pct = resp.progress_percent || 0;
+            var step = formatStep(resp.current_step || resp.status);
+            var detail = resp.details || '';
+            showProgress(pct, step, detail);
+          }
+        })
+        .withFailureHandler(function(err) {
+          // Polling error — don't stop, retry on next interval
+          console.log('Poll error: ' + err.message);
+        })
+        .getJobStatus(jobId);
+    }
+
+    function formatStep(step) {
+      var labels = {
+        'pending': 'Preparing...',
+        'queued': 'Queued...',
+        'extracting': 'Extracting content...',
+        'translating': 'Translating...',
+        'writing': 'Writing translated content...'
+      };
+      return labels[step] || step;
+    }
+
+    // ── Upgrade / Manage ──
+    function handleUpgrade() {
+      openPortal('upgrade_click');
+    }
+
+    function handleManageSubscription() {
+      openPortal('manage_subscription');
+    }
+
+    function openPortal(reason) {
+      google.script.run
+        .withSuccessHandler(function(url) {
+          window.open(url, '_blank');
+        })
+        .withFailureHandler(function(err) {
+          showError('Failed to open portal: ' + err.message);
+        })
+        .getPortalUrl(reason);
+    }
+
+    // ── UI helpers ──
+    function hideLoading() {
+      document.getElementById('loadingView').style.display = 'none';
+    }
+
+    function setTranslating(active) {
+      document.getElementById('translateBtn').disabled = active;
+      if (active) {
+        document.getElementById('translateBtn').textContent = 'Translating...';
+      } else {
+        document.getElementById('translateBtn').textContent = 'Translate';
+      }
+    }
+
+    function showProgress(percent, status, detail) {
+      var area = document.getElementById('progressArea');
+      area.classList.add('visible');
+      document.getElementById('progressBarFill').style.width = percent + '%';
+      document.getElementById('progressStatus').textContent = status;
+      document.getElementById('progressDetail').textContent = detail || '';
+    }
+
+    function hideProgress() {
+      document.getElementById('progressArea').classList.remove('visible');
+    }
+
+    function showResult(success, message, url) {
+      var area = document.getElementById('resultArea');
+      area.className = 'result-area visible ' + (success ? 'success' : 'error');
+      document.getElementById('resultMessage').textContent = message;
+      var link = document.getElementById('resultLink');
+      if (success && url) {
+        link.href = url;
+        link.style.display = 'inline-block';
+      } else {
+        link.style.display = 'none';
+      }
+    }
+
+    function hideResult() {
+      document.getElementById('resultArea').classList.remove('visible');
+      document.getElementById('resultArea').className = 'result-area';
+    }
+
+    function showError(msg) {
+      var banner = document.getElementById('errorBanner');
+      banner.textContent = msg;
+      banner.classList.add('visible');
+    }
+
+    function clearError() {
+      var banner = document.getElementById('errorBanner');
+      banner.classList.remove('visible');
+      banner.textContent = '';
+    }
+  </script>
+
+</body>
+</html>

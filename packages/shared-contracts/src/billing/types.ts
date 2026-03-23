@@ -14,6 +14,10 @@ export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 
 export type AccessLevel = "free" | "pro";
 
+/** S6: Supported payment provider names. */
+export const PAYMENT_PROVIDER_NAMES = ["none", "paddle"] as const;
+export type PaymentProviderName = (typeof PAYMENT_PROVIDER_NAMES)[number];
+
 /** Metered usage snapshot (free and pro with per-host limits). */
 export interface MeteredUsageSnapshot {
   readonly period_key: string;

@@ -2,6 +2,8 @@ import express, { type Request, type Response, type NextFunction } from "express
 import { loadConfig } from "@translay/shared-config";
 import { getPool, shutdownPool } from "./db/pool";
 import { getRedis, shutdownRedis } from "./cache/redis";
+import { corsMiddleware } from "./middleware/cors";
+import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { googleAuthMiddleware } from "./middleware/auth";
 import { portalSessionMiddleware } from "./middleware/session";
 import { healthHandler } from "./modules/health/handler";
@@ -14,6 +16,7 @@ import {
 } from "./modules/session/handler";
 import { createJobHandler, getJobHandler } from "./modules/jobs/handler";
 import { asyncHandler } from "./utils/async-handler";
+import { sendError } from "./utils/errors";
 
 const config = loadConfig();
 const app = express();
@@ -25,6 +28,12 @@ app.use(express.json({ limit: "1mb" }));
 
 // Trust proxy headers (Cloud Run sits behind a load balancer)
 app.set("trust proxy", true);
+
+// I1: CORS locked to production domain
+app.use(corsMiddleware(`https://${config.domain}`));
+
+// I2: Global rate limit (60 req/min per user/IP)
+app.use(rateLimitMiddleware(redis, { windowSeconds: 60, maxRequests: 60, keyPrefix: "global" }));
 
 // --- Public routes (no auth) ---
 app.get("/api/health", asyncHandler(healthHandler(pool, redis)));
@@ -45,10 +54,7 @@ app.get("/api/jobs/:jobId", googleAuth, asyncHandler(getJobHandler(pool, redis))
 // I9: Generic error code in response, stack trace logged server-side only
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("Unhandled error:", err.stack ?? err.message);
-  res.status(500).json({
-    error: "INTERNAL_ERROR",
-    message: "Internal server error",
-  });
+  sendError(res, "INTERNAL_ERROR");
 });
 
 // --- Start server ---

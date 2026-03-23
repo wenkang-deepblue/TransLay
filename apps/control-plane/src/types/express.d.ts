@@ -1,0 +1,13 @@
+import type { AuthContext } from "@translay/shared-contracts";
+
+declare global {
+  namespace Express {
+    interface Request {
+      authContext?: AuthContext;
+      portalSession?: {
+        userId: string;
+        createdAt: string;
+      };
+    }
+  }
+}

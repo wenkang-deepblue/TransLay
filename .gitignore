@@ -26,3 +26,6 @@ dist/
 
 #tmp
 tmp/
+
+#Configuration
+*clasp.json

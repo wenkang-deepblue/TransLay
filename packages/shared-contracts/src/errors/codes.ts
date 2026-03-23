@@ -1,6 +1,7 @@
 /** All machine-readable error codes returned by the API. */
 export const ERROR_CODES = {
   // 400
+  VALIDATION_ERROR: { status: 400, message: "Request validation failed" },
   INVALID_RANGE: { status: 400, message: "Invalid range expression" },
   UNSUPPORTED_LANGUAGE: { status: 400, message: "Language could not be recognized" },
   INVALID_TICKET: { status: 400, message: "Ticket is invalid, expired, or malformed" },
@@ -13,6 +14,9 @@ export const ERROR_CODES = {
   QUOTA_EXCEEDED: { status: 403, message: "Usage quota exceeded" },
   ACCESS_DENIED: { status: 403, message: "Current subscription does not permit this operation" },
 
+  // 404
+  NOT_FOUND: { status: 404, message: "Resource not found" },
+
   // 409
   CONCURRENT_JOB_RUNNING: { status: 409, message: "A translation job is already in progress" },
   IDEMPOTENT_REPLAY: { status: 409, message: "This request has already been processed" },
@@ -22,6 +26,7 @@ export const ERROR_CODES = {
   RATE_LIMITED: { status: 429, message: "Too many requests" },
 
   // 500
+  INTERNAL_ERROR: { status: 500, message: "Internal server error" },
   LLM_PROVIDER_ERROR: { status: 500, message: "Translation provider error" },
   GOOGLE_API_RATE_LIMIT: { status: 500, message: "Google Workspace™ API rate limit" },
   JOB_INTERNAL_ERROR: { status: 500, message: "Internal job processing error" },
