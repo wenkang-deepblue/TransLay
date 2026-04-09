@@ -56,6 +56,21 @@ function getJobStatus(jobId) {
 }
 
 /**
+ * Requests cancellation of an existing translation job.
+ * @param {string} jobId
+ * @returns {Object} CancelJobResponse
+ */
+function cancelJob(jobId) {
+  var token = getGoogleToken();
+  var response = UrlFetchApp.fetch(API_BASE_URL + '/jobs/' + jobId + '/cancel', {
+    method: 'post',
+    headers: _authHeaders(token),
+    muteHttpExceptions: true
+  });
+  return _handleResponse(response);
+}
+
+/**
  * Creates a Portal session ticket for upgrade/manage flows.
  * @param {string} redirectPath - Portal page path (e.g., "/pricing")
  * @param {string} reason - Reason for the session (e.g., "upgrade_click")

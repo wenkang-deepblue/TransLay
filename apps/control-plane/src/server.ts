@@ -14,7 +14,7 @@ import {
   sessionMeHandler,
   sessionLogoutHandler,
 } from "./modules/session/handler";
-import { createJobHandler, getJobHandler } from "./modules/jobs/handler";
+import { cancelJobHandler, createJobHandler, getJobHandler } from "./modules/jobs/handler";
 import { asyncHandler } from "./utils/async-handler";
 import { sendError } from "./utils/errors";
 
@@ -50,6 +50,7 @@ app.get("/api/entitlement", googleAuth, asyncHandler(entitlementHandler(pool)));
 app.post("/api/session/start", googleAuth, asyncHandler(sessionStartHandler(redis, config)));
 app.post("/api/jobs", googleAuth, asyncHandler(createJobHandler(pool, redis, config)));
 app.get("/api/jobs/:jobId", googleAuth, asyncHandler(getJobHandler(pool, redis)));
+app.post("/api/jobs/:jobId/cancel", googleAuth, asyncHandler(cancelJobHandler(pool, redis, config)));
 
 // I9: Generic error code in response, stack trace logged server-side only
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

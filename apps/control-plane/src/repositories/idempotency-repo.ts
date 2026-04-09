@@ -29,3 +29,15 @@ export async function insertIdempotencyRecord(
     [params.userId, params.idempotencyKey, params.jobId, params.requestFingerprint]
   );
 }
+
+export async function deleteIdempotencyRecord(
+  pool: Pool | PoolClient,
+  userId: UserId,
+  idempotencyKey: string
+): Promise<void> {
+  await pool.query(
+    `DELETE FROM idempotency_records
+     WHERE user_id = $1 AND idempotency_key = $2`,
+    [userId, idempotencyKey]
+  );
+}

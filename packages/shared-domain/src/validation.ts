@@ -2,7 +2,9 @@ import {
   HOST_TYPES,
   OUTPUT_MODES,
   RANGE_MODES,
+  SOURCE_LANGUAGE_MODES,
   type HostType,
+  type SourceLanguageMode,
 } from "@translay/shared-contracts";
 
 /** Max total pages allowed in a single range expression (DoS prevention). */
@@ -26,8 +28,27 @@ export function validateCreateJobRequest(body: unknown): string | null {
   if (!req.document_name || typeof req.document_name !== "string")
     return "document_name is required";
 
-  if (req.source_language_mode !== "auto")
-    return "source_language_mode must be 'auto'";
+  if (
+    req.target_document_id !== undefined &&
+    req.target_document_id !== null &&
+    typeof req.target_document_id !== "string"
+  ) {
+    return "target_document_id must be a string when provided";
+  }
+
+  if (
+    req.resubmit !== undefined &&
+    typeof req.resubmit !== "boolean"
+  ) {
+    return "resubmit must be a boolean when provided";
+  }
+
+  if (
+    !req.source_language_mode ||
+    !SOURCE_LANGUAGE_MODES.includes(req.source_language_mode as SourceLanguageMode)
+  ) {
+    return `source_language_mode must be one of: ${SOURCE_LANGUAGE_MODES.join(", ")}`;
+  }
 
   if (!req.target_language_input || typeof req.target_language_input !== "string")
     return "target_language_input is required";
@@ -37,6 +58,10 @@ export function validateCreateJobRequest(body: unknown): string | null {
 
   if (!req.output_mode || !OUTPUT_MODES.includes(req.output_mode as any))
     return `output_mode must be one of: ${OUTPUT_MODES.join(", ")}`;
+
+  if (req.output_mode === "create_new_file" && !req.target_document_id) {
+    return "target_document_id is required when output_mode is 'create_new_file'";
+  }
 
   if (!req.range_mode || !RANGE_MODES.includes(req.range_mode as any))
     return `range_mode must be one of: ${RANGE_MODES.join(", ")}`;

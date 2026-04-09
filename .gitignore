@@ -23,9 +23,10 @@ dist/
 .env
 .env.local
 .env.*.local
+.*aud*/
 
 #tmp
 tmp/
 
 #Configuration
-*clasp.json
+**/.clasp.json

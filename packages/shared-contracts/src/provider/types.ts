@@ -14,6 +14,12 @@ export interface TranslationRequest {
   readonly source_language: string;
   readonly target_language: string;
   readonly nodes: readonly TranslationNode[];
+  /**
+   * Full document text provided as read-only context for terminology consistency.
+   * The model should use this to maintain consistent translations across pages.
+   * @internal MUST NOT be persisted, logged, or cached — zero-content-persistence rule.
+   */
+  readonly context_text?: string;
 }
 
 /** Translation response from inference plane. */

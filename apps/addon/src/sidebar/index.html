@@ -160,6 +160,24 @@
       margin-top: 8px;
     }
     .btn-secondary:hover:not(:disabled) { background: #e8eaed; }
+    #resubmitBtn {
+      background: #f9ba02;
+      color: #fff;
+    }
+    #resubmitBtn:hover:not(:disabled) { background: #e0a700; }
+    .btn-danger {
+      background: #d93025;
+      color: #fff;
+      margin-top: 10px;
+    }
+    .btn-danger:hover:not(:disabled) { background: #b3261e; }
+    .btn-inline {
+      width: auto;
+      min-width: 120px;
+      padding: 8px 12px;
+      font-size: 12px;
+      margin-top: 8px;
+    }
 
     /* ── Progress area ── */
     .progress-area {
@@ -192,6 +210,11 @@
       font-size: 11px;
       color: #80868b;
       margin-top: 2px;
+    }
+    .progress-actions {
+      margin-top: 10px;
+      display: flex;
+      justify-content: center;
     }
 
     /* ── Result area ── */
@@ -262,6 +285,17 @@
       margin-bottom: 10px;
     }
     .error-banner.visible { display: block; }
+    .duplicate-action {
+      display: none;
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      background: #fff7e0;
+      color: #8d5c00;
+      font-size: 12px;
+      text-align: center;
+    }
+    .duplicate-action.visible { display: block; }
   </style>
 </head>
 <body>
@@ -317,6 +351,12 @@
 
     <!-- Error banner -->
     <div class="error-banner" id="errorBanner"></div>
+    <div class="duplicate-action" id="duplicateAction">
+      <div id="duplicateMessage"></div>
+      <button class="btn btn-secondary btn-inline" id="resubmitBtn" onclick="handleResubmit()">
+        Resubmit
+      </button>
+    </div>
 
     <!-- Source Language -->
     <div class="section">
@@ -377,6 +417,11 @@
       </div>
       <div class="progress-status" id="progressStatus">Preparing...</div>
       <div class="progress-detail" id="progressDetail"></div>
+      <div class="progress-actions">
+        <button class="btn btn-danger btn-inline" id="cancelJobBtn" onclick="handleCancelJob()" style="display:none;">
+          Cancel
+        </button>
+      </div>
     </div>
 
     <!-- Result area -->
@@ -398,6 +443,11 @@
       entitlementFetchedAt: 0,
       entitlementCacheTtl: 300,
       currentJobId: null,
+      currentJobOutputMode: null,
+      cancelRequested: false,
+      cancelRequestInFlight: false,
+      activeSubmission: null,
+      submissionSeq: 0,
       pollTimer: null,
       pollStartedAt: 0,
       presetLanguages: []
@@ -567,12 +617,18 @@
         upgradeBtn.textContent = 'Upgrade to Pro';
         upgradeBtn.onclick = function() { handleUpgrade(); };
       }
+
+      hideDuplicateAction();
     }
 
     // ── Translate ──
-    function handleTranslate() {
+    function handleTranslate(options) {
+      options = options || {};
       clearError();
+      hideDuplicateAction();
       hideResult();
+      state.cancelRequested = false;
+      state.cancelRequestInFlight = false;
 
       // Gather target language
       var targetLangSel = document.getElementById('targetLang');
@@ -597,48 +653,145 @@
       }
 
       var outputMode = document.getElementById('outputMode').value;
+      var submissionNonce = options.forceResubmit
+        ? ('resubmit_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8))
+        : '';
 
       var jobRequest = {
         host_type: state.hostType,
         document_id: state.documentId,
         document_name: state.documentName,
+        target_document_id: undefined,
+        resubmit: !!options.forceResubmit,
         source_language_mode: 'auto',
         target_language_input: targetLang,
         output_mode: outputMode,
         range_mode: rangeMode,
         range_expression: rangeExpression,
-        idempotency_key: null // Generated server-side
+        idempotency_key: null
       };
+      var submission = beginSubmission(jobRequest.output_mode);
 
-      // Generate idempotency key server-side
       setTranslating(true);
       showProgress(0, 'Submitting job...', '');
 
       google.script.run
         .withSuccessHandler(function(key) {
+          var activeSubmission = getActiveSubmission(submission.token);
+          if (!activeSubmission) {
+            return;
+          }
           jobRequest.idempotency_key = key;
-          submitJob(jobRequest);
+          if (activeSubmission.cancelRequested) {
+            finishSubmissionCanceled(jobRequest.output_mode);
+            return;
+          }
+          google.script.run
+            .withSuccessHandler(function() {
+              activeSubmission = getActiveSubmission(submission.token);
+              if (!activeSubmission) {
+                return;
+              }
+              if (activeSubmission.cancelRequested) {
+                finishSubmissionCanceled(jobRequest.output_mode);
+                return;
+              }
+              if (outputMode === 'create_new_file') {
+                google.script.run
+                  .withSuccessHandler(function(prepared) {
+                    activeSubmission = getActiveSubmission(submission.token);
+                    if (!activeSubmission) {
+                      google.script.run.cleanupPreparedPresentation(prepared.documentId);
+                      return;
+                    }
+                    activeSubmission.targetDocumentId = prepared.documentId;
+                    jobRequest.target_document_id = prepared.documentId;
+                    if (activeSubmission.cancelRequested) {
+                      google.script.run.cleanupPreparedPresentation(prepared.documentId);
+                      finishSubmissionCanceled(jobRequest.output_mode);
+                      return;
+                    }
+                    submitJob(jobRequest, submission.token);
+                  })
+                  .withFailureHandler(function(err) {
+                    if (!getActiveSubmission(submission.token)) {
+                      return;
+                    }
+                    clearActiveSubmission();
+                    setTranslating(false);
+                    hideProgress();
+                    showError('Failed to prepare the new presentation: ' + err.message);
+                  })
+                  .prepareOutputPresentation(targetLang);
+                return;
+              }
+
+              submitJob(jobRequest, submission.token);
+            })
+            .withFailureHandler(function(err) {
+              if (!getActiveSubmission(submission.token)) {
+                return;
+              }
+              clearActiveSubmission();
+              setTranslating(false);
+              hideProgress();
+              showError('Failed to authorize the current presentation for translation: ' + err.message);
+            })
+            .ensureCurrentPresentationWorkerAccess();
         })
         .withFailureHandler(function(err) {
+          if (!getActiveSubmission(submission.token)) {
+            return;
+          }
+          clearActiveSubmission();
           setTranslating(false);
+          hideProgress();
           showError('Failed to prepare request: ' + err.message);
         })
         .generateIdempotencyKey(
-          state.hostType, state.documentId, targetLang, outputMode,
-          rangeExpression || ''
+          state.hostType,
+          state.documentId,
+          targetLang,
+          outputMode,
+          rangeExpression || '',
+          submissionNonce
         );
     }
 
-    function submitJob(jobRequest) {
+    function handleResubmit() {
+      handleTranslate({ forceResubmit: true });
+    }
+
+    function submitJob(jobRequest, submissionToken) {
       google.script.run
         .withSuccessHandler(function(resp) {
+          var activeSubmission = getActiveSubmission(submissionToken);
           state.currentJobId = resp.job_id;
+          state.currentJobOutputMode = jobRequest.output_mode;
+          if (activeSubmission && activeSubmission.cancelRequested) {
+            clearActiveSubmission();
+            requestJobCancellation(resp.job_id, jobRequest.output_mode);
+            return;
+          }
+          clearActiveSubmission();
+          state.cancelRequested = false;
+          state.cancelRequestInFlight = false;
           showProgress(5, 'Job accepted', 'Waiting to start...');
           startPolling(resp.job_id);
         })
         .withFailureHandler(function(err) {
+          var activeSubmission = getActiveSubmission(submissionToken);
+          if (!activeSubmission) {
+            return;
+          }
+          clearActiveSubmission();
           setTranslating(false);
           hideProgress();
+          if (jobRequest.output_mode === 'create_new_file' && activeSubmission.targetDocumentId) {
+            google.script.run.cleanupPreparedPresentation(activeSubmission.targetDocumentId);
+          } else if (jobRequest.output_mode === 'create_new_file' && jobRequest.target_document_id) {
+            google.script.run.cleanupPreparedPresentation(jobRequest.target_document_id);
+          }
           var msg = err.message || 'Failed to create translation job.';
           if (msg.indexOf('[UNSUPPORTED_LANGUAGE]') !== -1) {
             showError('Language not recognized. Please try again.');
@@ -647,7 +800,9 @@
           } else if (msg.indexOf('[CONCURRENT_JOB_RUNNING]') !== -1) {
             showError('A translation job is already in progress. Please wait for it to finish.');
           } else if (msg.indexOf('[IDEMPOTENT_REPLAY]') !== -1) {
-            showError('This translation has already been submitted.');
+            showDuplicateAction(
+              'This translation has already been submitted. You can also submit it again, but resubmitting will consume your usage quota.'
+            );
           } else {
             showError(msg);
           }
@@ -678,6 +833,11 @@
         clearInterval(state.pollTimer);
         state.pollTimer = null;
       }
+      state.currentJobId = null;
+      state.currentJobOutputMode = null;
+      state.cancelRequested = false;
+      state.cancelRequestInFlight = false;
+      state.activeSubmission = null;
     }
 
     function pollJob(jobId) {
@@ -689,6 +849,12 @@
             showProgress(100, 'Completed', '');
             showResult(true, 'Translation completed successfully.', resp.output_document_url);
             // Refresh entitlement after job completion (usage changed)
+            refreshEntitlement(true);
+          } else if (resp.status === 'canceled') {
+            stopPolling();
+            setTranslating(false);
+            hideProgress();
+            showCanceledResult(resp);
             refreshEntitlement(true);
           } else if (resp.status === 'failed') {
             stopPolling();
@@ -708,6 +874,77 @@
           console.log('Poll error: ' + err.message);
         })
         .getJobStatus(jobId);
+    }
+
+    function handleCancelJob() {
+      if (state.cancelRequested || state.cancelRequestInFlight) {
+        return;
+      }
+
+      if (state.activeSubmission && !state.currentJobId) {
+        state.activeSubmission.cancelRequested = true;
+        state.cancelRequested = true;
+        updateCancelButton();
+        showProgress(
+          parseInt(document.getElementById('progressBarFill').style.width, 10) || 0,
+          document.getElementById('progressStatus').textContent || 'Submitting job...',
+          'Cancellation requested. The submission will be stopped as soon as possible.'
+        );
+        return;
+      }
+
+      if (!state.currentJobId) {
+        return;
+      }
+
+      requestJobCancellation(
+        state.currentJobId,
+        state.currentJobOutputMode || document.getElementById('outputMode').value
+      );
+    }
+
+    function requestJobCancellation(jobId, outputMode) {
+      if (state.cancelRequestInFlight) {
+        return;
+      }
+
+      state.cancelRequestInFlight = true;
+      state.cancelRequested = true;
+      updateCancelButton();
+
+      google.script.run
+        .withSuccessHandler(function(resp) {
+          state.cancelRequestInFlight = false;
+          var detail = resp && resp.message
+            ? resp.message
+            : 'Cancellation requested. The worker will stop at the next safe checkpoint.';
+          showProgress(
+            parseInt(document.getElementById('progressBarFill').style.width, 10) || 0,
+            document.getElementById('progressStatus').textContent || 'Working...',
+            detail
+          );
+          if (resp.status === 'canceled') {
+            stopPolling();
+            setTranslating(false);
+            hideProgress();
+            showCanceledResult({
+              status: 'canceled',
+              message: resp.message || 'Translation canceled.',
+              total_units_billed: 0,
+              output_mode: outputMode
+            });
+            refreshEntitlement(true);
+          } else if (!state.pollTimer) {
+            startPolling(jobId);
+          }
+        })
+        .withFailureHandler(function(err) {
+          state.cancelRequestInFlight = false;
+          state.cancelRequested = false;
+          updateCancelButton();
+          showError('Failed to cancel the translation job: ' + err.message);
+        })
+        .cancelJob(jobId);
     }
 
     function formatStep(step) {
@@ -753,6 +990,7 @@
       } else {
         document.getElementById('translateBtn').textContent = 'Translate';
       }
+      updateCancelButton();
     }
 
     function showProgress(percent, status, detail) {
@@ -761,10 +999,12 @@
       document.getElementById('progressBarFill').style.width = percent + '%';
       document.getElementById('progressStatus').textContent = status;
       document.getElementById('progressDetail').textContent = detail || '';
+      updateCancelButton();
     }
 
     function hideProgress() {
       document.getElementById('progressArea').classList.remove('visible');
+      updateCancelButton();
     }
 
     function showResult(success, message, url) {
@@ -772,12 +1012,24 @@
       area.className = 'result-area visible ' + (success ? 'success' : 'error');
       document.getElementById('resultMessage').textContent = message;
       var link = document.getElementById('resultLink');
-      if (success && url) {
+      if (url) {
         link.href = url;
+        link.textContent = success ? 'Open translated document' : 'Open document';
         link.style.display = 'inline-block';
       } else {
         link.style.display = 'none';
       }
+    }
+
+    function showCanceledResult(resp) {
+      var message = resp.message || 'Translation canceled.';
+      if (
+        resp.output_mode === 'create_new_file' &&
+        resp.total_units_billed > 0
+      ) {
+        message += ' The generated file was kept, and the generated slides were counted toward your quota.';
+      }
+      showResult(false, message, resp.output_document_url || null);
     }
 
     function hideResult() {
@@ -795,6 +1047,63 @@
       var banner = document.getElementById('errorBanner');
       banner.classList.remove('visible');
       banner.textContent = '';
+    }
+
+    function showDuplicateAction(message) {
+      document.getElementById('duplicateMessage').textContent = message;
+      document.getElementById('duplicateAction').classList.add('visible');
+    }
+
+    function hideDuplicateAction() {
+      document.getElementById('duplicateAction').classList.remove('visible');
+      document.getElementById('duplicateMessage').textContent = '';
+    }
+
+    function updateCancelButton() {
+      var btn = document.getElementById('cancelJobBtn');
+      var isVisible = document.getElementById('progressArea').classList.contains('visible') &&
+        document.getElementById('translateBtn').disabled &&
+        (!!state.currentJobId || !!state.activeSubmission);
+      btn.style.display = isVisible ? 'inline-block' : 'none';
+      btn.disabled = !isVisible || state.cancelRequested || state.cancelRequestInFlight;
+      btn.textContent = (state.cancelRequested || state.cancelRequestInFlight) ? 'Canceling...' : 'Cancel';
+    }
+
+    function beginSubmission(outputMode) {
+      state.submissionSeq += 1;
+      state.activeSubmission = {
+        token: state.submissionSeq,
+        outputMode: outputMode,
+        cancelRequested: false,
+        targetDocumentId: null
+      };
+      updateCancelButton();
+      return state.activeSubmission;
+    }
+
+    function getActiveSubmission(token) {
+      return state.activeSubmission && state.activeSubmission.token === token
+        ? state.activeSubmission
+        : null;
+    }
+
+    function clearActiveSubmission() {
+      state.activeSubmission = null;
+      updateCancelButton();
+    }
+
+    function finishSubmissionCanceled(outputMode) {
+      clearActiveSubmission();
+      state.cancelRequested = false;
+      state.cancelRequestInFlight = false;
+      setTranslating(false);
+      hideProgress();
+      showCanceledResult({
+        status: 'canceled',
+        message: 'Translation canceled before submission completed.',
+        total_units_billed: 0,
+        output_mode: outputMode
+      });
     }
   </script>
 

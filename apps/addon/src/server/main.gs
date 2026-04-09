@@ -103,9 +103,10 @@ function getPortalUrl(reason) {
  * idempotency enforcement happens server-side with google_subject_id.
  * We use a stable hash of the request parameters as the key.
  */
-function generateIdempotencyKey(hostType, documentId, targetLang, outputMode, rangeExpression) {
+function generateIdempotencyKey(hostType, documentId, targetLang, outputMode, rangeExpression, submissionNonce) {
   var rangePart = rangeExpression || 'all';
-  var raw = hostType + ':' + documentId + ':' + targetLang + ':' + outputMode + ':' + rangePart;
+  var noncePart = submissionNonce || 'stable';
+  var raw = hostType + ':' + documentId + ':' + targetLang + ':' + outputMode + ':' + rangePart + ':' + noncePart;
   // Use Utilities.computeDigest for a stable hash, avoiding email dependency
   var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, raw);
   var hex = digest.map(function(b) {

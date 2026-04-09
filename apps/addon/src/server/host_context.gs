@@ -87,3 +87,87 @@ function getSheetNames() {
   if (!spreadsheet) return [];
   return spreadsheet.getSheets().map(function(s) { return s.getName(); });
 }
+
+/**
+ * Grants the worker service account editor access to the currently open
+ * presentation so backend extraction/write-back can access user-selected
+ * test copies without any manual sharing step.
+ */
+function ensureCurrentPresentationWorkerAccess() {
+  var presentation = SlidesApp.getActivePresentation();
+  if (!presentation) {
+    throw new Error('No active presentation found');
+  }
+
+  try {
+    DriveApp.getFileById(presentation.getId()).addEditor(WORKER_SERVICE_ACCOUNT_EMAIL);
+  } catch (err) {
+    throw new Error('Failed to grant worker access to the current presentation.');
+  }
+}
+
+/**
+ * Creates a user-owned copy of the active presentation and grants the worker
+ * service account editor access so backend write-back can target this file.
+ *
+ * OAuth note: this flow intentionally keeps the broader Drive scope because
+ * Apps Script must read the active source file via DriveApp.getFileById(),
+ * create a sibling copy with inherited parent placement, and then mutate ACLs
+ * with addEditor() on that user-owned file. Real-environment validation showed
+ * that drive.file is insufficient for this combination in the Slides container
+ * context, so full Drive access is the minimum scope that preserves the
+ * production create_new_file workflow.
+ *
+ * Even with that scope, this code path only touches the currently active
+ * presentation and the freshly copied destination file.
+ * Returns the copied presentation ID and URL.
+ */
+function prepareOutputPresentation(copyLabel) {
+  var presentation = SlidesApp.getActivePresentation();
+  if (!presentation) {
+    throw new Error('No active presentation found');
+  }
+
+  var sourceId = presentation.getId();
+  var sourceName = presentation.getName();
+  var copyName = sourceName + ' (' + copyLabel + ')';
+  var sourceFile = DriveApp.getFileById(sourceId);
+  var parents = sourceFile.getParents();
+  var copiedFile;
+
+  if (parents.hasNext()) {
+    copiedFile = sourceFile.makeCopy(copyName, parents.next());
+  } else {
+    copiedFile = sourceFile.makeCopy(copyName);
+  }
+
+  try {
+    copiedFile.addEditor(WORKER_SERVICE_ACCOUNT_EMAIL);
+  } catch (err) {
+    try {
+      copiedFile.setTrashed(true);
+    } catch (cleanupErr) {
+      console.error('Failed to trash copied presentation: ' + cleanupErr.message);
+    }
+    throw new Error('Failed to grant worker access to the copied presentation.');
+  }
+
+  return {
+    documentId: copiedFile.getId(),
+    documentUrl: 'https://docs.google.com/presentation/d/' + copiedFile.getId() + '/edit'
+  };
+}
+
+/**
+ * Deletes a previously prepared output presentation when job submission fails
+ * before the backend accepts the task.
+ */
+function cleanupPreparedPresentation(documentId) {
+  if (!documentId) return;
+
+  try {
+    DriveApp.getFileById(documentId).setTrashed(true);
+  } catch (err) {
+    console.error('Failed to cleanup prepared presentation: ' + err.message);
+  }
+}

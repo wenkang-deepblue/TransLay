@@ -6,6 +6,8 @@ import type { AppConfig } from "@translay/shared-config";
 import type {
   CreateJobRequest,
   CreateJobResponse,
+  CancelJobResponse,
+  JobCanceledResponse,
   JobCompletedResponse,
   JobFailedResponse,
   JobProgressResponse,
@@ -18,17 +20,31 @@ import {
   validateCreateJobRequest,
   matchPresetLanguage,
   billingPeriodKey,
+  buildJobCancelKey,
   getRemainingQuota,
   computeEntitlement,
   FREE_TIER_MAX_JOBS_PER_PERIOD,
 } from "@translay/shared-domain";
 import { getActiveSubscription } from "../../repositories/subscription-repo";
 import { getUsageSummary } from "../../repositories/usage-repo";
-import { createJob, getJobById, hasRunningJob } from "../../repositories/job-repo";
-import { findIdempotencyRecord, insertIdempotencyRecord } from "../../repositories/idempotency-repo";
-import { enqueueJob } from "./cloud-tasks";
+import {
+  createJob,
+  getJobById,
+  hasRunningJob,
+  hasCompletedEquivalentJob,
+  requestJobCancel,
+  updateJobStatus,
+} from "../../repositories/job-repo";
+import {
+  deleteIdempotencyRecord,
+  findIdempotencyRecord,
+  insertIdempotencyRecord,
+} from "../../repositories/idempotency-repo";
+import { deleteQueuedJob, enqueueJob } from "./cloud-tasks";
 import { sendError } from "../../utils/errors";
 import { assertMultiOk } from "../../utils/redis-helpers";
+
+const CANCEL_KEY_TTL_SECONDS = 24 * 60 * 60;
 
 // S8: Validate a string is a known job status
 function isValidJobStatus(s: string): s is JobStatus {
@@ -37,6 +53,34 @@ function isValidJobStatus(s: string): s is JobStatus {
     s === "translating" || s === "writing" || s === "completed" ||
     s === "failed" || s === "canceled"
   );
+}
+
+function isRunningStatus(status: JobStatus): status is JobInProgressStatus {
+  return (
+    status === "pending" ||
+    status === "queued" ||
+    status === "extracting" ||
+    status === "translating" ||
+    status === "writing"
+  );
+}
+
+function buildCanceledMessage(job: {
+  output_mode: CreateJobRequest["output_mode"];
+  total_units_billed: number;
+}): string {
+  if (job.output_mode === "create_new_file") {
+    if (job.total_units_billed > 0) {
+      return `Translation canceled after the translated presentation was generated. ${job.total_units_billed} slides were counted toward your quota.`;
+    }
+    return "Translation canceled before the translated presentation was generated. No quota was charged.";
+  }
+
+  if (job.total_units_billed > 0) {
+    return `Translation canceled after ${job.total_units_billed} translated slides were written. Only those visible slides were counted toward your quota.`;
+  }
+
+  return "Translation canceled before any translated slides were written. No quota was charged.";
 }
 
 // I10: Exhaustive host-type usage lookup
@@ -74,11 +118,29 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
 
     // S5: body is validated; cast is safe after validateCreateJobRequest returns null
     const body = req.body as CreateJobRequest;
+    const hasCompletedHistory = await hasCompletedEquivalentJob(pool, {
+      userId: auth.user_id,
+      hostType: body.host_type,
+      sourceDocId: body.document_id,
+      targetLanguageInput: body.target_language_input,
+      outputMode: body.output_mode,
+      rangeMode: body.range_mode,
+      rangeExpression: body.range_expression ?? null,
+    });
+
+    if (hasCompletedHistory && !body.resubmit) {
+      sendError(res, "IDEMPOTENT_REPLAY");
+      return;
+    }
 
     const existingJobId = await findIdempotencyRecord(pool, auth.user_id, body.idempotency_key);
     if (existingJobId) {
-      sendError(res, "IDEMPOTENT_REPLAY");
-      return;
+      const existingJob = await getJobById(pool, existingJobId, auth.user_id);
+      if (existingJob && isRunningStatus(existingJob.status)) {
+        sendError(res, "CONCURRENT_JOB_RUNNING");
+        return;
+      }
+      await deleteIdempotencyRecord(pool, auth.user_id, body.idempotency_key);
     }
 
     const running = await hasRunningJob(pool, auth.user_id);
@@ -131,6 +193,7 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
         hostType: body.host_type,
         sourceDocId: body.document_id,
         sourceDocName: body.document_name,
+        targetDocId: body.target_document_id ?? null,
         sourceLangMode: body.source_language_mode,
         targetLanguageInput: body.target_language_input,
         targetLanguageCode,
@@ -159,25 +222,48 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
       client.release();
     }
 
-    // C2: Track whether enqueue actually succeeded
-    let enqueued = false;
+    const progressKey = `job_progress:${jobId}`;
     try {
       await enqueueJob(config, jobId);
-      enqueued = true;
     } catch (err) {
-      console.error("Failed to enqueue job to Cloud Tasks:", (err as Error).message);
-      // Job is in DB with status=pending but not enqueued.
-      // A recovery sweep (Phase 6) will re-enqueue orphaned pending jobs.
+      const message = err instanceof Error ? err.message : "Unknown enqueue error";
+      console.error("Failed to enqueue job to Cloud Tasks:", message);
+
+      await updateJobStatus(pool, jobId, "failed", {
+        errorCode: "JOB_INTERNAL_ERROR",
+        errorMessage: "Failed to enqueue job for processing. Please retry.",
+      });
+
+      await deleteIdempotencyRecord(pool, auth.user_id, body.idempotency_key).catch((cleanupErr) => {
+        console.error(
+          "Failed to cleanup idempotency record after enqueue failure:",
+          cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)
+        );
+      });
+
+      const failedResults = await redis
+        .multi()
+        .hset(progressKey, {
+          status: "failed",
+          progress_percent: "0",
+          current_step: "failed",
+          details: "Failed to queue job for processing",
+        })
+        .expire(progressKey, 24 * 60 * 60)
+        .exec();
+
+      assertMultiOk(failedResults, "jobs/create progress init failed");
+      sendError(res, "JOB_INTERNAL_ERROR", "Failed to enqueue job for processing. Please retry.");
+      return;
     }
 
-    const progressKey = `job_progress:${jobId}`;
     const results = await redis
       .multi()
       .hset(progressKey, {
-        status: enqueued ? "queued" : "pending",
+        status: "queued",
         progress_percent: "0",
-        current_step: enqueued ? "queued" : "pending",
-        details: enqueued ? "Job queued for processing" : "Job created, awaiting enqueue",
+        current_step: "queued",
+        details: "Job queued for processing",
       })
       .expire(progressKey, 24 * 60 * 60)
       .exec();
@@ -187,7 +273,7 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
     const response: CreateJobResponse = {
       status: "accepted",
       job_id: jobId,
-      queued: enqueued,
+      queued: true,
     };
 
     res.status(201).json(response);
@@ -240,6 +326,19 @@ export function getJobHandler(pool: Pool, redis: Redis) {
       return;
     }
 
+    if (job.status === "canceled") {
+      const response: JobCanceledResponse = {
+        job_id: job.id,
+        status: "canceled",
+        message: buildCanceledMessage(job),
+        total_units_billed: job.total_units_billed,
+        output_mode: job.output_mode,
+        output_document_url: job.output_document_url ?? undefined,
+      };
+      res.json(response);
+      return;
+    }
+
     // S8: Validate Redis status before using in response
     const progress = await redis.hgetall(`job_progress:${job.id}`);
     const redisStatus = progress?.status;
@@ -255,6 +354,115 @@ export function getJobHandler(pool: Pool, redis: Redis) {
       details: progress?.details,
     };
 
+    res.json(response);
+  };
+}
+
+export function cancelJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
+  return async (req: Request, res: Response) => {
+    const auth = req.authContext;
+    if (!auth) {
+      sendError(res, "UNAUTHORIZED");
+      return;
+    }
+
+    const jobId = req.params.jobId as string;
+    if (!jobId || !UUID_RE.test(jobId)) {
+      sendError(res, "VALIDATION_ERROR", "Invalid job ID format");
+      return;
+    }
+
+    const job = await getJobById(pool, jobId, auth.user_id);
+    if (!job) {
+      sendError(res, "NOT_FOUND", "Job not found");
+      return;
+    }
+
+    if (job.status === "completed") {
+      const response: CancelJobResponse = {
+        job_id: job.id,
+        status: "already_completed",
+        message: "This translation job has already completed.",
+      };
+      res.json(response);
+      return;
+    }
+
+    if (job.status === "failed") {
+      const response: CancelJobResponse = {
+        job_id: job.id,
+        status: "already_failed",
+        message: "This translation job has already failed.",
+      };
+      res.json(response);
+      return;
+    }
+
+    if (job.status === "canceled") {
+      const response: CancelJobResponse = {
+        job_id: job.id,
+        status: "already_canceled",
+        message: buildCanceledMessage(job),
+      };
+      res.json(response);
+      return;
+    }
+
+    if (job.status === "pending" || job.status === "queued") {
+      await deleteQueuedJob(config, job.id);
+      await updateJobStatus(pool, job.id, "canceled");
+      const progressKey = `job_progress:${job.id}`;
+      const results = await redis
+        .multi()
+        .del(buildJobCancelKey(job.id))
+        .hset(progressKey, {
+          status: "canceled",
+          progress_percent: "0",
+          current_step: "canceled",
+          details: "Translation canceled before processing started. No quota was charged.",
+        })
+        .expire(progressKey, CANCEL_KEY_TTL_SECONDS)
+        .exec();
+
+      assertMultiOk(results, "jobs/cancel pending progress");
+
+      const response: CancelJobResponse = {
+        job_id: job.id,
+        status: "canceled",
+        message: "Translation canceled before processing started.",
+      };
+      res.json(response);
+      return;
+    }
+
+    const cancelRequested = await requestJobCancel(pool, job.id, auth.user_id);
+    if (!cancelRequested) {
+      const response: CancelJobResponse = {
+        job_id: job.id,
+        status: "cancel_requested",
+        message: "Cancellation has already been requested. The worker will stop at the next safe checkpoint.",
+      };
+      res.json(response);
+      return;
+    }
+
+    const progressKey = `job_progress:${job.id}`;
+    const results = await redis
+      .multi()
+      .set(buildJobCancelKey(job.id), new Date().toISOString(), "EX", CANCEL_KEY_TTL_SECONDS)
+      .hset(progressKey, {
+        details: "Cancellation requested. The worker will stop at the next safe checkpoint.",
+      })
+      .expire(progressKey, CANCEL_KEY_TTL_SECONDS)
+      .exec();
+
+    assertMultiOk(results, "jobs/cancel request");
+
+    const response: CancelJobResponse = {
+      job_id: job.id,
+      status: "cancel_requested",
+      message: "Cancellation requested. The current step will stop as soon as possible.",
+    };
     res.json(response);
   };
 }

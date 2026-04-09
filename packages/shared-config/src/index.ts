@@ -29,6 +29,11 @@ export function loadConfig() {
   }
 
   const workerUrl = optionalEnv("WORKER_URL", "");
+  const normalizedWorkerUrl = workerUrl.replace(/\/$/, "");
+  const cloudTasksAudience = optionalEnv(
+    "CLOUD_TASKS_AUDIENCE",
+    normalizedWorkerUrl ? `${normalizedWorkerUrl}/tasks/translate` : ""
+  );
 
   // S10: WORKER_URL must be set in production
   if (nodeEnv === "production" && !workerUrl) {
@@ -59,6 +64,7 @@ export function loadConfig() {
       queueName: optionalEnv("CLOUD_TASKS_QUEUE_NAME", "YOUR_CLOUD_TASKS_QUEUE"),
       location: optionalEnv("CLOUD_TASKS_LOCATION", "us-central1"),
       workerUrl,
+      audience: cloudTasksAudience,
       invokerServiceAccount: optionalEnv(
         "CLOUD_TASKS_INVOKER_SA",
         ""
@@ -78,3 +84,58 @@ export function loadConfig() {
 }
 
 export type AppConfig = ReturnType<typeof loadConfig>;
+
+export function loadWorkerConfig() {
+  const nodeEnv = optionalEnv("NODE_ENV", "development");
+  const cloudTasksAudience = optionalEnv("CLOUD_TASKS_AUDIENCE", "");
+  const cloudTasksInvokerServiceAccount = optionalEnv(
+    "CLOUD_TASKS_INVOKER_SA",
+    ""
+  );
+
+  if (nodeEnv === "production" && !cloudTasksAudience) {
+    throw new Error("CLOUD_TASKS_AUDIENCE is required in production");
+  }
+
+  if (nodeEnv === "production" && !cloudTasksInvokerServiceAccount) {
+    throw new Error("CLOUD_TASKS_INVOKER_SA is required in production");
+  }
+
+  return {
+    port: requireIntEnv("PORT", optionalEnv("PORT", "8081")),
+    nodeEnv,
+
+    gcpProjectId: requireEnv("GCP_PROJECT_ID"),
+    gcpRegion: optionalEnv("GCP_REGION", "us-central1"),
+
+    db: {
+      host: optionalEnv("DB_HOST", "127.0.0.1"),
+      port: requireIntEnv("DB_PORT", optionalEnv("DB_PORT", "5432")),
+      name: optionalEnv("DB_NAME", "translay"),
+      user: optionalEnv("DB_USER", "translay_app"),
+      password: requireEnv("DB_PASSWORD"),
+    },
+
+    redis: {
+      host: requireEnv("REDIS_HOST"),
+      port: requireIntEnv("REDIS_PORT", optionalEnv("REDIS_PORT", "6379")),
+    },
+
+    vertex: {
+      model: optionalEnv("VERTEX_MODEL", "gemini-3.1-flash-lite-preview"),
+      maxInputTokens: 50_000,
+      location: optionalEnv("VERTEX_LOCATION", "global"),
+    },
+
+    gemmaGpu: {
+      url: optionalEnv("GEMMA_GPU_URL", ""),
+    },
+
+    cloudTasks: {
+      audience: cloudTasksAudience,
+      invokerServiceAccount: cloudTasksInvokerServiceAccount,
+    },
+  } as const;
+}
+
+export type WorkerConfig = ReturnType<typeof loadWorkerConfig>;

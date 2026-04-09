@@ -1,0 +1,16 @@
+substitutions:
+  _REGION: us-central1
+  _REPOSITORY: translay-repo
+  _IMAGE_TAG: manual
+
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-f'
+      - 'infra/sql/Dockerfile'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/sql-migrator:${_IMAGE_TAG}'
+      - '.'
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/sql-migrator:${_IMAGE_TAG}'

@@ -7,6 +7,9 @@ export type OutputMode = (typeof OUTPUT_MODES)[number];
 export const RANGE_MODES = ["current", "entire", "custom"] as const;
 export type RangeMode = (typeof RANGE_MODES)[number];
 
+export const SOURCE_LANGUAGE_MODES = ["auto"] as const;
+export type SourceLanguageMode = (typeof SOURCE_LANGUAGE_MODES)[number];
+
 export const JOB_STATUSES = [
   "pending",
   "queued",
@@ -20,7 +23,7 @@ export const JOB_STATUSES = [
 export type JobStatus = (typeof JOB_STATUSES)[number];
 
 /** Statuses that indicate a job is still in progress (not terminal). */
-export type JobInProgressStatus = "pending" | "queued" | "extracting" | "translating" | "writing" | "canceled";
+export type JobInProgressStatus = "pending" | "queued" | "extracting" | "translating" | "writing";
 
 export const SEGMENT_TYPES = ["extract", "translate", "write"] as const;
 export type SegmentType = (typeof SEGMENT_TYPES)[number];
@@ -41,7 +44,9 @@ export interface CreateJobRequest {
   readonly host_type: HostType;
   readonly document_id: string;
   readonly document_name: string;
-  readonly source_language_mode: "auto";
+  readonly target_document_id?: string;
+  readonly resubmit?: boolean;
+  readonly source_language_mode: SourceLanguageMode;
   readonly target_language_input: string;
   readonly output_mode: OutputMode;
   readonly range_mode: RangeMode;
@@ -74,6 +79,16 @@ export interface JobCompletedResponse {
   readonly message: string;
 }
 
+/** GET /api/jobs/:jobId — canceled response. */
+export interface JobCanceledResponse {
+  readonly job_id: string;
+  readonly status: "canceled";
+  readonly message: string;
+  readonly total_units_billed: number;
+  readonly output_mode: OutputMode;
+  readonly output_document_url?: string;
+}
+
 /** GET /api/jobs/:jobId — failed response. */
 export interface JobFailedResponse {
   readonly job_id: string;
@@ -85,7 +100,15 @@ export interface JobFailedResponse {
 export type JobStatusResponse =
   | JobProgressResponse
   | JobCompletedResponse
+  | JobCanceledResponse
   | JobFailedResponse;
+
+/** POST /api/jobs/:jobId/cancel response. */
+export interface CancelJobResponse {
+  readonly job_id: string;
+  readonly status: "cancel_requested" | "canceled" | "already_completed" | "already_failed" | "already_canceled";
+  readonly message: string;
+}
 
 /** Cloud Tasks payload (internal, not public API). */
 export interface TaskPayload {

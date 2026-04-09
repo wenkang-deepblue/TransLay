@@ -11,6 +11,16 @@ function getClient(): CloudTasksClient {
   return tasksClient;
 }
 
+export function getTaskName(config: AppConfig, jobId: JobId | string): string {
+  const client = getClient();
+  return client.taskPath(
+    config.gcpProjectId,
+    config.cloudTasks.location,
+    config.cloudTasks.queueName,
+    String(jobId)
+  );
+}
+
 export async function enqueueJob(
   config: AppConfig,
   jobId: JobId | string
@@ -42,6 +52,7 @@ export async function enqueueJob(
   await client.createTask({
     parent,
     task: {
+      name: getTaskName(config, jobId),
       httpRequest: {
         httpMethod: "POST",
         url: `${workerUrl}/tasks/translate`,
@@ -49,8 +60,23 @@ export async function enqueueJob(
         body: Buffer.from(JSON.stringify(payload)).toString("base64"),
         oidcToken: {
           serviceAccountEmail: invokerSa,
+          audience: config.cloudTasks.audience,
         },
       },
     },
   });
+}
+
+export async function deleteQueuedJob(config: AppConfig, jobId: JobId | string): Promise<void> {
+  const client = getClient();
+  const name = getTaskName(config, jobId);
+  try {
+    await client.deleteTask({ name });
+  } catch (error) {
+    const err = error as { code?: number };
+    if (err.code === 5) {
+      return;
+    }
+    throw error;
+  }
 }
