@@ -452,6 +452,119 @@ test("writer rebuilds speaker notes with the same rich-text request structure", 
   });
 });
 
+test("writer applies fit-pass scaling proportionally across style hierarchy and tightens paragraph spacing", () => {
+  const sourceNode = createNode({
+    node_id: "metric_fit",
+    text: "$68B ARR",
+    full_text: "$68B ARR",
+    slide_index: 4,
+    element_type: "shape",
+    archetype: "metric_card",
+    object_id: "metric_fit",
+    box: {
+      width_emu: 72 * 12700,
+      height_emu: 26 * 12700,
+      translate_x_emu: 0,
+      translate_y_emu: 0,
+      rotation_deg: 0,
+    },
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        text: "$68B ARR",
+        start_index: 0,
+        end_index: 8,
+        paragraph_style: {
+          lineSpacing: 115,
+          spaceAbove: { magnitude: 8, unit: "PT" },
+          spaceBelow: { magnitude: 6, unit: "PT" },
+        },
+        runs: [
+          {
+            run_id: "r0",
+            text: "$68B",
+            start_index: 0,
+            end_index: 4,
+            style_role: "metric_value",
+            text_style: {
+              fontSize: { magnitude: 28, unit: "PT" },
+              bold: true,
+            },
+          },
+          {
+            run_id: "r1",
+            text: " ARR",
+            start_index: 4,
+            end_index: 8,
+            style_role: "metric_unit",
+            text_style: {
+              fontSize: { magnitude: 14, unit: "PT" },
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  const translatedNode: TranslatedNode = {
+    node_id: "metric_fit",
+    translated_full_text: "68 mil millones de dolares ARR",
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        translated_text: "68 mil millones de dolares ARR",
+        bullet_behavior: "none",
+      },
+    ],
+    segments: [
+      {
+        segment_id: "r0",
+        translated_text: "68 mil millones",
+        style_role: "metric_value",
+      },
+      {
+        segment_id: "r1",
+        translated_text: " de dolares ARR",
+        style_role: "metric_unit",
+      },
+    ],
+  };
+
+  const requests = __buildNodeWriteRequestsForTests({
+    sourceNode,
+    translatedNode,
+    objectId: "metric_fit_copy",
+  });
+
+  const paragraphStyleRequest = requests.find((request) => request.updateParagraphStyle);
+  const textStyleRequests = requests.filter((request) => request.updateTextStyle);
+
+  assert.ok(paragraphStyleRequest?.updateParagraphStyle);
+  assert.equal(
+    paragraphStyleRequest?.updateParagraphStyle?.style?.lineSpacing !== undefined,
+    true
+  );
+  assert.ok((paragraphStyleRequest?.updateParagraphStyle?.style?.lineSpacing ?? 0) < 115);
+  assert.ok(
+    (paragraphStyleRequest?.updateParagraphStyle?.style?.spaceAbove?.magnitude ?? 0) < 8
+  );
+  assert.ok(
+    (paragraphStyleRequest?.updateParagraphStyle?.style?.spaceBelow?.magnitude ?? 0) < 6
+  );
+  assert.equal(textStyleRequests.length, 2);
+  assert.ok(
+    (textStyleRequests[0]?.updateTextStyle?.style?.fontSize?.magnitude ?? 0) < 28
+  );
+  assert.ok(
+    (textStyleRequests[1]?.updateTextStyle?.style?.fontSize?.magnitude ?? 0) < 14
+  );
+  assert.equal(
+    (textStyleRequests[0]?.updateTextStyle?.style?.fontSize?.magnitude ?? 0) /
+      (textStyleRequests[1]?.updateTextStyle?.style?.fontSize?.magnitude ?? 1),
+    2
+  );
+});
+
 test("writer handles empty translated nodes by issuing only deleteText", () => {
   const sourceNode = createNode({
     node_id: "shape_empty",

@@ -2,6 +2,11 @@ import type { slides_v1 } from "googleapis";
 import type { TranslatedNode } from "@translay/shared-contracts";
 import type { SlideTextNode, SlideExtractionResult } from "./types";
 import { getSlidesClient } from "./auth";
+import {
+  applyFitToParagraphStyle,
+  applyFitToTextStyle,
+  fitTranslatedNode,
+} from "./fit-pass";
 
 interface SlideDuplicatePlan {
   readonly sourceSlide: slides_v1.Schema$Page;
@@ -352,6 +357,7 @@ function buildNodeWriteRequests(
   params: NodeWriteRequestParams
 ): slides_v1.Schema$Request[] {
   const plan = buildRichTextWritePlan(params.sourceNode, params.translatedNode);
+  const fit = fitTranslatedNode(params.sourceNode, params.translatedNode);
   const requests: slides_v1.Schema$Request[] = [
     {
       deleteText: {
@@ -396,7 +402,7 @@ function buildNodeWriteRequests(
         updateParagraphStyle: {
           objectId: params.objectId,
           cellLocation: params.cellLocation,
-          style: structuredClone(paragraphPlan.sourceParagraph.paragraph_style),
+          style: applyFitToParagraphStyle(paragraphPlan.sourceParagraph.paragraph_style, fit),
           fields: "*",
           textRange: {
             type: "FIXED_RANGE",
@@ -416,7 +422,11 @@ function buildNodeWriteRequests(
         updateTextStyle: {
           objectId: params.objectId,
           cellLocation: params.cellLocation,
-          style: structuredClone(segmentPlan.sourceRun.text_style),
+          style: applyFitToTextStyle(
+            segmentPlan.sourceRun.text_style,
+            fit,
+            getFallbackFontSizeForRun(params.sourceNode, segmentPlan.sourceRun.run_id)
+          ),
           fields: "*",
           textRange: {
             type: "FIXED_RANGE",
@@ -600,6 +610,28 @@ function inferBulletPreset(glyph?: string): string {
   }
 
   return DEFAULT_BULLET_PRESET;
+}
+
+function getFallbackFontSizeForRun(
+  sourceNode: SlideTextNode,
+  runId: string
+): number | undefined {
+  let maxFontSize: number | undefined;
+
+  for (const paragraph of sourceNode.paragraphs) {
+    for (const run of paragraph.runs) {
+      const magnitude = run.text_style.fontSize?.magnitude;
+      if (typeof magnitude === "number") {
+        maxFontSize = maxFontSize === undefined ? magnitude : Math.max(maxFontSize, magnitude);
+      }
+
+      if (run.run_id === runId && typeof magnitude === "number") {
+        return magnitude;
+      }
+    }
+  }
+
+  return maxFontSize;
 }
 
 function findElement(
