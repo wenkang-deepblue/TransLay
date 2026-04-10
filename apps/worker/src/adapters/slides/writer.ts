@@ -10,15 +10,50 @@ interface SlideDuplicatePlan {
   readonly objectIds: Record<string, string>;
 }
 
-interface TextStyleSnapshot {
-  readonly textStyle?: slides_v1.Schema$TextStyle;
-  readonly paragraphStyle?: slides_v1.Schema$ParagraphStyle;
+interface NodeWriteRequestParams {
+  readonly sourceNode: SlideTextNode;
+  readonly translatedNode: TranslatedNode;
+  readonly objectId: string;
+  readonly cellLocation?: slides_v1.Schema$TableCellLocation;
 }
 
 export interface WriteBackResult {
   readonly outputUrl: string;
   readonly committedUnits: number;
 }
+
+interface ParagraphWritePlan {
+  readonly sourceParagraph: SlideTextNode["paragraphs"][number];
+  readonly translatedParagraph: TranslatedNode["paragraphs"][number];
+  readonly insertionStart: number;
+  readonly insertionEnd: number;
+  readonly styleRangeStart: number;
+  readonly styleRangeEnd: number;
+  readonly needsBullet: boolean;
+  readonly bulletGlyph?: string;
+}
+
+interface SegmentWritePlan {
+  readonly sourceRun: SlideTextNode["paragraphs"][number]["runs"][number];
+  readonly translatedSegment: TranslatedNode["segments"][number];
+  readonly start: number;
+  readonly end: number;
+}
+
+interface BulletRangePlan {
+  readonly start: number;
+  readonly end: number;
+  readonly glyph?: string;
+}
+
+interface RichTextWritePlan {
+  readonly insertedText: string;
+  readonly paragraphPlans: readonly ParagraphWritePlan[];
+  readonly segmentPlans: readonly SegmentWritePlan[];
+  readonly bulletRanges: readonly BulletRangePlan[];
+}
+
+const DEFAULT_BULLET_PRESET = "BULLET_DISC_CIRCLE_SQUARE";
 
 export async function writeBackAppend(
   presentationId: string,
@@ -164,10 +199,10 @@ export async function writeBackNewFile(
 
 function buildTranslationMap(
   translatedNodes: readonly TranslatedNode[]
-): Map<string, string> {
-  const map = new Map<string, string>();
+): Map<string, TranslatedNode> {
+  const map = new Map<string, TranslatedNode>();
   for (const node of translatedNodes) {
-    map.set(node.node_id, node.translated_full_text);
+    map.set(node.node_id, node);
   }
   return map;
 }
@@ -240,7 +275,7 @@ function buildExecutionPrefix(): string {
 function buildReplaceRequests(
   slide: slides_v1.Schema$Page,
   originalNodes: SlideTextNode[],
-  translationMap: Map<string, string>,
+  translationMap: Map<string, TranslatedNode>,
   resolveObjectId: (sourceObjectId: string) => string
 ): slides_v1.Schema$Request[] {
   const requests: slides_v1.Schema$Request[] = [];
@@ -263,11 +298,11 @@ function buildReplaceRequests(
       }
 
       requests.push(
-        ...buildTextReplacementRequests(
-          resolvedObjectId,
-          translated,
-          captureTextStyleSnapshot(notesShape.shape.text)
-        )
+        ...buildNodeWriteRequests({
+          sourceNode: node,
+          translatedNode: translated,
+          objectId: resolvedObjectId,
+        })
       );
       continue;
     }
@@ -283,15 +318,15 @@ function buildReplaceRequests(
       }
 
       requests.push(
-        ...buildTextReplacementRequests(
-          resolvedObjectId,
-          translated,
-          captureTextStyleSnapshot(tableCell.text),
-          {
+        ...buildNodeWriteRequests({
+          sourceNode: node,
+          translatedNode: translated,
+          objectId: resolvedObjectId,
+          cellLocation: {
             rowIndex: node.row_index ?? 0,
             columnIndex: node.col_index ?? 0,
-          }
-        )
+          },
+        })
       );
       continue;
     }
@@ -302,69 +337,92 @@ function buildReplaceRequests(
     }
 
     requests.push(
-      ...buildTextReplacementRequests(
-        resolvedObjectId,
-        translated,
-        captureTextStyleSnapshot(element.shape.text)
-      )
+      ...buildNodeWriteRequests({
+        sourceNode: node,
+        translatedNode: translated,
+        objectId: resolvedObjectId,
+      })
     );
   }
 
   return requests;
 }
 
-function buildTextReplacementRequests(
-  objectId: string,
-  translatedText: string,
-  styleSnapshot: TextStyleSnapshot,
-  cellLocation?: slides_v1.Schema$TableCellLocation
+function buildNodeWriteRequests(
+  params: NodeWriteRequestParams
 ): slides_v1.Schema$Request[] {
+  const plan = buildRichTextWritePlan(params.sourceNode, params.translatedNode);
   const requests: slides_v1.Schema$Request[] = [
     {
       deleteText: {
-        objectId,
-        cellLocation,
+        objectId: params.objectId,
+        cellLocation: params.cellLocation,
         textRange: { type: "ALL" },
       },
     },
   ];
 
-  if (translatedText.length > 0) {
+  if (plan.insertedText.length > 0) {
     requests.push({
       insertText: {
-        objectId,
-        cellLocation,
-        text: translatedText,
+        objectId: params.objectId,
+        cellLocation: params.cellLocation,
+        text: plan.insertedText,
         insertionIndex: 0,
       },
     });
 
-    const textRange = {
-      type: "FIXED_RANGE",
-      startIndex: 0,
-      endIndex: translatedText.length,
-    } as const;
-
-    if (styleSnapshot.textStyle) {
+    for (const bulletRange of plan.bulletRanges) {
       requests.push({
-        updateTextStyle: {
-          objectId,
-          cellLocation,
-          style: styleSnapshot.textStyle,
-          fields: "*",
-          textRange,
+        createParagraphBullets: {
+          objectId: params.objectId,
+          cellLocation: params.cellLocation,
+          bulletPreset: inferBulletPreset(bulletRange.glyph),
+          textRange: {
+            type: "FIXED_RANGE",
+            startIndex: bulletRange.start,
+            endIndex: bulletRange.end,
+          },
         },
       });
     }
 
-    if (styleSnapshot.paragraphStyle) {
+    for (const paragraphPlan of plan.paragraphPlans) {
+      if (Object.keys(paragraphPlan.sourceParagraph.paragraph_style).length === 0) {
+        continue;
+      }
+
       requests.push({
         updateParagraphStyle: {
-          objectId,
-          cellLocation,
-          style: styleSnapshot.paragraphStyle,
+          objectId: params.objectId,
+          cellLocation: params.cellLocation,
+          style: structuredClone(paragraphPlan.sourceParagraph.paragraph_style),
           fields: "*",
-          textRange,
+          textRange: {
+            type: "FIXED_RANGE",
+            startIndex: paragraphPlan.styleRangeStart,
+            endIndex: paragraphPlan.styleRangeEnd,
+          },
+        },
+      });
+    }
+
+    for (const segmentPlan of plan.segmentPlans) {
+      if (Object.keys(segmentPlan.sourceRun.text_style).length === 0) {
+        continue;
+      }
+
+      requests.push({
+        updateTextStyle: {
+          objectId: params.objectId,
+          cellLocation: params.cellLocation,
+          style: structuredClone(segmentPlan.sourceRun.text_style),
+          fields: "*",
+          textRange: {
+            type: "FIXED_RANGE",
+            startIndex: segmentPlan.start,
+            endIndex: segmentPlan.end,
+          },
         },
       });
     }
@@ -373,19 +431,175 @@ function buildTextReplacementRequests(
   return requests;
 }
 
-function captureTextStyleSnapshot(
-  textContent: slides_v1.Schema$TextContent
-): TextStyleSnapshot {
-  const textElements = textContent.textElements ?? [];
-  const textRun = textElements.find((element) => element.textRun?.style)?.textRun;
-  const paragraphMarker = textElements.find((element) => element.paragraphMarker?.style)?.paragraphMarker;
+export function __buildNodeWriteRequestsForTests(
+  params: NodeWriteRequestParams
+): slides_v1.Schema$Request[] {
+  return buildNodeWriteRequests(params);
+}
+
+function buildRichTextWritePlan(
+  sourceNode: SlideTextNode,
+  translatedNode: TranslatedNode
+): RichTextWritePlan {
+  const translatedParagraphById = new Map(
+    translatedNode.paragraphs.map((paragraph) => [paragraph.paragraph_id, paragraph] as const)
+  );
+  const translatedSegmentById = new Map(
+    translatedNode.segments.map((segment) => [segment.segment_id, segment] as const)
+  );
+  const consumedParagraphIds = new Set<string>();
+  const consumedSegmentIds = new Set<string>();
+  const paragraphPlans: ParagraphWritePlan[] = [];
+  const segmentPlans: SegmentWritePlan[] = [];
+  let insertedText = "";
+  let insertionCursor = 0;
+
+  for (let index = 0; index < sourceNode.paragraphs.length; index += 1) {
+    const sourceParagraph = sourceNode.paragraphs[index];
+    const translatedParagraph = translatedParagraphById.get(sourceParagraph.paragraph_id);
+    if (!translatedParagraph) {
+      throw new Error(
+        `Translated node "${translatedNode.node_id}" is missing paragraph "${sourceParagraph.paragraph_id}"`
+      );
+    }
+
+    consumedParagraphIds.add(sourceParagraph.paragraph_id);
+
+    if (index > 0) {
+      insertedText += "\n";
+      insertionCursor += 1;
+    }
+
+    const needsBullet = translatedParagraph.bullet_behavior === "preserve";
+    const bulletPrefix = needsBullet
+      ? "\t".repeat(sourceParagraph.bullet?.nesting_level ?? 0)
+      : "";
+    const insertionStart = insertionCursor;
+    insertedText += bulletPrefix + translatedParagraph.translated_text;
+    insertionCursor += bulletPrefix.length + translatedParagraph.translated_text.length;
+    const insertionEnd = insertionCursor;
+
+    const styleRangeStart = insertionStart + bulletPrefix.length;
+    const styleRangeEnd = insertionEnd;
+
+    let segmentCursor = styleRangeStart;
+    for (const sourceRun of sourceParagraph.runs) {
+      const translatedSegment = translatedSegmentById.get(sourceRun.run_id);
+      if (!translatedSegment) {
+        throw new Error(
+          `Translated node "${translatedNode.node_id}" is missing segment "${sourceRun.run_id}"`
+        );
+      }
+
+      consumedSegmentIds.add(sourceRun.run_id);
+      const start = segmentCursor;
+      segmentCursor += translatedSegment.translated_text.length;
+      const end = segmentCursor;
+      segmentPlans.push({
+        sourceRun,
+        translatedSegment,
+        start,
+        end,
+      });
+    }
+
+    if (segmentCursor !== styleRangeEnd) {
+      throw new Error(
+        `Translated paragraph "${translatedParagraph.paragraph_id}" does not match its segment reconstruction`
+      );
+    }
+
+    paragraphPlans.push({
+      sourceParagraph,
+      translatedParagraph,
+      insertionStart,
+      insertionEnd,
+      styleRangeStart,
+      styleRangeEnd,
+      needsBullet,
+      bulletGlyph: sourceParagraph.bullet?.glyph,
+    });
+  }
+
+  if (consumedParagraphIds.size !== translatedNode.paragraphs.length) {
+    throw new Error(
+      `Translated node "${translatedNode.node_id}" contains unexpected paragraphs for writer rebuild`
+    );
+  }
+
+  if (consumedSegmentIds.size !== translatedNode.segments.length) {
+    throw new Error(
+      `Translated node "${translatedNode.node_id}" contains unexpected segments for writer rebuild`
+    );
+  }
+
+  if (paragraphPlans.map((plan) => plan.translatedParagraph.translated_text).join("\n") !== translatedNode.translated_full_text) {
+    throw new Error(
+      `Translated node "${translatedNode.node_id}" full text does not match paragraph reconstruction`
+    );
+  }
 
   return {
-    textStyle: textRun?.style ? structuredClone(textRun.style) : undefined,
-    paragraphStyle: paragraphMarker?.style
-      ? structuredClone(paragraphMarker.style)
-      : undefined,
+    insertedText,
+    paragraphPlans,
+    segmentPlans,
+    bulletRanges: buildBulletRanges(paragraphPlans),
   };
+}
+
+function buildBulletRanges(
+  paragraphPlans: readonly ParagraphWritePlan[]
+): BulletRangePlan[] {
+  const ranges: BulletRangePlan[] = [];
+  let activeRange: BulletRangePlan | null = null;
+
+  for (const paragraphPlan of paragraphPlans) {
+    if (!paragraphPlan.needsBullet) {
+      if (activeRange) {
+        ranges.push(activeRange);
+        activeRange = null;
+      }
+      continue;
+    }
+
+    if (!activeRange) {
+      activeRange = {
+        start: paragraphPlan.insertionStart,
+        end: paragraphPlan.insertionEnd,
+        glyph: paragraphPlan.bulletGlyph,
+      };
+      continue;
+    }
+
+    activeRange = {
+      start: activeRange.start,
+      end: paragraphPlan.insertionEnd,
+      glyph: activeRange.glyph ?? paragraphPlan.bulletGlyph,
+    };
+  }
+
+  if (activeRange) {
+    ranges.push(activeRange);
+  }
+
+  return ranges;
+}
+
+function inferBulletPreset(glyph?: string): string {
+  const normalized = glyph?.trim();
+  if (!normalized) {
+    return DEFAULT_BULLET_PRESET;
+  }
+
+  if (/^\d/.test(normalized)) {
+    return "NUMBERED_DIGIT_ALPHA_ROMAN";
+  }
+
+  if (/^[A-Za-z]/.test(normalized)) {
+    return "NUMBERED_UPPERALPHA_ALPHA_ROMAN";
+  }
+
+  return DEFAULT_BULLET_PRESET;
 }
 
 function findElement(
