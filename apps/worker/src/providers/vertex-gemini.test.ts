@@ -46,7 +46,34 @@ test("translateWithVertexGemini sends system instructions and a constrained JSON
     model: "gemini-3.1-flash-lite-preview",
     source_language: "English",
     target_language: "Chinese",
-    context_text: "[Slide 1] Product presentation\n[Slide 2] Presentation goals",
+    context_pack: {
+      deck_title: "Q3 Product Presentation",
+      source_language: "English",
+      target_language: "Chinese",
+      deck_plaintext_context:
+        "[Slide 1] Product presentation\n[Slide 2] Presentation goals",
+      glossary_candidates: [
+        {
+          source_term: "ARR",
+          occurrences: 3,
+        },
+      ],
+      nodes: [
+        {
+          node_id: "n1",
+          archetype: "bullet_list",
+          slide_index: 1,
+          full_text: "Presentation overview",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "Presentation overview",
+              style_roles: ["default"],
+            },
+          ],
+        },
+      ],
+    },
     nodes: [{ node_id: "n1", text: "Presentation overview" }],
   };
 
@@ -104,7 +131,19 @@ test("translateWithVertexGemini sends system instructions and a constrained JSON
       systemInstruction,
       /Maintain consistent terminology for repeated domain terms/i
     );
-    assert.match(userPrompt, /FULL DOCUMENT CONTEXT/i);
+    assert.match(userPrompt, /DECK CONTEXT PACK/i);
+    assert.match(userPrompt, /Q3 Product Presentation/);
+    assert.match(userPrompt, /ARR/);
+    assert.match(userPrompt, /bullet_list/);
+    assert.match(userPrompt, /Presentation overview/);
+    const [, deckContextSection = ""] =
+      userPrompt.match(/DECK CONTEXT PACK:\n([\s\S]*?)\n\nTARGET NODES:/) ?? [];
+    assert.doesNotMatch(deckContextSection, /"full_text"/);
+    assert.doesNotMatch(deckContextSection, /"text":/);
+    assert.equal(
+      [...userPrompt.matchAll(/Presentation overview/g)].length,
+      1
+    );
     assert.match(userPrompt, /Translate only the target nodes/i);
     assert.doesNotMatch(userPrompt, /for reference only/i);
     assert.doesNotMatch(

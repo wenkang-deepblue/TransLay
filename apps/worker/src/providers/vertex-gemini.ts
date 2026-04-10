@@ -1,5 +1,6 @@
 import type { WorkerConfig } from "@translay/shared-config";
 import type {
+  TranslationContextPack,
   TranslationNode,
   TranslatedNode,
   TranslationRequest,
@@ -25,7 +26,7 @@ You are a professional translator for presentation and document content.
 
 Follow these rules for every request:
 - Semantic correctness is the highest priority.
-- Use the provided full-document context to infer the document domain, audience, and terminology.
+- Use the provided deck context pack to infer the document domain, audience, terminology, and local structure constraints.
 - Maintain consistent terminology for repeated domain terms when they carry the same meaning.
 - If the local sentence clearly requires a different meaning, choose the translation that preserves the local meaning even if wording differs elsewhere.
 - Translate only the provided target nodes.
@@ -86,7 +87,7 @@ export async function translateWithVertexGemini(
     nodes,
     source_language,
     target_language,
-    request.context_text
+    request.context_pack
   );
 
   const endpoint = buildVertexGenerateContentEndpoint(
@@ -208,26 +209,24 @@ function buildPrompt(
   nodes: readonly TranslationNode[],
   sourceLang: string,
   targetLang: string,
-  contextText?: string
+  contextPack?: TranslationContextPack
 ): string {
   const nodesJson = nodes.map((n) => ({
     node_id: n.node_id,
     text: n.text,
   }));
 
-  const contextBlock = contextText
-    ? `FULL DOCUMENT CONTEXT:
----
-${contextText}
----`
-    : "FULL DOCUMENT CONTEXT:\n<not provided>";
+  const contextBlock = contextPack
+    ? `DECK CONTEXT PACK:
+${JSON.stringify(compactContextPackForPrompt(contextPack), null, 2)}`
+    : "DECK CONTEXT PACK:\n<not provided>";
 
   return `TASK:
 Translate only the target nodes from ${sourceLang} to ${targetLang}.
 
 TRANSLATION PRIORITIES:
 1. Preserve the intended meaning of each node in its local sentence or slide context.
-2. Use the full document context to keep terminology and style consistent when the meaning stays the same.
+2. Use the deck context pack to keep terminology and style consistent when the meaning stays the same.
 3. If a repeated source term has a different meaning locally, prefer the correct local meaning over forced consistency.
 4. Keep the same number of nodes and preserve each node_id exactly.
 5. Preserve line breaks, punctuation, and non-translatable content when possible.
@@ -237,6 +236,42 @@ ${contextBlock}
 
 TARGET NODES:
 ${JSON.stringify(nodesJson)}`;
+}
+
+function compactContextPackForPrompt(contextPack: TranslationContextPack) {
+  const activeSlides = new Set(contextPack.nodes.map((node) => node.slide_index));
+  const deckContextWithoutActiveSlides = contextPack.deck_plaintext_context
+    .split("\n")
+    .filter((line) => {
+      const match = line.match(/^\[Slide (\d+)\]/);
+      if (!match) {
+        return true;
+      }
+
+      const slideIndex = Number.parseInt(match[1] ?? "", 10);
+      return !activeSlides.has(slideIndex);
+    })
+    .join("\n");
+
+  return {
+    deck_title: contextPack.deck_title,
+    source_language: contextPack.source_language,
+    target_language: contextPack.target_language,
+    deck_plaintext_context:
+      deckContextWithoutActiveSlides || "<active group covers current deck context>",
+    glossary_candidates: contextPack.glossary_candidates,
+    nodes: contextPack.nodes.map((node) => ({
+      node_id: node.node_id,
+      archetype: node.archetype,
+      slide_index: node.slide_index,
+      paragraph_count: node.paragraphs.length,
+      paragraphs: node.paragraphs.map((paragraph) => ({
+        paragraph_id: paragraph.paragraph_id,
+        bullet: paragraph.bullet,
+        style_roles: paragraph.style_roles,
+      })),
+    })),
+  };
 }
 
 /**

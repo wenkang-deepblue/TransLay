@@ -4,7 +4,7 @@ import type { WorkerConfig } from "@translay/shared-config";
 import type {
   TaskPayload,
   TranslationRequest,
-  TranslationNode,
+  TranslatedNode,
 } from "@translay/shared-contracts";
 import {
   matchPresetLanguage,
@@ -18,6 +18,11 @@ import { setJobProgress } from "../cache/job-progress";
 import { extractSlides } from "../adapters/slides";
 import { writeBackAppend, writeBackNewFile, type WriteBackResult } from "../adapters/slides";
 import { selectRoute, translate } from "../providers/router";
+import {
+  buildDeckContextPack,
+  groupNodesForTranslation,
+  projectGroupToTranslationNodes,
+} from "./context-pack";
 
 /**
  * Main job pipeline: extract → translate → write-back.
@@ -120,36 +125,67 @@ export async function runJobPipeline(
       matchPresetLanguage(job.target_language_input) ??
       job.target_language_input;
 
-    const translationNodes: TranslationNode[] = extraction.all_nodes.map(
-      (n) => ({ node_id: n.node_id, text: n.text })
-    );
+    const translationGroups = groupNodesForTranslation(extraction.all_nodes);
 
-    // Build context: use full document text if within token budget.
-    // Rough estimate: 1 token ≈ 4 chars for mixed-language content.
-    const contextText = truncateToTokenBudget(
+    // Build deck-level plaintext context once, then reuse it for every group.
+    const deckPlaintextContext = truncateToTokenBudget(
       extraction.full_context_text,
       config.vertex.maxInputTokens
     );
+    const translatedNodes: TranslatedNode[] = [];
+    const providerRequestIds: string[] = [];
 
-    const translationRequest: TranslationRequest = {
-      provider: route.provider,
-      model: route.model,
-      source_language: "auto",
-      target_language: targetLangCode,
-      nodes: translationNodes,
-      context_text: contextText || undefined,
+    for (let groupIndex = 0; groupIndex < translationGroups.length; groupIndex += 1) {
+      const group = translationGroups[groupIndex];
+      if (!group) {
+        continue;
+      }
+
+      const translationRequest: TranslationRequest = {
+        provider: route.provider,
+        model: route.model,
+        source_language: "auto",
+        target_language: targetLangCode,
+        nodes: projectGroupToTranslationNodes(group),
+        context_pack: buildDeckContextPack({
+          deckTitle: extraction.title,
+          sourceLanguage: "auto",
+          targetLanguage: targetLangCode,
+          deckPlaintextContext,
+          deckNodes: extraction.all_nodes,
+          activeGroup: group,
+        }),
+      };
+
+      const groupResult = await translate(config, translationRequest);
+      validateTranslatedGroup(group, groupResult.nodes);
+      translatedNodes.push(...groupResult.nodes);
+      providerRequestIds.push(groupResult.provider_request_id);
+
+      const translatedGroupCount = groupIndex + 1;
+      const progressPercent = 30 + Math.round((translatedGroupCount / translationGroups.length) * 40);
+      await setJobProgress(redis, job_id, {
+        status: "translating",
+        progress_percent: progressPercent,
+        current_step: "translating_segments",
+        details: `Translated batch ${translatedGroupCount} of ${translationGroups.length}`,
+      });
+      await assertNotCanceled(pool, redis, job, writeResult);
+    }
+
+    const translationResult = {
+      provider_request_id: JSON.stringify(providerRequestIds),
+      nodes: translatedNodes,
     };
-
-    const translationResult = await translate(config, translationRequest);
     console.log(
       `Job ${job_id} translation completed: ${translationResult.nodes.length} translated nodes`
     );
 
     // Validate response integrity
-    if (translationResult.nodes.length !== translationNodes.length) {
+    if (translationResult.nodes.length !== extraction.all_nodes.length) {
       throw new PipelineError(
         "LLM_PROVIDER_ERROR",
-        `Translation returned ${translationResult.nodes.length} nodes, expected ${translationNodes.length}`
+        `Translation returned ${translationResult.nodes.length} nodes, expected ${extraction.all_nodes.length}`
       );
     }
 
@@ -459,6 +495,30 @@ function getErrorMetadata(error: unknown): Record<string, unknown> {
     google_error_reason: candidate.response?.data?.error?.errors?.[0]?.reason,
     error_message: candidate.message,
   };
+}
+
+function validateTranslatedGroup(
+  group: readonly { node_id: string }[],
+  translatedNodes: readonly TranslatedNode[]
+): void {
+  if (translatedNodes.length !== group.length) {
+    throw new PipelineError(
+      "LLM_PROVIDER_ERROR",
+      `Translation returned ${translatedNodes.length} nodes for a group of ${group.length}`
+    );
+  }
+
+  for (let index = 0; index < group.length; index += 1) {
+    const expectedNode = group[index];
+    const translatedNode = translatedNodes[index];
+
+    if (!expectedNode || !translatedNode || translatedNode.node_id !== expectedNode.node_id) {
+      throw new PipelineError(
+        "LLM_PROVIDER_ERROR",
+        `Translation node mismatch at group index ${index}`
+      );
+    }
+  }
 }
 
 /**
