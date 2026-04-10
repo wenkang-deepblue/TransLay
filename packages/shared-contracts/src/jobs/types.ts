@@ -1,3 +1,5 @@
+import type { TranslationNodeArchetype } from "../provider/types";
+
 export const HOST_TYPES = ["docs", "sheets", "slides"] as const;
 export type HostType = (typeof HOST_TYPES)[number];
 
@@ -17,6 +19,7 @@ export const JOB_STATUSES = [
   "translating",
   "writing",
   "completed",
+  "completed_with_warnings",
   "failed",
   "canceled",
 ] as const;
@@ -24,6 +27,26 @@ export type JobStatus = (typeof JOB_STATUSES)[number];
 
 /** Statuses that indicate a job is still in progress (not terminal). */
 export type JobInProgressStatus = "pending" | "queued" | "extracting" | "translating" | "writing";
+
+export const JOB_WARNING_RISK_LEVELS = ["medium", "high"] as const;
+export type JobWarningRiskLevel = (typeof JOB_WARNING_RISK_LEVELS)[number];
+
+export const JOB_WARNING_REASONS = [
+  "possible_overflow",
+  "mixed_style_alignment_low_confidence",
+  "bullet_structure_rebuilt_with_compaction",
+  "manual_review_recommended",
+] as const;
+export type JobWarningReason = (typeof JOB_WARNING_REASONS)[number];
+
+/** Structured warning metadata exposed to clients without persisting document content. */
+export interface JobWarning {
+  readonly node_id: string;
+  readonly slide_index: number;
+  readonly archetype: TranslationNodeArchetype;
+  readonly risk_level: JobWarningRiskLevel;
+  readonly risk_reason: JobWarningReason;
+}
 
 export const SEGMENT_TYPES = ["extract", "translate", "write"] as const;
 export type SegmentType = (typeof SEGMENT_TYPES)[number];
@@ -73,10 +96,11 @@ export interface JobProgressResponse {
 /** GET /api/jobs/:jobId — completed response. */
 export interface JobCompletedResponse {
   readonly job_id: string;
-  readonly status: "completed";
+  readonly status: "completed" | "completed_with_warnings";
   readonly progress_percent: 100;
   readonly output_document_url: string;
   readonly message: string;
+  readonly warnings?: readonly JobWarning[];
 }
 
 /** GET /api/jobs/:jobId — canceled response. */

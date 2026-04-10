@@ -53,7 +53,7 @@ export async function runJobPipeline(
 
   const route = selectRoute(config, job.user_id as string);
   console.log(`Job ${job_id} route selected: ${route.provider}/${route.model}`);
-  let writeResult: WriteBackResult = { outputUrl: "", committedUnits: 0 };
+  let writeResult: WriteBackResult = { outputUrl: "", committedUnits: 0, warnings: [] };
 
   try {
     await assertNotCanceled(pool, redis, job, writeResult);
@@ -333,13 +333,20 @@ async function finalizeSuccessfulJob(
   writeResult: WriteBackResult
 ): Promise<void> {
   const client = await pool.connect();
+  const completedStatus = writeResult.warnings.length > 0
+    ? "completed_with_warnings"
+    : "completed";
+  const completionDetail = writeResult.warnings.length > 0
+    ? `Translation completed with ${writeResult.warnings.length} warning(s). Review the translated Slides for minor layout issues.`
+    : "Translation completed successfully.";
   try {
     await client.query("BEGIN");
 
-    await updateJobStatus(client, jobId, "completed", {
+    await updateJobStatus(client, jobId, completedStatus, {
       outputDocumentUrl: writeResult.outputUrl,
       totalUnitsBilled: writeResult.committedUnits,
       targetLangCode,
+      warnings: writeResult.warnings,
     });
 
     if (writeResult.committedUnits > 0) {
@@ -366,10 +373,10 @@ async function finalizeSuccessfulJob(
 
   await Promise.all([
     setJobProgress(redis, jobId, {
-      status: "completed",
+      status: completedStatus,
       progress_percent: 100,
-      current_step: "completed",
-      details: "Translation completed successfully.",
+      current_step: completedStatus,
+      details: completionDetail,
     }),
     redis.del(buildJobCancelKey(jobId)),
   ]);

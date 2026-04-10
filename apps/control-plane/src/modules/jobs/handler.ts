@@ -15,6 +15,8 @@ import type {
   JobId,
   HostType,
   JobStatus,
+  JobStatusResponse,
+  JobWarning,
 } from "@translay/shared-contracts";
 import {
   validateCreateJobRequest,
@@ -32,6 +34,7 @@ import {
   getJobById,
   hasRunningJob,
   hasCompletedEquivalentJob,
+  type JobRow,
   requestJobCancel,
   updateJobStatus,
 } from "../../repositories/job-repo";
@@ -51,6 +54,7 @@ function isValidJobStatus(s: string): s is JobStatus {
   return (
     s === "pending" || s === "queued" || s === "extracting" ||
     s === "translating" || s === "writing" || s === "completed" ||
+    s === "completed_with_warnings" ||
     s === "failed" || s === "canceled"
   );
 }
@@ -81,6 +85,86 @@ function buildCanceledMessage(job: {
   }
 
   return "Translation canceled before any translated slides were written. No quota was charged.";
+}
+
+function buildCompletedMessage(reviewContainerCount: number): string {
+  if (reviewContainerCount > 0) {
+    const noun = reviewContainerCount === 1 ? "container" : "containers";
+    return `Translation completed with ${reviewContainerCount} ${noun} requiring review. Review the highlighted Slides containers for layout fidelity.`;
+  }
+
+  return "Translation completed successfully.";
+}
+
+function normalizeWarnings(warnings: JobRow["warnings"] | null | undefined): JobRow["warnings"] {
+  return Array.isArray(warnings) ? warnings : [];
+}
+
+function countUniqueWarningNodes(warnings: readonly JobWarning[]): number {
+  return new Set(warnings.map((warning) => warning.node_id)).size;
+}
+
+function buildJobStatusResponse(
+  job: JobRow,
+  progress?: Record<string, string>
+): JobStatusResponse {
+  if (job.status === "completed" || job.status === "completed_with_warnings") {
+    const normalizedWarnings = normalizeWarnings(job.warnings);
+    const reviewContainerCount = countUniqueWarningNodes(normalizedWarnings);
+    const response: JobCompletedResponse = {
+      job_id: job.id,
+      status: job.status,
+      progress_percent: 100,
+      output_document_url: job.output_document_url ?? "",
+      message: buildCompletedMessage(reviewContainerCount),
+      ...(normalizedWarnings.length > 0 ? { warnings: normalizedWarnings } : {}),
+    };
+    return response;
+  }
+
+  if (job.status === "failed") {
+    const response: JobFailedResponse = {
+      job_id: job.id,
+      status: "failed",
+      error: job.error_code ?? "JOB_INTERNAL_ERROR",
+      message: job.error_message ?? "Translation failed.",
+    };
+    return response;
+  }
+
+  if (job.status === "canceled") {
+    const response: JobCanceledResponse = {
+      job_id: job.id,
+      status: "canceled",
+      message: buildCanceledMessage(job),
+      total_units_billed: job.total_units_billed,
+      output_mode: job.output_mode,
+      output_document_url: job.output_document_url ?? undefined,
+    };
+    return response;
+  }
+
+  const redisStatus = progress?.status;
+  const resolvedStatus: JobStatus = (redisStatus && isValidJobStatus(redisStatus))
+    ? redisStatus
+    : job.status;
+
+  const response: JobProgressResponse = {
+    job_id: job.id,
+    status: resolvedStatus as JobInProgressStatus,
+    progress_percent: progress?.progress_percent ? parseInt(progress.progress_percent, 10) : 0,
+    current_step: progress?.current_step,
+    details: progress?.details,
+  };
+
+  return response;
+}
+
+export function __buildJobStatusResponseForTests(
+  job: JobRow,
+  progress?: Record<string, string>
+): JobStatusResponse {
+  return buildJobStatusResponse(job, progress);
 }
 
 // I10: Exhaustive host-type usage lookup
@@ -303,58 +387,18 @@ export function getJobHandler(pool: Pool, redis: Redis) {
       return;
     }
 
-    if (job.status === "completed") {
-      const response: JobCompletedResponse = {
-        job_id: job.id,
-        status: "completed",
-        progress_percent: 100,
-        output_document_url: job.output_document_url ?? "",
-        message: "Translation completed successfully.",
-      };
-      res.json(response);
+    if (
+      job.status === "completed" ||
+      job.status === "completed_with_warnings" ||
+      job.status === "failed" ||
+      job.status === "canceled"
+    ) {
+      res.json(buildJobStatusResponse(job));
       return;
     }
 
-    if (job.status === "failed") {
-      const response: JobFailedResponse = {
-        job_id: job.id,
-        status: "failed",
-        error: job.error_code ?? "JOB_INTERNAL_ERROR",
-        message: job.error_message ?? "Translation failed.",
-      };
-      res.json(response);
-      return;
-    }
-
-    if (job.status === "canceled") {
-      const response: JobCanceledResponse = {
-        job_id: job.id,
-        status: "canceled",
-        message: buildCanceledMessage(job),
-        total_units_billed: job.total_units_billed,
-        output_mode: job.output_mode,
-        output_document_url: job.output_document_url ?? undefined,
-      };
-      res.json(response);
-      return;
-    }
-
-    // S8: Validate Redis status before using in response
     const progress = await redis.hgetall(`job_progress:${job.id}`);
-    const redisStatus = progress?.status;
-    const resolvedStatus: JobStatus = (redisStatus && isValidJobStatus(redisStatus))
-      ? redisStatus
-      : job.status;
-
-    const response: JobProgressResponse = {
-      job_id: job.id,
-      status: resolvedStatus as JobInProgressStatus,
-      progress_percent: progress?.progress_percent ? parseInt(progress.progress_percent, 10) : 0,
-      current_step: progress?.current_step,
-      details: progress?.details,
-    };
-
-    res.json(response);
+    res.json(buildJobStatusResponse(job, progress));
   };
 }
 
@@ -378,7 +422,7 @@ export function cancelJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
       return;
     }
 
-    if (job.status === "completed") {
+    if (job.status === "completed" || job.status === "completed_with_warnings") {
       const response: CancelJobResponse = {
         job_id: job.id,
         status: "already_completed",

@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import type {
   HostType,
+  JobWarning,
   OutputMode,
   RangeMode,
   JobStatus,
@@ -29,6 +30,7 @@ export interface JobRow {
   output_document_url: string | null;
   error_code: string | null;
   error_message: string | null;
+  warnings: JobWarning[];
   cancel_requested_at: Date | null;
   started_at: Date;
   completed_at: Date | null;
@@ -38,7 +40,7 @@ export interface JobRow {
 const JOB_COLUMNS = `id, user_id, host_type, source_doc_id, source_doc_name, target_doc_id,
   source_language_mode, source_language, target_language_input, target_language_code,
   output_mode, range_mode, range_expression, provider_route, status, total_units_billed,
-  output_document_url, error_code, error_message, cancel_requested_at, started_at, completed_at`;
+  output_document_url, error_code, error_message, warnings, cancel_requested_at, started_at, completed_at`;
 
 export async function createJob(
   client: PoolClient,
@@ -109,13 +111,23 @@ export async function updateJobStatus(
   pool: Pool,
   jobId: JobId,
   status: JobStatus,
-  extra?: { errorCode?: string; errorMessage?: string; outputDocumentUrl?: string }
+  extra?: {
+    errorCode?: string;
+    errorMessage?: string;
+    outputDocumentUrl?: string;
+    warnings?: readonly JobWarning[];
+  }
 ): Promise<void> {
   const setClauses = ["status = $2"];
   const params: unknown[] = [jobId, status];
   let idx = 3;
 
-  if (status === "completed" || status === "failed" || status === "canceled") {
+  if (
+    status === "completed" ||
+    status === "completed_with_warnings" ||
+    status === "failed" ||
+    status === "canceled"
+  ) {
     setClauses.push("completed_at = NOW()");
   }
   if (extra?.errorCode) {
@@ -131,6 +143,11 @@ export async function updateJobStatus(
   if (extra?.outputDocumentUrl) {
     setClauses.push(`output_document_url = $${idx}`);
     params.push(extra.outputDocumentUrl);
+    idx++;
+  }
+  if (extra?.warnings !== undefined) {
+    setClauses.push(`warnings = $${idx}`);
+    params.push(JSON.stringify(extra.warnings));
     idx++;
   }
 
@@ -178,7 +195,7 @@ export async function hasCompletedEquivalentJob(
        AND output_mode = $5
        AND range_mode = $6
        AND COALESCE(range_expression, '') = COALESCE($7, '')
-       AND status = 'completed'
+       AND status IN ('completed', 'completed_with_warnings')
      LIMIT 1`,
     [
       params.userId,

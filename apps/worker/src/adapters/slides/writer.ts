@@ -1,5 +1,10 @@
 import type { slides_v1 } from "googleapis";
-import type { TranslatedNode } from "@translay/shared-contracts";
+import {
+  type JobWarning,
+  type JobWarningReason,
+  type JobWarningRiskLevel,
+  type TranslatedNode,
+} from "@translay/shared-contracts";
 import type { SlideTextNode, SlideExtractionResult } from "./types";
 import { getSlidesClient } from "./auth";
 import {
@@ -25,6 +30,17 @@ interface NodeWriteRequestParams {
 export interface WriteBackResult {
   readonly outputUrl: string;
   readonly committedUnits: number;
+  readonly warnings: readonly JobWarning[];
+}
+
+interface ReplacePlan {
+  readonly requests: slides_v1.Schema$Request[];
+  readonly warnings: JobWarning[];
+}
+
+interface NodeWriteArtifacts {
+  readonly requests: slides_v1.Schema$Request[];
+  readonly warnings: JobWarning[];
 }
 
 interface ParagraphWritePlan {
@@ -69,9 +85,10 @@ export async function writeBackAppend(
   const { slides } = getSlidesClient();
   const translationMap = buildTranslationMap(translatedNodes);
   const outputUrl = `https://docs.google.com/presentation/d/${presentationId}/edit`;
+  const warnings: JobWarning[] = [];
 
   if (extractedSlides.length === 0) {
-    return { outputUrl, committedUnits: 0 };
+    return { outputUrl, committedUnits: 0, warnings };
   }
 
   const pres = await slides.presentations.get({ presentationId });
@@ -125,23 +142,25 @@ export async function writeBackAppend(
       });
       duplicated = true;
 
-      const replaceRequests = buildReplaceRequests(
+      const replacePlan = buildReplacePlan(
         plan.sourceSlide,
         plan.extractedSlide.nodes,
         translationMap,
         (sourceObjectId) => plan.objectIds[sourceObjectId] ?? sourceObjectId
       );
 
-      if (replaceRequests.length > 0) {
+      if (replacePlan.requests.length > 0) {
         await slides.presentations.batchUpdate({
           presentationId,
-          requestBody: { requests: replaceRequests },
+          requestBody: { requests: replacePlan.requests },
         });
       }
 
+      warnings.push(...replacePlan.warnings);
+
       committedUnits += 1;
       if (onCommitted) {
-        await onCommitted({ outputUrl, committedUnits });
+        await onCommitted({ outputUrl, committedUnits, warnings });
       }
     } catch (err) {
       if (duplicated) {
@@ -151,7 +170,7 @@ export async function writeBackAppend(
     }
   }
 
-  return { outputUrl, committedUnits };
+  return { outputUrl, committedUnits, warnings };
 }
 
 export async function writeBackNewFile(
@@ -163,8 +182,9 @@ export async function writeBackNewFile(
   const { slides } = getSlidesClient();
   const translationMap = buildTranslationMap(translatedNodes);
   const outputUrl = `https://docs.google.com/presentation/d/${targetPresentationId}/edit`;
+  const warnings: JobWarning[] = [];
   if (extractedSlides.length === 0) {
-    return { outputUrl, committedUnits: 0 };
+    return { outputUrl, committedUnits: 0, warnings };
   }
 
   const newPres = await slides.presentations.get({
@@ -179,27 +199,29 @@ export async function writeBackNewFile(
       throw new Error(`Copied slide ${extracted.slide_index} is missing`);
     }
 
-    const replaceRequests = buildReplaceRequests(
+    const replacePlan = buildReplacePlan(
       slide,
       extracted.nodes,
       translationMap,
       (sourceObjectId) => sourceObjectId
     );
 
-    if (replaceRequests.length > 0) {
+    if (replacePlan.requests.length > 0) {
       await slides.presentations.batchUpdate({
         presentationId: targetPresentationId,
-        requestBody: { requests: replaceRequests },
+        requestBody: { requests: replacePlan.requests },
       });
     }
 
+    warnings.push(...replacePlan.warnings);
+
     committedUnits += 1;
     if (onCommitted) {
-      await onCommitted({ outputUrl, committedUnits });
+      await onCommitted({ outputUrl, committedUnits, warnings });
     }
   }
 
-  return { outputUrl, committedUnits };
+  return { outputUrl, committedUnits, warnings };
 }
 
 function buildTranslationMap(
@@ -277,13 +299,14 @@ function buildExecutionPrefix(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function buildReplaceRequests(
+function buildReplacePlan(
   slide: slides_v1.Schema$Page,
   originalNodes: SlideTextNode[],
   translationMap: Map<string, TranslatedNode>,
   resolveObjectId: (sourceObjectId: string) => string
-): slides_v1.Schema$Request[] {
+): ReplacePlan {
   const requests: slides_v1.Schema$Request[] = [];
+  const warnings: JobWarning[] = [];
 
   for (const node of originalNodes) {
     const translated = translationMap.get(node.node_id);
@@ -302,13 +325,13 @@ function buildReplaceRequests(
         continue;
       }
 
-      requests.push(
-        ...buildNodeWriteRequests({
-          sourceNode: node,
-          translatedNode: translated,
-          objectId: resolvedObjectId,
-        })
-      );
+      const artifacts = buildNodeWriteArtifacts({
+        sourceNode: node,
+        translatedNode: translated,
+        objectId: resolvedObjectId,
+      });
+      requests.push(...artifacts.requests);
+      warnings.push(...artifacts.warnings);
       continue;
     }
 
@@ -322,17 +345,17 @@ function buildReplaceRequests(
         continue;
       }
 
-      requests.push(
-        ...buildNodeWriteRequests({
-          sourceNode: node,
-          translatedNode: translated,
-          objectId: resolvedObjectId,
-          cellLocation: {
-            rowIndex: node.row_index ?? 0,
-            columnIndex: node.col_index ?? 0,
-          },
-        })
-      );
+      const artifacts = buildNodeWriteArtifacts({
+        sourceNode: node,
+        translatedNode: translated,
+        objectId: resolvedObjectId,
+        cellLocation: {
+          rowIndex: node.row_index ?? 0,
+          columnIndex: node.col_index ?? 0,
+        },
+      });
+      requests.push(...artifacts.requests);
+      warnings.push(...artifacts.warnings);
       continue;
     }
 
@@ -341,23 +364,30 @@ function buildReplaceRequests(
       continue;
     }
 
-    requests.push(
-      ...buildNodeWriteRequests({
-        sourceNode: node,
-        translatedNode: translated,
-        objectId: resolvedObjectId,
-      })
-    );
+    const artifacts = buildNodeWriteArtifacts({
+      sourceNode: node,
+      translatedNode: translated,
+      objectId: resolvedObjectId,
+    });
+    requests.push(...artifacts.requests);
+    warnings.push(...artifacts.warnings);
   }
 
-  return requests;
+  return { requests, warnings };
 }
 
 function buildNodeWriteRequests(
   params: NodeWriteRequestParams
 ): slides_v1.Schema$Request[] {
+  return buildNodeWriteArtifacts(params).requests;
+}
+
+function buildNodeWriteArtifacts(
+  params: NodeWriteRequestParams
+): NodeWriteArtifacts {
   const plan = buildRichTextWritePlan(params.sourceNode, params.translatedNode);
   const fit = fitTranslatedNode(params.sourceNode, params.translatedNode);
+  const warnings = buildNodeWarnings(params.sourceNode, params.translatedNode, fit);
   const requests: slides_v1.Schema$Request[] = [
     {
       deleteText: {
@@ -438,13 +468,19 @@ function buildNodeWriteRequests(
     }
   }
 
-  return requests;
+  return { requests, warnings };
 }
 
 export function __buildNodeWriteRequestsForTests(
   params: NodeWriteRequestParams
 ): slides_v1.Schema$Request[] {
   return buildNodeWriteRequests(params);
+}
+
+export function __buildNodeWarningsForTests(
+  params: NodeWriteRequestParams
+): readonly JobWarning[] {
+  return buildNodeWriteArtifacts(params).warnings;
 }
 
 function buildRichTextWritePlan(
@@ -610,6 +646,63 @@ function inferBulletPreset(glyph?: string): string {
   }
 
   return DEFAULT_BULLET_PRESET;
+}
+
+const KNOWN_JOB_WARNING_REASONS = new Set<JobWarningReason>([
+  "possible_overflow",
+  "mixed_style_alignment_low_confidence",
+  "bullet_structure_rebuilt_with_compaction",
+  "manual_review_recommended",
+]);
+
+function buildNodeWarnings(
+  sourceNode: SlideTextNode,
+  translatedNode: TranslatedNode,
+  fit: ReturnType<typeof fitTranslatedNode>
+): JobWarning[] {
+  const reasons: JobWarningReason[] = [];
+  const pushReason = (reason: JobWarningReason) => {
+    if (!reasons.includes(reason)) {
+      reasons.push(reason);
+    }
+  };
+
+  if (fit.risk !== "low") {
+    pushReason("manual_review_recommended");
+  }
+
+  if (fit.risk === "high") {
+    pushReason("possible_overflow");
+  }
+
+  if (sourceNode.archetype === "bullet_list" && fit.applyTighterParagraphSpacing) {
+    pushReason("bullet_structure_rebuilt_with_compaction");
+  }
+
+  for (const riskFlag of translatedNode.risk_flags ?? []) {
+    if (KNOWN_JOB_WARNING_REASONS.has(riskFlag as JobWarningReason)) {
+      pushReason(riskFlag as JobWarningReason);
+    }
+  }
+
+  return reasons.map((risk_reason) => ({
+    node_id: sourceNode.node_id,
+    slide_index: sourceNode.slide_index,
+    archetype: sourceNode.archetype,
+    risk_level: resolveWarningRiskLevel(fit.risk, risk_reason),
+    risk_reason,
+  }));
+}
+
+function resolveWarningRiskLevel(
+  fitRisk: ReturnType<typeof fitTranslatedNode>["risk"],
+  riskReason: JobWarningReason
+): JobWarningRiskLevel {
+  if (fitRisk === "high" || riskReason === "possible_overflow") {
+    return "high";
+  }
+
+  return "medium";
 }
 
 function getFallbackFontSizeForRun(

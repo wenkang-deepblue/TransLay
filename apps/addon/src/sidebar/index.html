@@ -843,11 +843,19 @@
     function pollJob(jobId) {
       google.script.run
         .withSuccessHandler(function(resp) {
-          if (resp.status === 'completed') {
+          if (resp.status === 'completed' || resp.status === 'completed_with_warnings') {
             stopPolling();
             setTranslating(false);
-            showProgress(100, 'Completed', '');
-            showResult(true, 'Translation completed successfully.', resp.output_document_url);
+            showProgress(
+              100,
+              resp.status === 'completed_with_warnings' ? 'Completed with warnings' : 'Completed',
+              ''
+            );
+            showResult(
+              true,
+              resp.message || 'Translation completed successfully.',
+              resp.output_document_url
+            );
             // Refresh entitlement after job completion (usage changed)
             refreshEntitlement(true);
           } else if (resp.status === 'canceled') {

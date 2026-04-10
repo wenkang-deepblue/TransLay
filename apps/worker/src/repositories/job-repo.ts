@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import type {
   HostType,
+  JobWarning,
   OutputMode,
   RangeMode,
   JobStatus,
@@ -28,6 +29,7 @@ export interface JobRow {
   output_document_url: string | null;
   error_code: string | null;
   error_message: string | null;
+  warnings: JobWarning[];
   cancel_requested_at: Date | null;
   started_at: Date;
   completed_at: Date | null;
@@ -36,7 +38,7 @@ export interface JobRow {
 const JOB_COLUMNS = `id, user_id, host_type, source_doc_id, source_doc_name, target_doc_id,
   source_language_mode, source_language, target_language_input, target_language_code,
   output_mode, range_mode, range_expression, provider_route, status, total_units_billed,
-  output_document_url, error_code, error_message, cancel_requested_at, started_at, completed_at`;
+  output_document_url, error_code, error_message, warnings, cancel_requested_at, started_at, completed_at`;
 
 export async function getJobById(pool: Pool, jobId: string): Promise<JobRow | null> {
   // Internal-only worker lookup: the caller is the trusted Cloud Tasks pipeline,
@@ -60,13 +62,19 @@ export async function updateJobStatus(
     totalUnitsBilled?: number;
     sourceLang?: string;
     targetLangCode?: string;
+    warnings?: readonly JobWarning[];
   }
 ): Promise<void> {
   const setClauses = ["status = $2"];
   const params: unknown[] = [jobId, status];
   let idx = 3;
 
-  if (status === "completed" || status === "failed" || status === "canceled") {
+  if (
+    status === "completed" ||
+    status === "completed_with_warnings" ||
+    status === "failed" ||
+    status === "canceled"
+  ) {
     setClauses.push("completed_at = NOW()");
   }
   if (status === "extracting") {
@@ -105,6 +113,11 @@ export async function updateJobStatus(
   if (extra?.targetLangCode) {
     setClauses.push(`target_language_code = $${idx}`);
     params.push(extra.targetLangCode);
+    idx++;
+  }
+  if (extra?.warnings !== undefined) {
+    setClauses.push(`warnings = $${idx}`);
+    params.push(JSON.stringify(extra.warnings));
     idx++;
   }
 

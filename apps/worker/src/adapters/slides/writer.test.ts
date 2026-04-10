@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import type { slides_v1 } from "googleapis";
 import type { TranslatedNode } from "@translay/shared-contracts";
 import type { SlideTextNode } from "./types";
-import { __buildNodeWriteRequestsForTests } from "./writer";
+import {
+  __buildNodeWarningsForTests,
+  __buildNodeWriteRequestsForTests,
+} from "./writer";
 
 function createNode(
   overrides: Partial<SlideTextNode> &
@@ -672,4 +675,116 @@ test("writer keeps table cell location on every rich-text rebuild request", () =
     const value = Object.values(request)[0] as { cellLocation?: slides_v1.Schema$TableCellLocation };
     assert.deepEqual(value.cellLocation, cellLocation);
   }
+});
+
+test("writer emits structured warning metadata without leaking source or translated text", () => {
+  const sourceNode = createNode({
+    node_id: "metric_warning",
+    text: "$68B ARR",
+    full_text: "$68B ARR",
+    slide_index: 6,
+    element_type: "shape",
+    archetype: "metric_card",
+    object_id: "metric_warning",
+    box: {
+      width_emu: 44 * 12700,
+      height_emu: 16 * 12700,
+      translate_x_emu: 0,
+      translate_y_emu: 0,
+      rotation_deg: 0,
+    },
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        text: "$68B ARR",
+        start_index: 0,
+        end_index: 8,
+        paragraph_style: {
+          lineSpacing: 112,
+        },
+        runs: [
+          {
+            run_id: "r0",
+            text: "$68B",
+            start_index: 0,
+            end_index: 4,
+            style_role: "metric_value",
+            text_style: {
+              fontSize: { magnitude: 28, unit: "PT" },
+              bold: true,
+            },
+          },
+          {
+            run_id: "r1",
+            text: " ARR",
+            start_index: 4,
+            end_index: 8,
+            style_role: "metric_unit",
+            text_style: {
+              fontSize: { magnitude: 14, unit: "PT" },
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  const translatedNode: TranslatedNode = {
+    node_id: "metric_warning",
+    translated_full_text: "68 mil millones de dolares en ingresos recurrentes anuales",
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        translated_text: "68 mil millones de dolares en ingresos recurrentes anuales",
+        bullet_behavior: "none",
+      },
+    ],
+    segments: [
+      {
+        segment_id: "r0",
+        translated_text: "68 mil millones",
+        style_role: "metric_value",
+      },
+      {
+        segment_id: "r1",
+        translated_text: " de dolares en ingresos recurrentes anuales",
+        style_role: "metric_unit",
+      },
+    ],
+    risk_flags: ["mixed_style_alignment_low_confidence"],
+  };
+
+  const warnings = __buildNodeWarningsForTests({
+    sourceNode,
+    translatedNode,
+    objectId: "metric_warning_copy",
+  });
+
+  assert.deepEqual(warnings, [
+    {
+      node_id: "metric_warning",
+      slide_index: 6,
+      archetype: "metric_card",
+      risk_level: "high",
+      risk_reason: "manual_review_recommended",
+    },
+    {
+      node_id: "metric_warning",
+      slide_index: 6,
+      archetype: "metric_card",
+      risk_level: "high",
+      risk_reason: "possible_overflow",
+    },
+    {
+      node_id: "metric_warning",
+      slide_index: 6,
+      archetype: "metric_card",
+      risk_level: "high",
+      risk_reason: "mixed_style_alignment_low_confidence",
+    },
+  ]);
+
+  const serializedWarnings = JSON.stringify(warnings);
+  assert.equal(serializedWarnings.includes(sourceNode.full_text), false);
+  assert.equal(serializedWarnings.includes(translatedNode.translated_full_text), false);
 });
