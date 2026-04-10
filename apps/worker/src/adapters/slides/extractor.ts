@@ -5,6 +5,11 @@ import type {
   PresentationExtractionResult,
 } from "./types";
 import { getSlidesClient } from "./auth";
+import {
+  buildRichTextNode,
+  extractBoxGeometry,
+  extractPlainText,
+} from "./rich-text";
 
 /**
  * Extract structured text nodes from a Google Slides™ presentation.
@@ -115,17 +120,19 @@ function extractFromElement(
   nodes: SlideTextNode[]
 ): void {
   const objectId = element.objectId ?? "";
+  const box = extractBoxGeometry(element);
 
   if (element.shape?.text) {
-    const text = extractPlainText(element.shape.text);
-    if (text.trim()) {
-      nodes.push({
-        node_id: `s${slideIndex}_shape_${objectId}`,
-        text,
-        slide_index: slideIndex,
-        element_type: "shape",
-        object_id: objectId,
-      });
+    const node = buildRichTextNode({
+      nodeId: `s${slideIndex}_shape_${objectId}`,
+      objectId,
+      slideIndex,
+      elementType: "shape",
+      textContent: element.shape.text,
+      box,
+    });
+    if (node) {
+      nodes.push(node);
     }
   }
 
@@ -137,17 +144,18 @@ function extractFromElement(
       for (let c = 0; c < (row.tableCells?.length ?? 0); c++) {
         const cell = row.tableCells?.[c];
         if (!cell?.text) continue;
-        const text = extractPlainText(cell.text);
-        if (text.trim()) {
-          nodes.push({
-            node_id: `s${slideIndex}_table_${objectId}_r${r}_c${c}`,
-            text,
-            slide_index: slideIndex,
-            element_type: "table_cell",
-            object_id: objectId,
-            row_index: r,
-            col_index: c,
-          });
+        const node = buildRichTextNode({
+          nodeId: `s${slideIndex}_table_${objectId}_r${r}_c${c}`,
+          objectId,
+          slideIndex,
+          elementType: "table_cell",
+          textContent: cell.text,
+          box,
+          rowIndex: r,
+          colIndex: c,
+        });
+        if (node) {
+          nodes.push(node);
         }
       }
     }
@@ -167,15 +175,16 @@ function extractSpeakerNotes(
 ): void {
   for (const element of notesPage.pageElements ?? []) {
     if (isSpeakerNotesBodyShape(element)) {
-      const text = extractPlainText(element.shape.text);
-      if (text.trim()) {
-        nodes.push({
-          node_id: `s${slideIndex}_notes_${element.objectId ?? "notes"}`,
-          text,
-          slide_index: slideIndex,
-          element_type: "speaker_notes",
-          object_id: element.objectId ?? "",
-        });
+      const node = buildRichTextNode({
+        nodeId: `s${slideIndex}_notes_${element.objectId ?? "notes"}`,
+        objectId: element.objectId ?? "",
+        slideIndex,
+        elementType: "speaker_notes",
+        textContent: element.shape.text,
+        box: extractBoxGeometry(element),
+      });
+      if (node) {
+        nodes.push(node);
       }
     }
   }
@@ -196,10 +205,3 @@ function isSpeakerNotesBodyShape(
   );
 }
 
-/** Extract plain text from a TextContent structure, concatenating all text runs. */
-function extractPlainText(textContent: slides_v1.Schema$TextContent): string {
-  if (!textContent.textElements) return "";
-  return textContent.textElements
-    .map((te) => te.textRun?.content ?? "")
-    .join("");
-}
