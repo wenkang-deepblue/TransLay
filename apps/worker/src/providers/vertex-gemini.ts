@@ -1,10 +1,15 @@
 import type { WorkerConfig } from "@translay/shared-config";
-import type {
-  TranslationContextPack,
-  TranslationNode,
-  TranslatedNode,
-  TranslationRequest,
-  TranslationResponse,
+import {
+  TRANSLATED_PARAGRAPH_BULLET_BEHAVIORS,
+  TRANSLATION_SEGMENT_STYLE_ROLES,
+  type TranslationContextPack,
+  type TranslationContextNodeSummary,
+  type TranslatedParagraphBulletBehavior,
+  type TranslationNode,
+  type TranslationSegmentStyleRole,
+  type TranslatedNode,
+  type TranslationRequest,
+  type TranslationResponse,
 } from "@translay/shared-contracts";
 
 const MAX_NODES_PER_BATCH = 50;
@@ -31,8 +36,14 @@ Follow these rules for every request:
 - If the local sentence clearly requires a different meaning, choose the translation that preserves the local meaning even if wording differs elsewhere.
 - Translate only the provided target nodes.
 - Preserve every node_id exactly as given.
+- Preserve every paragraph_id, segment_id, and style_role exactly as given.
 - Preserve line breaks, punctuation, list markers, and other meaningful formatting where possible.
 - Do not omit, merge, split, or reorder nodes.
+- Do not create empty paragraphs or empty segments.
+- For bullet source paragraphs, set bullet_behavior to "preserve". Otherwise set it to "none".
+- Make translated_full_text equal the paragraph translations joined with "\\n".
+- Make each paragraph's translated_text equal the concatenation of that paragraph's segment translations in output order.
+- For metric cards, preserve semantic roles instead of copying source character positions mechanically.
 - Return only JSON that matches the provided response schema.
 `.trim();
 
@@ -52,14 +63,84 @@ function buildResponseSchema(nodeCount: number) {
           type: "STRING",
           description: "The exact node_id from the input, unchanged.",
         },
-        translated_text: {
+        translated_full_text: {
           type: "STRING",
           description:
-            "The translated text for that node, preserving meaning and important formatting.",
+            "The fully reconstructed translated text for the node, preserving paragraph breaks.",
+        },
+        paragraphs: {
+          type: "ARRAY",
+          description:
+            "Translated paragraphs for the node. Preserve paragraph_id exactly and never emit empty paragraphs.",
+          minItems: 1,
+          items: {
+            type: "OBJECT",
+            properties: {
+              paragraph_id: {
+                type: "STRING",
+                description: "The exact paragraph_id from the source structure.",
+              },
+              translated_text: {
+                type: "STRING",
+                description:
+                  "Translated text for this paragraph only. Concatenate this paragraph's segment translations to produce this value.",
+              },
+              bullet_behavior: {
+                type: "STRING",
+                enum: [...TRANSLATED_PARAGRAPH_BULLET_BEHAVIORS],
+                description:
+                  'Use "preserve" when the source paragraph had a bullet. Otherwise use "none".',
+              },
+            },
+            required: ["paragraph_id", "translated_text", "bullet_behavior"],
+            propertyOrdering: ["paragraph_id", "translated_text", "bullet_behavior"],
+          },
+        },
+        segments: {
+          type: "ARRAY",
+          description:
+            "Translated style segments for the node. Preserve segment_id and style_role exactly as given.",
+          minItems: 1,
+          items: {
+            type: "OBJECT",
+            properties: {
+              segment_id: {
+                type: "STRING",
+                description: "The exact segment_id from the source structure.",
+              },
+              translated_text: {
+                type: "STRING",
+                description:
+                  "Translated text for this segment. Concatenate segments that belong to the same paragraph in output order to reconstruct the paragraph text.",
+              },
+              style_role: {
+                type: "STRING",
+                enum: [...TRANSLATION_SEGMENT_STYLE_ROLES],
+                description:
+                  "The exact style_role from the source segment. Preserve it even if wording changes.",
+              },
+            },
+            required: ["segment_id", "translated_text", "style_role"],
+            propertyOrdering: ["segment_id", "translated_text", "style_role"],
+          },
+        },
+        risk_flags: {
+          type: "ARRAY",
+          description:
+            "Optional snake_case identifiers for cases that may need extra scrutiny, without including any source or translated content.",
+          items: {
+            type: "STRING",
+          },
         },
       },
-      required: ["node_id", "translated_text"],
-      propertyOrdering: ["node_id", "translated_text"],
+      required: ["node_id", "translated_full_text", "paragraphs", "segments"],
+      propertyOrdering: [
+        "node_id",
+        "translated_full_text",
+        "paragraphs",
+        "segments",
+        "risk_flags",
+      ],
     },
   } as const;
 }
@@ -134,7 +215,7 @@ export async function translateWithVertexGemini(
     throw new Error("Vertex AI returned empty response");
   }
 
-  const parsed = parseTranslationResponse(responseText, nodes);
+  const parsed = parseTranslationResponse(responseText, request);
 
   return {
     provider_request_id: `vertex_${Date.now()}`,
@@ -215,6 +296,7 @@ function buildPrompt(
     node_id: n.node_id,
     text: n.text,
   }));
+  const targetNodeStructure = buildTargetNodeStructureForPrompt(contextPack, nodes);
 
   const contextBlock = contextPack
     ? `DECK CONTEXT PACK:
@@ -229,13 +311,23 @@ TRANSLATION PRIORITIES:
 2. Use the deck context pack to keep terminology and style consistent when the meaning stays the same.
 3. If a repeated source term has a different meaning locally, prefer the correct local meaning over forced consistency.
 4. Keep the same number of nodes and preserve each node_id exactly.
-5. Preserve line breaks, punctuation, and non-translatable content when possible.
-6. If a node contains only numbers, punctuation, or other non-translatable content, return it unchanged.
+5. Reuse each paragraph_id exactly once and in the same order as the source node structure.
+6. Reuse each segment_id exactly once and preserve its style_role exactly.
+7. For bullet_list nodes, preserve the exact paragraph count and never create an empty bullet paragraph.
+8. Set bullet_behavior to "preserve" for source bullet paragraphs and "none" for non-bullet paragraphs.
+9. Build translated_full_text by joining paragraph translated_text values with "\n".
+10. Build each paragraph's translated_text from that paragraph's segment translations in output order.
+11. For metric_card nodes, translate according to semantic role, not source character positions.
+12. Preserve line breaks, punctuation, and non-translatable content when possible.
+13. If a node contains only numbers, punctuation, or other non-translatable content, return it unchanged.
 
 ${contextBlock}
 
-TARGET NODES:
-${JSON.stringify(nodesJson)}`;
+TARGET NODE STRUCTURE:
+${JSON.stringify(targetNodeStructure, null, 2)}
+
+TARGET NODE TEXT:
+${JSON.stringify(nodesJson, null, 2)}`;
 }
 
 function compactContextPackForPrompt(contextPack: TranslationContextPack) {
@@ -274,6 +366,72 @@ function compactContextPackForPrompt(contextPack: TranslationContextPack) {
   };
 }
 
+function buildTargetNodeStructureForPrompt(
+  contextPack: TranslationContextPack | undefined,
+  nodes: readonly TranslationNode[]
+) {
+  if (!contextPack) {
+    return nodes.map((node) => ({
+      node_id: node.node_id,
+      full_text: node.text,
+      paragraphs: [
+        {
+          paragraph_id: "p0",
+          text: node.text,
+          segments: [
+            {
+              segment_id: "r0",
+              text: node.text,
+              style_role: "default",
+            },
+          ],
+        },
+      ],
+    }));
+  }
+
+  const nodeById = new Map(contextPack.nodes.map((node) => [node.node_id, node]));
+  return nodes.map((node) => {
+    const structuredNode = nodeById.get(node.node_id);
+    if (!structuredNode) {
+      return {
+        node_id: node.node_id,
+        full_text: node.text,
+        paragraphs: [
+          {
+            paragraph_id: "p0",
+            text: node.text,
+            segments: [
+              {
+                segment_id: "r0",
+                text: node.text,
+                style_role: "default",
+              },
+            ],
+          },
+        ],
+      };
+    }
+
+    return {
+      node_id: structuredNode.node_id,
+      archetype: structuredNode.archetype,
+      slide_index: structuredNode.slide_index,
+      full_text: structuredNode.full_text,
+      paragraphs: structuredNode.paragraphs.map((paragraph) => ({
+        paragraph_id: paragraph.paragraph_id,
+        text: paragraph.text,
+        bullet: paragraph.bullet,
+        segments: paragraph.segments.map((segment) => ({
+          segment_id: segment.segment_id,
+          text: segment.text,
+          style_role: segment.style_role,
+        })),
+      })),
+    };
+  });
+}
+
 /**
  * Parse translation response. With responseSchema, the output is
  * guaranteed to be valid JSON matching our schema — but we still
@@ -281,8 +439,9 @@ function compactContextPackForPrompt(contextPack: TranslationContextPack) {
  */
 function parseTranslationResponse(
   raw: string,
-  originalNodes: readonly TranslationNode[]
+  request: TranslationRequest
 ): TranslatedNode[] {
+  const originalNodes = request.nodes;
   let parsed: unknown[];
   try {
     parsed = JSON.parse(raw);
@@ -300,11 +459,21 @@ function parseTranslationResponse(
     );
   }
 
+  const sourceNodeById = new Map(
+    (request.context_pack?.nodes ?? []).map((node) => [node.node_id, node])
+  );
   const result: TranslatedNode[] = [];
   for (let i = 0; i < parsed.length; i++) {
-    const item = parsed[i] as Record<string, unknown>;
-    const nodeId = String(item.node_id ?? "");
-    const translatedText = String(item.translated_text ?? "");
+    const item = asRecord(parsed[i], `node at index ${i}`);
+    assertOnlyAllowedKeys(
+      item,
+      TRANSLATED_NODE_FIELD_NAMES,
+      `node "${originalNodes[i]?.node_id ?? i}"`
+    );
+    const nodeId = readRequiredNonEmptyString(
+      item.node_id,
+      `node_id for response item at index ${i}`
+    );
 
     if (nodeId !== originalNodes[i].node_id) {
       throw new Error(
@@ -312,10 +481,283 @@ function parseTranslationResponse(
       );
     }
 
-    result.push({ node_id: nodeId, translated_text: translatedText });
+    const translatedNode: TranslatedNode = {
+      node_id: nodeId,
+      translated_full_text: readRequiredString(
+        item.translated_full_text,
+        `translated_full_text for node "${nodeId}"`
+      ),
+      paragraphs: parseTranslatedParagraphs(item.paragraphs, nodeId),
+      segments: parseTranslatedSegments(item.segments, nodeId),
+      risk_flags: parseRiskFlags(item.risk_flags, nodeId),
+    };
+
+    validateStructuredNode(translatedNode, sourceNodeById.get(nodeId));
+    result.push(translatedNode);
   }
 
   return result;
+}
+
+const TRANSLATED_NODE_FIELD_NAMES = new Set([
+  "node_id",
+  "translated_full_text",
+  "paragraphs",
+  "segments",
+  "risk_flags",
+]);
+const TRANSLATED_PARAGRAPH_FIELD_NAMES = new Set([
+  "paragraph_id",
+  "translated_text",
+  "bullet_behavior",
+]);
+const TRANSLATED_SEGMENT_FIELD_NAMES = new Set([
+  "segment_id",
+  "translated_text",
+  "style_role",
+]);
+
+function parseTranslatedParagraphs(
+  value: unknown,
+  nodeId: string
+): TranslatedNode["paragraphs"] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`Node "${nodeId}" must include at least one paragraph`);
+  }
+
+  return value.map((paragraphValue, index) => {
+    const paragraph = asRecord(
+      paragraphValue,
+      `paragraph ${index} for node "${nodeId}"`
+    );
+    assertOnlyAllowedKeys(
+      paragraph,
+      TRANSLATED_PARAGRAPH_FIELD_NAMES,
+      `paragraph ${index} for node "${nodeId}"`
+    );
+    const translatedText = readRequiredString(
+      paragraph.translated_text,
+      `translated_text for paragraph ${index} in node "${nodeId}"`
+    );
+    if (translatedText.trim().length === 0) {
+      throw new Error(`Node "${nodeId}" contains an empty paragraph`);
+    }
+
+    const bulletBehavior = readRequiredString(
+      paragraph.bullet_behavior,
+      `bullet_behavior for paragraph ${index} in node "${nodeId}"`
+    );
+    if (!TRANSLATED_PARAGRAPH_BULLET_BEHAVIORS.includes(bulletBehavior as never)) {
+      throw new Error(
+        `Node "${nodeId}" paragraph "${paragraph.paragraph_id}" has invalid bullet_behavior "${bulletBehavior}"`
+      );
+    }
+
+    return {
+      paragraph_id: readRequiredNonEmptyString(
+        paragraph.paragraph_id,
+        `paragraph_id for paragraph ${index} in node "${nodeId}"`
+      ),
+      translated_text: translatedText,
+      bullet_behavior: bulletBehavior as TranslatedParagraphBulletBehavior,
+    };
+  });
+}
+
+function parseTranslatedSegments(
+  value: unknown,
+  nodeId: string
+): TranslatedNode["segments"] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`Node "${nodeId}" must include at least one segment`);
+  }
+
+  return value.map((segmentValue, index) => {
+    const segment = asRecord(segmentValue, `segment ${index} for node "${nodeId}"`);
+    assertOnlyAllowedKeys(
+      segment,
+      TRANSLATED_SEGMENT_FIELD_NAMES,
+      `segment ${index} for node "${nodeId}"`
+    );
+    const translatedText = readRequiredString(
+      segment.translated_text,
+      `translated_text for segment ${index} in node "${nodeId}"`
+    );
+    if (translatedText.trim().length === 0) {
+      throw new Error(`Node "${nodeId}" contains an empty segment`);
+    }
+
+    const styleRole = readRequiredString(
+      segment.style_role,
+      `style_role for segment ${index} in node "${nodeId}"`
+    );
+    if (!TRANSLATION_SEGMENT_STYLE_ROLES.includes(styleRole as never)) {
+      throw new Error(
+        `Node "${nodeId}" segment "${segment.segment_id}" has invalid style_role "${styleRole}"`
+      );
+    }
+
+    return {
+      segment_id: readRequiredNonEmptyString(
+        segment.segment_id,
+        `segment_id for segment ${index} in node "${nodeId}"`
+      ),
+      translated_text: translatedText,
+      style_role: styleRole as TranslationSegmentStyleRole,
+    };
+  });
+}
+
+function parseRiskFlags(
+  value: unknown,
+  nodeId: string
+): TranslatedNode["risk_flags"] {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error(`Node "${nodeId}" risk_flags must be an array when provided`);
+  }
+
+  return value.map((flag, index) => {
+    const normalized = readRequiredString(
+      flag,
+      `risk_flags[${index}] for node "${nodeId}"`
+    );
+    if (!/^[a-z0-9_]+$/.test(normalized)) {
+      throw new Error(
+        `Node "${nodeId}" risk flag "${normalized}" must be a non-empty snake_case identifier`
+      );
+    }
+    return normalized;
+  });
+}
+
+function validateStructuredNode(
+  node: TranslatedNode,
+  sourceNode?: TranslationContextNodeSummary
+): void {
+  const paragraphText = node.paragraphs.map((paragraph) => paragraph.translated_text).join("\n");
+  if (paragraphText !== node.translated_full_text) {
+    throw new Error(
+      `Node "${node.node_id}" translated_full_text must equal paragraph translations joined by newline`
+    );
+  }
+
+  if (!sourceNode) {
+    return;
+  }
+
+  if (node.paragraphs.length !== sourceNode.paragraphs.length) {
+    if (sourceNode.archetype === "bullet_list") {
+      throw new Error(`Node "${node.node_id}" has bullet_list paragraph count mismatch`);
+    }
+    throw new Error(`Node "${node.node_id}" paragraph count does not match source structure`);
+  }
+
+  const seenSegmentIds = new Set<string>();
+  for (const segment of node.segments) {
+    if (seenSegmentIds.has(segment.segment_id)) {
+      throw new Error(`Node "${node.node_id}" contains duplicate segment_id "${segment.segment_id}"`);
+    }
+    seenSegmentIds.add(segment.segment_id);
+  }
+
+  const translatedSegmentById = new Map(
+    node.segments.map((segment) => [segment.segment_id, segment] as const)
+  );
+  const expectedSegmentCount = sourceNode.paragraphs.reduce(
+    (sum, paragraph) => sum + paragraph.segments.length,
+    0
+  );
+  if (node.segments.length !== expectedSegmentCount) {
+    throw new Error(`Node "${node.node_id}" segment count does not match source structure`);
+  }
+
+  for (let index = 0; index < sourceNode.paragraphs.length; index += 1) {
+    const sourceParagraph = sourceNode.paragraphs[index];
+    const translatedParagraph = node.paragraphs[index];
+
+    if (!sourceParagraph || !translatedParagraph) {
+      throw new Error(`Node "${node.node_id}" is missing paragraph data at index ${index}`);
+    }
+
+    if (translatedParagraph.paragraph_id !== sourceParagraph.paragraph_id) {
+      throw new Error(
+        `Node "${node.node_id}" paragraph_id mismatch at index ${index}: expected "${sourceParagraph.paragraph_id}", got "${translatedParagraph.paragraph_id}"`
+      );
+    }
+
+    const expectedBulletBehavior = sourceParagraph.bullet ? "preserve" : "none";
+    if (translatedParagraph.bullet_behavior !== expectedBulletBehavior) {
+      throw new Error(
+        `Node "${node.node_id}" paragraph "${translatedParagraph.paragraph_id}" must use bullet_behavior "${expectedBulletBehavior}"`
+      );
+    }
+
+    const paragraphSegmentIds = new Set(
+      sourceParagraph.segments.map((segment) => segment.segment_id)
+    );
+    const translatedParagraphText = node.segments
+      .filter((segment) => paragraphSegmentIds.has(segment.segment_id))
+      .map((segment) => segment.translated_text)
+      .join("");
+
+    if (translatedParagraphText !== translatedParagraph.translated_text) {
+      throw new Error(
+        `Node "${node.node_id}" paragraph "${translatedParagraph.paragraph_id}" must equal the concatenation of its segment translations`
+      );
+    }
+
+    for (const sourceSegment of sourceParagraph.segments) {
+      const translatedSegment = translatedSegmentById.get(sourceSegment.segment_id);
+      if (!translatedSegment) {
+        throw new Error(
+          `Node "${node.node_id}" is missing segment "${sourceSegment.segment_id}"`
+        );
+      }
+      if (translatedSegment.style_role !== sourceSegment.style_role) {
+        throw new Error(
+          `Node "${node.node_id}" segment "${sourceSegment.segment_id}" must preserve style_role "${sourceSegment.style_role}"`
+        );
+      }
+    }
+  }
+}
+
+function asRecord(value: unknown, label: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Vertex AI ${label} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertOnlyAllowedKeys(
+  value: Record<string, unknown>,
+  allowedKeys: ReadonlySet<string>,
+  label: string
+): void {
+  for (const key of Object.keys(value)) {
+    if (!allowedKeys.has(key)) {
+      throw new Error(`Vertex AI ${label} contains unexpected field "${key}"`);
+    }
+  }
+}
+
+function readRequiredString(value: unknown, label: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`Vertex AI ${label} must be a string`);
+  }
+  return value;
+}
+
+function readRequiredNonEmptyString(value: unknown, label: string): string {
+  const normalized = readRequiredString(value, label);
+  if (normalized.length === 0) {
+    throw new Error(`Vertex AI ${label} must be a non-empty string`);
+  }
+  return normalized;
 }
 
 /** Get GCP access token using Application Default Credentials. */

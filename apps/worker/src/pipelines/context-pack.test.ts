@@ -163,6 +163,21 @@ test("buildDeckContextPack includes deck context, glossary candidates, and activ
     contextPack.nodes[0]?.paragraphs[0]?.style_roles,
     ["metric_value", "default"]
   );
+  assert.deepEqual(
+    contextPack.nodes[0]?.paragraphs[0]?.segments,
+    [
+      {
+        segment_id: "r0",
+        text: "ARR",
+        style_role: "metric_value",
+      },
+      {
+        segment_id: "r1",
+        text: " grew 30%",
+        style_role: "default",
+      },
+    ]
+  );
   assert.ok(
     contextPack.glossary_candidates.some(
       (candidate) => candidate.source_term === "ARR" && candidate.occurrences >= 3

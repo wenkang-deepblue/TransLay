@@ -76,6 +76,11 @@ export function buildDeckContextPack(
           ? { nesting_level: paragraph.bullet.nesting_level }
           : undefined,
         style_roles: paragraph.runs.map((run) => run.style_role),
+        segments: paragraph.runs.map((run) => ({
+          segment_id: run.run_id,
+          text: run.text,
+          style_role: run.style_role,
+        })),
       })),
     })),
   };

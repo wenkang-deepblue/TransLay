@@ -11,6 +11,24 @@ export const TRANSLATION_NODE_ARCHETYPES = [
 export type TranslationNodeArchetype =
   (typeof TRANSLATION_NODE_ARCHETYPES)[number];
 
+export const TRANSLATION_SEGMENT_STYLE_ROLES = [
+  "default",
+  "emphasis",
+  "metric_value",
+  "metric_unit",
+  "prefix",
+  "suffix",
+] as const;
+export type TranslationSegmentStyleRole =
+  (typeof TRANSLATION_SEGMENT_STYLE_ROLES)[number];
+
+export const TRANSLATED_PARAGRAPH_BULLET_BEHAVIORS = [
+  "preserve",
+  "none",
+] as const;
+export type TranslatedParagraphBulletBehavior =
+  (typeof TRANSLATED_PARAGRAPH_BULLET_BEHAVIORS)[number];
+
 /** Translation request sent from Worker to inference plane. */
 export interface TranslationNode {
   readonly node_id: string;
@@ -30,7 +48,14 @@ export interface TranslationContextParagraphSummary {
   readonly bullet?: {
     readonly nesting_level?: number;
   };
-  readonly style_roles: readonly string[];
+  readonly style_roles: readonly TranslationSegmentStyleRole[];
+  readonly segments: readonly TranslationContextSegmentSummary[];
+}
+
+export interface TranslationContextSegmentSummary {
+  readonly segment_id: string;
+  readonly text: string;
+  readonly style_role: TranslationSegmentStyleRole;
 }
 
 export interface TranslationContextNodeSummary {
@@ -75,7 +100,24 @@ export interface TranslationRequest {
 export interface TranslatedNode {
   readonly node_id: string;
   /** @internal MUST NOT be persisted, logged, or cached — zero-content-persistence rule. */
+  readonly translated_full_text: string;
+  readonly paragraphs: readonly TranslatedParagraph[];
+  readonly segments: readonly TranslatedSegment[];
+  readonly risk_flags?: readonly string[];
+}
+
+export interface TranslatedParagraph {
+  readonly paragraph_id: string;
+  /** @internal MUST NOT be persisted, logged, or cached — zero-content-persistence rule. */
   readonly translated_text: string;
+  readonly bullet_behavior: TranslatedParagraphBulletBehavior;
+}
+
+export interface TranslatedSegment {
+  readonly segment_id: string;
+  /** @internal MUST NOT be persisted, logged, or cached — zero-content-persistence rule. */
+  readonly translated_text: string;
+  readonly style_role: TranslationSegmentStyleRole;
 }
 
 export interface TranslationResponse {

@@ -167,7 +167,7 @@ function buildTranslationMap(
 ): Map<string, string> {
   const map = new Map<string, string>();
   for (const node of translatedNodes) {
-    map.set(node.node_id, node.translated_text);
+    map.set(node.node_id, node.translated_full_text);
   }
   return map;
 }
