@@ -677,6 +677,89 @@ test("writer keeps table cell location on every rich-text rebuild request", () =
   }
 });
 
+test("writer skips zero-length text style ranges for empty translated segments", () => {
+  const sourceNode = createNode({
+    node_id: "metric_prefix_drop",
+    text: "$ 68B",
+    full_text: "$ 68B",
+    slide_index: 4,
+    element_type: "shape",
+    archetype: "metric_card",
+    object_id: "metric_prefix_drop",
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        text: "$ 68B",
+        start_index: 0,
+        end_index: 5,
+        paragraph_style: {},
+        runs: [
+          {
+            run_id: "r0",
+            text: "$ ",
+            start_index: 0,
+            end_index: 2,
+            style_role: "prefix",
+            text_style: {
+              bold: true,
+              fontSize: { magnitude: 18, unit: "PT" },
+            },
+          },
+          {
+            run_id: "r1",
+            text: "68B",
+            start_index: 2,
+            end_index: 5,
+            style_role: "metric_value",
+            text_style: {
+              bold: true,
+              fontSize: { magnitude: 48, unit: "PT" },
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  const translatedNode: TranslatedNode = {
+    node_id: "metric_prefix_drop",
+    translated_full_text: "680亿美元",
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        translated_text: "680亿美元",
+        bullet_behavior: "none",
+      },
+    ],
+    segments: [
+      {
+        segment_id: "r0",
+        translated_text: "",
+        style_role: "prefix",
+      },
+      {
+        segment_id: "r1",
+        translated_text: "680亿美元",
+        style_role: "metric_value",
+      },
+    ],
+  };
+
+  const requests = __buildNodeWriteRequestsForTests({
+    sourceNode,
+    translatedNode,
+    objectId: "metric_prefix_drop_copy",
+  });
+  const textStyleRequests = requests.filter((request) => request.updateTextStyle);
+
+  assert.equal(textStyleRequests.length, 1);
+  assert.deepEqual(textStyleRequests[0]?.updateTextStyle?.textRange, {
+    type: "FIXED_RANGE",
+    startIndex: 0,
+    endIndex: "680亿美元".length,
+  });
+});
+
 test("writer emits structured warning metadata without leaking source or translated text", () => {
   const sourceNode = createNode({
     node_id: "metric_warning",

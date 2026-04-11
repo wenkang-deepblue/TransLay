@@ -25,6 +25,7 @@ interface FitProfile {
 
 const EMU_PER_PT = 12700;
 const MIN_FONT_SIZE_PT = 6;
+const DENSE_SCRIPT_RE = /[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/;
 
 const FIT_PROFILE_BY_ARCHETYPE: Record<SlideTextNode["archetype"], FitProfile> = {
   plain_text: {
@@ -76,9 +77,10 @@ export function fitTranslatedNode(
   translatedNode: TranslatedNode
 ): FitPassResult {
   const profile = FIT_PROFILE_BY_ARCHETYPE[sourceNode.archetype];
+  const minScale = resolveMinScale(sourceNode, translatedNode, profile.minScale);
   let scale = 1;
 
-  while (estimateOverflow(sourceNode, translatedNode, scale) > 1 && scale > profile.minScale) {
+  while (estimateOverflow(sourceNode, translatedNode, scale) > 1 && scale > minScale) {
     scale = roundScale(scale - 0.04);
   }
 
@@ -152,12 +154,19 @@ export function estimateOverflow(
   const estimatedTargetLines = Math.max(paragraphCount, targetTotal / charsPerLineBudget);
   const widthPressure = targetLongest / charsPerLineBudget;
   const heightPressure = estimatedTargetLines / lineBudget;
+  const metricSegmentPressure = estimateMetricSegmentPressure(
+    sourceNode,
+    translatedNode,
+    scale
+  );
   const expansionPressure =
     0.55 * (targetLongest / sourceLongest) + 0.45 * (targetTotal / sourceTotal);
   const sourceFitBias = Math.max(0.85, Math.min(1.05, estimatedSourceLines / lineBudget));
 
   return (
-    Math.max(widthPressure, heightPressure) * profile.pressureBias * sourceFitBias +
+    Math.max(widthPressure, heightPressure, metricSegmentPressure) *
+      profile.pressureBias *
+      sourceFitBias +
     Math.max(0, expansionPressure - 1) * 0.25
   );
 }
@@ -231,6 +240,140 @@ function getMaxSourceFontSize(sourceNode: SlideTextNode): number {
   }
 
   return maxFontSize;
+}
+
+function resolveMinScale(
+  sourceNode: SlideTextNode,
+  translatedNode: TranslatedNode,
+  defaultMinScale: number
+): number {
+  if (sourceNode.archetype !== "metric_card") {
+    return defaultMinScale;
+  }
+
+  if (!DENSE_SCRIPT_RE.test(translatedNode.translated_full_text)) {
+    return defaultMinScale;
+  }
+
+  const metricExpansionRatio = getMaxMetricSegmentExpansionRatio(sourceNode, translatedNode);
+  if (metricExpansionRatio >= 1.8) {
+    return Math.min(defaultMinScale, 0.64);
+  }
+  if (metricExpansionRatio >= 1.4) {
+    return Math.min(defaultMinScale, 0.72);
+  }
+
+  return defaultMinScale;
+}
+
+function estimateMetricSegmentPressure(
+  sourceNode: SlideTextNode,
+  translatedNode: TranslatedNode,
+  scale: number
+): number {
+  if (sourceNode.archetype !== "metric_card") {
+    return 0;
+  }
+
+  const translatedSegmentById = new Map(
+    translatedNode.segments.map((segment) => [segment.segment_id, segment] as const)
+  );
+  let maxPressure = 0;
+
+  for (const paragraph of sourceNode.paragraphs) {
+    for (const run of paragraph.runs) {
+      if (!isMetricRunStyleRole(run.style_role)) {
+        continue;
+      }
+
+      const translatedSegment = translatedSegmentById.get(run.run_id);
+      if (!translatedSegment) {
+        continue;
+      }
+
+      const sourceText = run.text.trim();
+      const targetText = translatedSegment.translated_text.trim();
+      if (!sourceText || !targetText) {
+        continue;
+      }
+
+      const sourceWeight = Math.max(1, measureTextWeight(sourceText));
+      const targetWeight = Math.max(1, measureTextWeight(targetText));
+      const roleFactor = metricRolePressureFactor(run.style_role);
+      const denseScriptFactor = DENSE_SCRIPT_RE.test(targetText) ? 1.05 : 1;
+      const pressure = (targetWeight / sourceWeight) * scale * roleFactor * denseScriptFactor;
+
+      if (pressure > maxPressure) {
+        maxPressure = pressure;
+      }
+    }
+  }
+
+  return maxPressure;
+}
+
+function getMaxMetricSegmentExpansionRatio(
+  sourceNode: SlideTextNode,
+  translatedNode: TranslatedNode
+): number {
+  if (sourceNode.archetype !== "metric_card") {
+    return 1;
+  }
+
+  const translatedSegmentById = new Map(
+    translatedNode.segments.map((segment) => [segment.segment_id, segment] as const)
+  );
+  let maxRatio = 1;
+
+  for (const paragraph of sourceNode.paragraphs) {
+    for (const run of paragraph.runs) {
+      if (!isMetricRunStyleRole(run.style_role)) {
+        continue;
+      }
+
+      const translatedSegment = translatedSegmentById.get(run.run_id);
+      if (!translatedSegment) {
+        continue;
+      }
+
+      const sourceText = run.text.trim();
+      const targetText = translatedSegment.translated_text.trim();
+      if (!sourceText || !targetText) {
+        continue;
+      }
+
+      const sourceWeight = Math.max(1, measureTextWeight(sourceText));
+      const targetWeight = Math.max(1, measureTextWeight(targetText));
+      maxRatio = Math.max(maxRatio, targetWeight / sourceWeight);
+    }
+  }
+
+  return maxRatio;
+}
+
+function isMetricRunStyleRole(styleRole: SlideTextNode["paragraphs"][number]["runs"][number]["style_role"]): boolean {
+  return (
+    styleRole === "metric_value" ||
+    styleRole === "metric_unit" ||
+    styleRole === "prefix" ||
+    styleRole === "suffix"
+  );
+}
+
+function metricRolePressureFactor(
+  styleRole: SlideTextNode["paragraphs"][number]["runs"][number]["style_role"]
+): number {
+  switch (styleRole) {
+    case "metric_value":
+      return 0.7;
+    case "metric_unit":
+    case "suffix":
+      return 0.58;
+    case "prefix":
+      return 0.5;
+    default:
+      return 0.5;
+  }
 }
 
 export function measureTextWeight(text: string): number {

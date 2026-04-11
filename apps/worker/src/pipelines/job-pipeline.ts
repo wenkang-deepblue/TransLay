@@ -2,8 +2,8 @@ import type { Pool } from "pg";
 import type Redis from "ioredis";
 import type { WorkerConfig } from "@translay/shared-config";
 import type {
+  AuthorityTranslationNode,
   TaskPayload,
-  TranslationRequest,
   TranslatedNode,
 } from "@translay/shared-contracts";
 import {
@@ -16,13 +16,23 @@ import { getJobById, isCancelRequested, updateJobStatus } from "../repositories/
 import { insertUsageLedger } from "../repositories/usage-repo";
 import { setJobProgress } from "../cache/job-progress";
 import { extractSlides } from "../adapters/slides";
+import { buildPresentationStoryboard } from "../adapters/slides/storyboard";
 import { writeBackAppend, writeBackNewFile, type WriteBackResult } from "../adapters/slides";
-import { selectRoute, translate } from "../providers/router";
+import { selectRoute } from "../providers/router";
 import {
-  buildDeckContextPack,
-  groupNodesForTranslation,
-  projectGroupToTranslationNodes,
+  fillMissingAuthorityWithVertexGemini,
+  materializeTranslatedNodesWithVertexGemini,
+  translateDeckAuthorityWithVertexGemini,
+} from "../providers/vertex-gemini-authority";
+import {
+  extractGlossaryCandidates,
 } from "./context-pack";
+import {
+  auditAuthorityCoverage,
+  buildMaterializationGroups,
+  mergeAuthorityNodes,
+  projectNodesToAuthoritySourceNodes,
+} from "./authority";
 
 /**
  * Main job pipeline: extract → translate → write-back.
@@ -125,57 +135,145 @@ export async function runJobPipeline(
       matchPresetLanguage(job.target_language_input) ??
       job.target_language_input;
 
-    const translationGroups = groupNodesForTranslation(extraction.all_nodes);
-
-    // Build deck-level plaintext context once, then reuse it for every group.
-    const deckPlaintextContext = truncateToTokenBudget(
-      extraction.full_context_text,
-      config.vertex.maxInputTokens
-    );
-    const translatedNodes: TranslatedNode[] = [];
+    const deckPlaintextContext = extraction.full_context_text;
+    const glossaryCandidates = extractGlossaryCandidates(extraction.all_nodes);
     const providerRequestIds: string[] = [];
+    const storyboard = await buildPresentationStoryboard(job.source_doc_id);
+    await setJobProgress(redis, job_id, {
+      status: "translating",
+      progress_percent: 35,
+      current_step: "authority_pass",
+      details: `Building authoritative deck translation for ${extraction.all_nodes.length} nodes`,
+    });
+    await assertNotCanceled(pool, redis, job, writeResult);
 
-    for (let groupIndex = 0; groupIndex < translationGroups.length; groupIndex += 1) {
-      const group = translationGroups[groupIndex];
+    const authorityResult = await translateDeckAuthorityWithVertexGemini(config, {
+      model: route.model,
+      source_language: "auto",
+      target_language: targetLangCode,
+      deck_title: extraction.title,
+      deck_plaintext_context: deckPlaintextContext,
+      glossary_candidates: glossaryCandidates,
+      nodes: projectNodesToAuthoritySourceNodes(extraction.all_nodes),
+      storyboard,
+    });
+    providerRequestIds.push(authorityResult.provider_request_id);
+
+    let authorityNodes = authorityResult.nodes;
+    let authorityAudit = auditAuthorityCoverage(extraction.all_nodes, authorityNodes);
+    if (authorityAudit.missing_nodes.length > 0) {
+      await setJobProgress(redis, job_id, {
+        status: "translating",
+        progress_percent: 45,
+        current_step: "gap_fill",
+        details: `Filling ${authorityAudit.missing_nodes.length} authority coverage gap(s)`,
+      });
+      await assertNotCanceled(pool, redis, job, writeResult);
+
+      const missingNodesBySlide = groupNodesBySlide(authorityAudit.missing_nodes);
+      const slideByIndex = new Map(
+        extraction.extracted_slides.map((slide) => [slide.slide_index, slide])
+      );
+      const frameBySlideIndex = new Map(
+        storyboard.frames.map((frame) => [frame.slide_index, frame])
+      );
+      const gapFilledNodes: AuthorityTranslationNode[] = [];
+
+      for (const [slideIndex, missingNodes] of missingNodesBySlide) {
+        const slide = slideByIndex.get(slideIndex);
+        if (!slide) {
+          throw new PipelineError(
+            "JOB_INTERNAL_ERROR",
+            `Missing extracted slide context for slide ${slideIndex}`
+          );
+        }
+
+        const gapFillResult = await fillMissingAuthorityWithVertexGemini(config, {
+          model: route.model,
+          source_language: "auto",
+          target_language: targetLangCode,
+          deck_title: extraction.title,
+          slide_index: slideIndex,
+          slide_plaintext_context: buildSlidePlaintextContext(slide),
+          glossary_candidates: glossaryCandidates,
+          existing_authority_nodes: authorityNodes,
+          missing_nodes: projectNodesToAuthoritySourceNodes(missingNodes),
+          storyboard_frame: frameBySlideIndex.get(slideIndex),
+        });
+        providerRequestIds.push(gapFillResult.provider_request_id);
+        gapFilledNodes.push(...gapFillResult.nodes);
+        await assertNotCanceled(pool, redis, job, writeResult);
+      }
+
+      authorityNodes = mergeAuthorityNodes(authorityNodes, gapFilledNodes);
+      authorityAudit = auditAuthorityCoverage(extraction.all_nodes, authorityNodes);
+    }
+
+    if (authorityAudit.missing_nodes.length > 0) {
+      throw new PipelineError(
+        "LLM_PROVIDER_ERROR",
+        `Authority translation missed ${authorityAudit.missing_nodes.length} node(s)`
+      );
+    }
+
+    const materializationGroups = buildMaterializationGroups(extraction.extracted_slides, {
+      maxNodesPerGroup: 10,
+      maxCharsPerGroup: 2_000,
+    });
+    const translatedNodes: TranslatedNode[] = [];
+    const authorityById = new Map(
+      authorityAudit.authority_nodes.map((node) => [node.node_id, node])
+    );
+
+    for (let groupIndex = 0; groupIndex < materializationGroups.length; groupIndex += 1) {
+      const group = materializationGroups[groupIndex];
       if (!group) {
         continue;
       }
 
-      const translationRequest: TranslationRequest = {
-        provider: route.provider,
+      const authoritySubset = group.node_summaries.map((nodeSummary) => {
+        const authorityNode = authorityById.get(nodeSummary.node_id);
+        if (!authorityNode) {
+          throw new PipelineError(
+            "JOB_INTERNAL_ERROR",
+            `Authority translation missing for node ${nodeSummary.node_id}`
+          );
+        }
+        return authorityNode;
+      });
+
+      const groupResult = await materializeTranslatedNodesWithVertexGemini(config, {
         model: route.model,
         source_language: "auto",
         target_language: targetLangCode,
-        nodes: projectGroupToTranslationNodes(group),
-        context_pack: buildDeckContextPack({
-          deckTitle: extraction.title,
-          sourceLanguage: "auto",
-          targetLanguage: targetLangCode,
-          deckPlaintextContext,
-          deckNodes: extraction.all_nodes,
-          activeGroup: group,
-        }),
-      };
-
-      const groupResult = await translate(config, translationRequest);
-      validateTranslatedGroup(group, groupResult.nodes);
+        deck_title: extraction.title,
+        glossary_candidates: glossaryCandidates,
+        node_summaries: group.node_summaries,
+        authority_nodes: authoritySubset,
+      });
+      validateTranslatedGroup(group.node_summaries, groupResult.nodes);
       translatedNodes.push(...groupResult.nodes);
       providerRequestIds.push(groupResult.provider_request_id);
 
       const translatedGroupCount = groupIndex + 1;
-      const progressPercent = 30 + Math.round((translatedGroupCount / translationGroups.length) * 40);
+      const progressPercent = 50 + Math.round((translatedGroupCount / materializationGroups.length) * 20);
       await setJobProgress(redis, job_id, {
         status: "translating",
         progress_percent: progressPercent,
-        current_step: "translating_segments",
-        details: `Translated batch ${translatedGroupCount} of ${translationGroups.length}`,
+        current_step: "materialization_pass",
+        details: `Materialized batch ${translatedGroupCount} of ${materializationGroups.length}`,
       });
       await assertNotCanceled(pool, redis, job, writeResult);
     }
 
+    const orderedTranslatedNodes = orderTranslatedNodes(
+      extraction.all_nodes,
+      translatedNodes
+    );
+
     const translationResult = {
       provider_request_id: JSON.stringify(providerRequestIds),
-      nodes: translatedNodes,
+      nodes: orderedTranslatedNodes,
     };
     console.log(
       `Job ${job_id} translation completed: ${translationResult.nodes.length} translated nodes`
@@ -504,6 +602,48 @@ function getErrorMetadata(error: unknown): Record<string, unknown> {
   };
 }
 
+function groupNodesBySlide<T extends { slide_index: number }>(
+  nodes: readonly T[]
+): Map<number, T[]> {
+  const grouped = new Map<number, T[]>();
+  for (const node of nodes) {
+    const existing = grouped.get(node.slide_index);
+    if (existing) {
+      existing.push(node);
+      continue;
+    }
+    grouped.set(node.slide_index, [node]);
+  }
+  return grouped;
+}
+
+function buildSlidePlaintextContext(slide: {
+  readonly slide_index: number;
+  readonly nodes: readonly { full_text: string }[];
+}): string {
+  return [
+    `[Slide ${slide.slide_index}]`,
+    ...slide.nodes.map((node) => node.full_text),
+  ].join("\n");
+}
+
+function orderTranslatedNodes(
+  sourceNodes: readonly { node_id: string }[],
+  translatedNodes: readonly TranslatedNode[]
+): TranslatedNode[] {
+  const translatedById = new Map(translatedNodes.map((node) => [node.node_id, node]));
+  return sourceNodes.map((sourceNode) => {
+    const translatedNode = translatedById.get(sourceNode.node_id);
+    if (!translatedNode) {
+      throw new PipelineError(
+        "LLM_PROVIDER_ERROR",
+        `Translated node missing for ${sourceNode.node_id}`
+      );
+    }
+    return translatedNode;
+  });
+}
+
 function validateTranslatedGroup(
   group: readonly { node_id: string }[],
   translatedNodes: readonly TranslatedNode[]
@@ -528,20 +668,3 @@ function validateTranslatedGroup(
   }
 }
 
-/**
- * Truncate context text to fit within the token budget.
- * Uses a conservative 1 token ≈ 4 chars estimate for mixed-language content.
- * Returns empty string if context would exceed budget.
- */
-function truncateToTokenBudget(text: string, maxTokens: number): string {
-  // Mixed-language slides often land between Chinese and Latin token densities,
-  // so we keep the 4-char heuristic as a conservative cross-language budget.
-  const maxChars = maxTokens * 4;
-  if (text.length <= maxChars) return text;
-  // Truncate at last complete line within budget
-  const truncated = text.slice(0, maxChars);
-  const lastNewline = truncated.lastIndexOf("\n");
-  return lastNewline > 0
-    ? truncated.slice(0, lastNewline) + "\n[...context truncated]"
-    : truncated + "\n[...context truncated]";
-}

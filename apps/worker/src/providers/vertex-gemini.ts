@@ -14,6 +14,25 @@ import {
 
 const MAX_NODES_PER_BATCH = 50;
 const ACCESS_TOKEN_REFRESH_BUFFER_MS = 2 * 60 * 1000;
+export const VERTEX_MAX_OUTPUT_TOKENS = 65_535;
+export const VERTEX_SAFETY_SETTINGS_OFF = [
+  {
+    category: "HARM_CATEGORY_HATE_SPEECH",
+    threshold: "OFF",
+  },
+  {
+    category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+    threshold: "OFF",
+  },
+  {
+    category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+    threshold: "OFF",
+  },
+  {
+    category: "HARM_CATEGORY_HARASSMENT",
+    threshold: "OFF",
+  },
+] as const;
 
 let cachedAccessToken:
   | {
@@ -47,7 +66,7 @@ Follow these rules for every request:
 - Return only JSON that matches the provided response schema.
 `.trim();
 
-function buildResponseSchema(nodeCount: number) {
+export function buildResponseSchema(nodeCount: number) {
   return {
     type: "ARRAY",
     description:
@@ -184,8 +203,10 @@ export async function translateWithVertexGemini(
       parts: [{ text: TRANSLATION_SYSTEM_INSTRUCTION }],
     },
     contents: [{ role: "user", parts: [{ text: prompt }] }],
+    safetySettings: VERTEX_SAFETY_SETTINGS_OFF,
     generationConfig: {
       temperature: 0.1,
+      maxOutputTokens: VERTEX_MAX_OUTPUT_TOKENS,
       responseMimeType: "application/json",
       responseSchema: buildResponseSchema(nodes.length),
     },
@@ -223,7 +244,7 @@ export async function translateWithVertexGemini(
   };
 }
 
-function buildVertexGenerateContentEndpoint(
+export function buildVertexGenerateContentEndpoint(
   projectId: string,
   location: string,
   model: string
@@ -236,7 +257,7 @@ function buildVertexGenerateContentEndpoint(
   return `${baseUrl}/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
 }
 
-async function summarizeVertexErrorResponse(res: Response): Promise<string> {
+export async function summarizeVertexErrorResponse(res: Response): Promise<string> {
   const raw = (await res.text()).trim();
   if (!raw) {
     return "";
@@ -260,7 +281,7 @@ async function summarizeVertexErrorResponse(res: Response): Promise<string> {
   }
 }
 
-function truncateErrorSummary(message: string): string {
+export function truncateErrorSummary(message: string): string {
   const trimmed = message.replace(/\s+/g, " ").trim();
   return trimmed.length > 300 ? `${trimmed.slice(0, 297)}...` : trimmed;
 }
@@ -286,7 +307,7 @@ async function translateInBatches(
   };
 }
 
-function buildPrompt(
+export function buildPrompt(
   nodes: readonly TranslationNode[],
   sourceLang: string,
   targetLang: string,
@@ -330,7 +351,7 @@ TARGET NODE TEXT:
 ${JSON.stringify(nodesJson, null, 2)}`;
 }
 
-function compactContextPackForPrompt(contextPack: TranslationContextPack) {
+export function compactContextPackForPrompt(contextPack: TranslationContextPack) {
   const activeSlides = new Set(contextPack.nodes.map((node) => node.slide_index));
   const deckContextWithoutActiveSlides = contextPack.deck_plaintext_context
     .split("\n")
@@ -366,7 +387,7 @@ function compactContextPackForPrompt(contextPack: TranslationContextPack) {
   };
 }
 
-function buildTargetNodeStructureForPrompt(
+export function buildTargetNodeStructureForPrompt(
   contextPack: TranslationContextPack | undefined,
   nodes: readonly TranslationNode[]
 ) {
@@ -437,7 +458,7 @@ function buildTargetNodeStructureForPrompt(
  * guaranteed to be valid JSON matching our schema — but we still
  * validate node count and ID integrity.
  */
-function parseTranslationResponse(
+export function parseTranslationResponse(
   raw: string,
   request: TranslationRequest
 ): TranslatedNode[] {
@@ -583,9 +604,6 @@ function parseTranslatedSegments(
       segment.translated_text,
       `translated_text for segment ${index} in node "${nodeId}"`
     );
-    if (translatedText.trim().length === 0) {
-      throw new Error(`Node "${nodeId}" contains an empty segment`);
-    }
 
     const styleRole = readRequiredString(
       segment.style_role,
@@ -761,7 +779,7 @@ function readRequiredNonEmptyString(value: unknown, label: string): string {
 }
 
 /** Get GCP access token using Application Default Credentials. */
-async function getAccessToken(): Promise<string> {
+export async function getAccessToken(): Promise<string> {
   const now = Date.now();
   if (cachedAccessToken && cachedAccessToken.expiresAtMs > now) {
     return cachedAccessToken.token;

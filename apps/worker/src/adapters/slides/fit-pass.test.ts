@@ -344,6 +344,62 @@ test("fitTranslatedNode marks severe overflow as high risk and requests tighter 
   assert.ok(fit.avoidExpansion);
 });
 
+test("fitTranslatedNode shrinks dense CJK metric values to stay within the original card", () => {
+  const sourceNode = createNode({
+    node_id: "metric_cjk",
+    text: "3M",
+    full_text: "3M",
+    slide_index: 4,
+    element_type: "shape",
+    archetype: "metric_card",
+    object_id: "metric_cjk",
+    box: {
+      width_emu: 52 * 12700,
+      height_emu: 26 * 12700,
+      translate_x_emu: 0,
+      translate_y_emu: 0,
+      rotation_deg: 0,
+    },
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        text: "3M",
+        start_index: 0,
+        end_index: 2,
+        paragraph_style: {},
+        runs: [
+          {
+            run_id: "r0",
+            text: "3M",
+            start_index: 0,
+            end_index: 2,
+            style_role: "metric_value",
+            text_style: { fontSize: { magnitude: 48, unit: "PT" }, bold: true },
+          },
+        ],
+      },
+    ],
+  });
+
+  const translatedNode = createTranslatedNode({
+    node_id: "metric_cjk",
+    translated_full_text: "300万",
+    segments: [
+      {
+        segment_id: "r0",
+        translated_text: "300万",
+        style_role: "metric_value",
+      },
+    ],
+  });
+
+  const fit = fitTranslatedNode(sourceNode, translatedNode);
+
+  assert.ok(fit.scale < 1);
+  assert.ok(fit.scale <= 0.72);
+  assert.ok(riskRank(fit.risk) >= riskRank("medium"));
+});
+
 test("applyFitToTextStyle injects fallback font size for inherited theme runs when shrinking", () => {
   const scaled = applyFitToTextStyle(
     {

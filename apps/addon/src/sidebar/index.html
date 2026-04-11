@@ -444,6 +444,7 @@
       entitlementCacheTtl: 300,
       currentJobId: null,
       currentJobOutputMode: null,
+      currentOutputDocumentId: null,
       cancelRequested: false,
       cancelRequestInFlight: false,
       activeSubmission: null,
@@ -629,6 +630,7 @@
       hideResult();
       state.cancelRequested = false;
       state.cancelRequestInFlight = false;
+      state.currentOutputDocumentId = null;
 
       // Gather target language
       var targetLangSel = document.getElementById('targetLang');
@@ -671,6 +673,9 @@
         idempotency_key: null
       };
       var submission = beginSubmission(jobRequest.output_mode);
+      if (outputMode !== 'create_new_file') {
+        state.currentOutputDocumentId = state.documentId;
+      }
 
       setTranslating(true);
       showProgress(0, 'Submitting job...', '');
@@ -706,6 +711,7 @@
                     }
                     activeSubmission.targetDocumentId = prepared.documentId;
                     jobRequest.target_document_id = prepared.documentId;
+                    state.currentOutputDocumentId = prepared.documentId;
                     if (activeSubmission.cancelRequested) {
                       google.script.run.cleanupPreparedPresentation(prepared.documentId);
                       finishSubmissionCanceled(jobRequest.output_mode);
@@ -768,6 +774,7 @@
           var activeSubmission = getActiveSubmission(submissionToken);
           state.currentJobId = resp.job_id;
           state.currentJobOutputMode = jobRequest.output_mode;
+          state.currentOutputDocumentId = jobRequest.target_document_id || state.documentId;
           if (activeSubmission && activeSubmission.cancelRequested) {
             clearActiveSubmission();
             requestJobCancellation(resp.job_id, jobRequest.output_mode);
@@ -854,7 +861,7 @@
             showResult(
               true,
               resp.message || 'Translation completed successfully.',
-              resp.output_document_url
+              resolveOutputDocumentUrl(resp)
             );
             // Refresh entitlement after job completion (usage changed)
             refreshEntitlement(true);
@@ -958,12 +965,36 @@
     function formatStep(step) {
       var labels = {
         'pending': 'Preparing...',
-        'queued': 'Queued...',
+        'queued': 'Waiting in queue...',
         'extracting': 'Extracting content...',
+        'extracting_content': 'Extracting slide content...',
         'translating': 'Translating...',
-        'writing': 'Writing translated content...'
+        'translating_segments': 'Translating content...',
+        'authority_pass': 'Building deck translation...',
+        'gap_fill': 'Completing missing translations...',
+        'materialization_pass': 'Preparing slide layout...',
+        'writing': 'Writing translated content...',
+        'writing_back': 'Writing translated slides...',
+        'completed': 'Completed',
+        'completed_with_warnings': 'Completed with warnings',
+        'failed': 'Translation failed',
+        'canceled': 'Translation canceled'
       };
-      return labels[step] || step;
+      if (labels[step]) {
+        return labels[step];
+      }
+      return humanizeStepLabel(step);
+    }
+
+    function humanizeStepLabel(step) {
+      if (!step) {
+        return 'Working...';
+      }
+      var normalized = String(step).replace(/[_-]+/g, ' ').trim();
+      if (!normalized) {
+        return 'Working...';
+      }
+      return normalized.charAt(0).toUpperCase() + normalized.slice(1);
     }
 
     // ── Upgrade / Manage ──
@@ -1037,12 +1068,22 @@
       ) {
         message += ' The generated file was kept, and the generated slides were counted toward your quota.';
       }
-      showResult(false, message, resp.output_document_url || null);
+      showResult(false, message, resolveOutputDocumentUrl(resp));
     }
 
     function hideResult() {
       document.getElementById('resultArea').classList.remove('visible');
       document.getElementById('resultArea').className = 'result-area';
+    }
+
+    function resolveOutputDocumentUrl(resp) {
+      if (resp && resp.output_document_url) {
+        return resp.output_document_url;
+      }
+      if (!state.currentOutputDocumentId || state.hostType !== 'slides') {
+        return null;
+      }
+      return 'https://docs.google.com/presentation/d/' + state.currentOutputDocumentId + '/edit';
     }
 
     function showError(msg) {

@@ -123,7 +123,6 @@ export function loadWorkerConfig() {
 
     vertex: {
       model: optionalEnv("VERTEX_MODEL", "gemini-3.1-flash-lite-preview"),
-      maxInputTokens: 50_000,
       location: optionalEnv("VERTEX_LOCATION", "global"),
     },
 

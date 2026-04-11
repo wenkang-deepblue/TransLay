@@ -26,7 +26,6 @@ function createConfig(): WorkerConfig {
     },
     vertex: {
       model: "gemini-3.1-flash-lite-preview",
-      maxInputTokens: 50_000,
       location: "global",
     },
     gemmaGpu: {
@@ -197,6 +196,13 @@ test("translateWithVertexGemini sends system instructions and a constrained JSON
     );
 
     assert.equal(body.generationConfig?.responseMimeType, "application/json");
+    assert.equal(body.generationConfig?.maxOutputTokens, 65535);
+    assert.deepEqual(body.safetySettings, [
+      { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "OFF" },
+      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "OFF" },
+      { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "OFF" },
+      { category: "HARM_CATEGORY_HARASSMENT", threshold: "OFF" },
+    ]);
     assert.equal(responseSchema.type, "ARRAY");
     assert.equal(responseSchema.minItems, 1);
     assert.equal(responseSchema.maxItems, 1);

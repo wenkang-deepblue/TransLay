@@ -96,6 +96,20 @@ export interface TranslationRequest {
   readonly context_pack?: TranslationContextPack;
 }
 
+export interface AuthorityTranslationNode {
+  readonly node_id: string;
+  readonly slide_index: number;
+  /** @internal MUST NOT be persisted, logged, or cached — zero-content-persistence rule. */
+  readonly translated_full_text: string;
+  readonly preferred_terms_used?: readonly string[];
+  readonly notes?: readonly string[];
+}
+
+export interface AuthorityTranslationResponse {
+  readonly provider_request_id: string;
+  readonly nodes: readonly AuthorityTranslationNode[];
+}
+
 /** Translation response from inference plane. */
 export interface TranslatedNode {
   readonly node_id: string;

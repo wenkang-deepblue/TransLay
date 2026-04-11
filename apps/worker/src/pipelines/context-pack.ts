@@ -1,6 +1,7 @@
 import type {
   TranslationContextGlossaryCandidate,
   TranslationContextPack,
+  TranslationContextNodeSummary,
   TranslationNode,
 } from "@translay/shared-contracts";
 import type { SlideTextNode } from "../adapters/slides";
@@ -64,29 +65,35 @@ export function buildDeckContextPack(
     target_language: params.targetLanguage,
     deck_plaintext_context: params.deckPlaintextContext,
     glossary_candidates: extractGlossaryCandidates(params.deckNodes),
-    nodes: params.activeGroup.map((node) => ({
-      node_id: node.node_id,
-      archetype: node.archetype,
-      slide_index: node.slide_index,
-      full_text: node.full_text,
-      paragraphs: node.paragraphs.map((paragraph) => ({
-        paragraph_id: paragraph.paragraph_id,
-        text: paragraph.text,
-        bullet: paragraph.bullet
-          ? { nesting_level: paragraph.bullet.nesting_level }
-          : undefined,
-        style_roles: paragraph.runs.map((run) => run.style_role),
-        segments: paragraph.runs.map((run) => ({
-          segment_id: run.run_id,
-          text: run.text,
-          style_role: run.style_role,
-        })),
-      })),
-    })),
+    nodes: projectNodesToContextSummaries(params.activeGroup),
   };
 }
 
-function extractGlossaryCandidates(
+export function projectNodesToContextSummaries(
+  nodes: readonly SlideTextNode[]
+): TranslationContextNodeSummary[] {
+  return nodes.map((node) => ({
+    node_id: node.node_id,
+    archetype: node.archetype,
+    slide_index: node.slide_index,
+    full_text: node.full_text,
+    paragraphs: node.paragraphs.map((paragraph) => ({
+      paragraph_id: paragraph.paragraph_id,
+      text: paragraph.text,
+      bullet: paragraph.bullet
+        ? { nesting_level: paragraph.bullet.nesting_level }
+        : undefined,
+      style_roles: paragraph.runs.map((run) => run.style_role),
+      segments: paragraph.runs.map((run) => ({
+        segment_id: run.run_id,
+        text: run.text,
+        style_role: run.style_role,
+      })),
+    })),
+  }));
+}
+
+export function extractGlossaryCandidates(
   nodes: readonly SlideTextNode[]
 ): TranslationContextGlossaryCandidate[] {
   const candidates = new Map<string, TranslationContextGlossaryCandidate>();

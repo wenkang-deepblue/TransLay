@@ -447,6 +447,9 @@ function buildNodeWriteArtifacts(
       if (Object.keys(segmentPlan.sourceRun.text_style).length === 0) {
         continue;
       }
+      if (segmentPlan.start === segmentPlan.end) {
+        continue;
+      }
 
       requests.push({
         updateTextStyle: {
