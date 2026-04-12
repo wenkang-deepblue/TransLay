@@ -16,6 +16,36 @@ export type SlideRunStyleRole =
   | "prefix"
   | "suffix";
 
+export const SLIDE_LAYOUT_VISUAL_ROLES = [
+  "title",
+  "subtitle",
+  "section_label",
+  "agenda_item",
+  "step_label",
+  "body",
+  "caption",
+  "badge",
+  "decorative_text",
+  "unknown",
+] as const;
+export type SlideLayoutVisualRole =
+  (typeof SLIDE_LAYOUT_VISUAL_ROLES)[number];
+
+export const SLIDE_LAYOUT_LINE_POLICIES = [
+  "prefer_single_line",
+  "allow_wrap",
+  "fixed_multiline",
+] as const;
+export type SlideLayoutLinePolicy =
+  (typeof SLIDE_LAYOUT_LINE_POLICIES)[number];
+
+export const SLIDE_LAYOUT_SCALE_SYNC_OPTIONS = [
+  "sync_with_group",
+  "independent",
+] as const;
+export type SlideLayoutScaleSync =
+  (typeof SLIDE_LAYOUT_SCALE_SYNC_OPTIONS)[number];
+
 export type SlideTextStyleSnapshot = slides_v1.Schema$TextStyle;
 export type SlideParagraphStyleSnapshot = slides_v1.Schema$ParagraphStyle;
 
@@ -52,6 +82,24 @@ export interface SlideParagraph {
   readonly runs: SlideTextRun[];
 }
 
+export interface SlideVisibleStyleSummary {
+  readonly alignment?: string;
+  readonly font_family?: string;
+  readonly min_font_size_pt?: number;
+  readonly max_font_size_pt?: number;
+  readonly fill_color_hex?: string;
+  readonly outline_color_hex?: string;
+}
+
+export interface SlideLayoutSemanticHint {
+  readonly node_id: string;
+  readonly visual_role: SlideLayoutVisualRole;
+  readonly cluster_id: string;
+  readonly line_policy: SlideLayoutLinePolicy;
+  readonly scale_sync: SlideLayoutScaleSync;
+  readonly confidence: number;
+}
+
 /** Extracted text node from a Slides presentation. */
 export interface SlideTextNode {
   readonly node_id: string;
@@ -65,6 +113,8 @@ export interface SlideTextNode {
   readonly object_id: string;
   readonly box: SlideBoxGeometry;
   readonly paragraphs: SlideParagraph[];
+  readonly visible_style?: SlideVisibleStyleSummary;
+  readonly layout_hint?: SlideLayoutSemanticHint;
   /** For table cells: row and column indices. */
   readonly row_index?: number;
   readonly col_index?: number;

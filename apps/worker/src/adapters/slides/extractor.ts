@@ -9,6 +9,8 @@ import {
   buildRichTextNode,
   extractBoxGeometry,
   extractPlainText,
+  extractTableCellVisibleStyleSummary,
+  extractVisibleStyleSummary,
 } from "./rich-text";
 
 /**
@@ -130,6 +132,7 @@ function extractFromElement(
       elementType: "shape",
       textContent: element.shape.text,
       box,
+      visibleStyle: extractVisibleStyleSummary(element, element.shape.text),
     });
     if (node) {
       nodes.push(node);
@@ -151,6 +154,7 @@ function extractFromElement(
           elementType: "table_cell",
           textContent: cell.text,
           box,
+          visibleStyle: extractTableCellVisibleStyleSummary(cell, cell.text),
           rowIndex: r,
           colIndex: c,
         });

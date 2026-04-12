@@ -296,6 +296,52 @@
       text-align: center;
     }
     .duplicate-action.visible { display: block; }
+
+    /* ── Confirm dialog ── */
+    .dialog-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(32, 33, 36, 0.45);
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 999;
+    }
+    .dialog-overlay.visible { display: flex; }
+    .dialog-card {
+      width: 100%;
+      max-width: 320px;
+      background: #fff;
+      border-radius: 10px;
+      padding: 16px;
+      box-shadow: 0 8px 24px rgba(60, 64, 67, 0.24);
+    }
+    .dialog-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #202124;
+      margin-bottom: 10px;
+    }
+    .dialog-body {
+      font-size: 12px;
+      line-height: 1.6;
+      color: #3c4043;
+      white-space: pre-line;
+    }
+    .dialog-actions {
+      margin-top: 14px;
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .dialog-actions .btn {
+      width: auto;
+      min-width: 96px;
+      margin-top: 0;
+      padding: 8px 12px;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -432,6 +478,17 @@
 
   </div>
 
+  <div id="confirmDialog" class="dialog-overlay">
+    <div class="dialog-card">
+      <div class="dialog-title" id="confirmDialogTitle">友情提示</div>
+      <div class="dialog-body" id="confirmDialogBody"></div>
+      <div class="dialog-actions">
+        <button class="btn btn-secondary" id="confirmDialogCancelBtn" type="button">取消</button>
+        <button class="btn btn-primary" id="confirmDialogConfirmBtn" type="button">确认</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // ── State ──
     var state = {
@@ -439,12 +496,15 @@
       documentId: null,
       documentName: null,
       isSupported: false,
+      slideCount: 0,
+      currentSlideIndex: 1,
       entitlement: null,
       entitlementFetchedAt: 0,
       entitlementCacheTtl: 300,
       currentJobId: null,
       currentJobOutputMode: null,
       currentOutputDocumentId: null,
+      translatedUnitsBilled: 0,
       cancelRequested: false,
       cancelRequestInFlight: false,
       activeSubmission: null,
@@ -468,6 +528,8 @@
       state.documentId = data.documentId;
       state.documentName = data.documentName;
       state.isSupported = data.isSupported;
+      state.slideCount = data.slideCount || 0;
+      state.currentSlideIndex = data.currentSlideIndex || 1;
       state.presetLanguages = data.presetLanguages || [];
       state.entitlementCacheTtl = data.entitlementCacheTtl || 300;
 
@@ -672,6 +734,34 @@
         range_expression: rangeExpression,
         idempotency_key: null
       };
+      var translatedPageCount = estimateSelectedSlideCount(rangeMode, rangeExpression);
+      if (translatedPageCount === null) {
+        showError('The selected page range is invalid.');
+        return;
+      }
+
+      showConfirmationDialog(
+        '友情提示',
+        [
+          '当前翻译任务：',
+          '源语言：自动识别',
+          '目标语言：' + targetLang,
+          '翻译范围：' + describeRange(rangeMode, rangeExpression),
+          '输出形式：' + describeOutputMode(outputMode),
+          '将消耗额度：' + translatedPageCount,
+          '',
+          '是否开始任务？'
+        ].join('\n'),
+        '确认',
+        '取消',
+        function() {
+          executeTranslateSubmission(jobRequest, targetLang, outputMode, rangeExpression, submissionNonce);
+        }
+      );
+    }
+
+    function executeTranslateSubmission(jobRequest, targetLang, outputMode, rangeExpression, submissionNonce) {
+      state.translatedUnitsBilled = 0;
       var submission = beginSubmission(jobRequest.output_mode);
       if (outputMode !== 'create_new_file') {
         state.currentOutputDocumentId = state.documentId;
@@ -844,6 +934,7 @@
       state.currentJobOutputMode = null;
       state.cancelRequested = false;
       state.cancelRequestInFlight = false;
+      state.translatedUnitsBilled = 0;
       state.activeSubmission = null;
     }
 
@@ -878,6 +969,7 @@
             showResult(false, resp.message || 'Translation failed.', null);
           } else {
             // In progress
+            state.translatedUnitsBilled = resp.translated_units_billed || 0;
             var pct = resp.progress_percent || 0;
             var step = formatStep(resp.current_step || resp.status);
             var detail = resp.details || '';
@@ -909,6 +1001,27 @@
       }
 
       if (!state.currentJobId) {
+        return;
+      }
+
+      if (state.translatedUnitsBilled > 0) {
+        showConfirmationDialog(
+          '取消任务提醒',
+          [
+            '当前已经翻译完成' + state.translatedUnitsBilled + '页。',
+            '如果现在取消，已经成功翻译过的页面仍会计入本月额度。',
+            '',
+            '是否取消任务？'
+          ].join('\n'),
+          '取消任务',
+          '继续任务',
+          function() {
+            requestJobCancellation(
+              state.currentJobId,
+              state.currentJobOutputMode || document.getElementById('outputMode').value
+            );
+          }
+        );
         return;
       }
 
@@ -1017,6 +1130,105 @@
         .getPortalUrl(reason);
     }
 
+    function showConfirmationDialog(title, body, confirmText, cancelText, onConfirm) {
+      var overlay = document.getElementById('confirmDialog');
+      var titleEl = document.getElementById('confirmDialogTitle');
+      var bodyEl = document.getElementById('confirmDialogBody');
+      var cancelBtn = document.getElementById('confirmDialogCancelBtn');
+      var confirmBtn = document.getElementById('confirmDialogConfirmBtn');
+
+      titleEl.textContent = title || '友情提示';
+      bodyEl.textContent = body || '';
+      cancelBtn.textContent = cancelText || '取消';
+      confirmBtn.textContent = confirmText || '确认';
+
+      cancelBtn.onclick = function() {
+        hideConfirmationDialog();
+      };
+      confirmBtn.onclick = function() {
+        hideConfirmationDialog();
+        if (typeof onConfirm === 'function') {
+          onConfirm();
+        }
+      };
+
+      overlay.classList.add('visible');
+    }
+
+    function hideConfirmationDialog() {
+      document.getElementById('confirmDialog').classList.remove('visible');
+    }
+
+    function estimateSelectedSlideCount(rangeMode, rangeExpression) {
+      if (state.hostType !== 'slides') {
+        return 0;
+      }
+      if (rangeMode === 'entire') {
+        return state.slideCount;
+      }
+      if (rangeMode === 'current') {
+        return 1;
+      }
+      var parsed = parseSlideRangeExpression(rangeExpression, state.slideCount);
+      return parsed ? parsed.length : null;
+    }
+
+    function parseSlideRangeExpression(rangeExpression, slideCount) {
+      if (!rangeExpression) {
+        return null;
+      }
+
+      var values = {};
+      var segments = String(rangeExpression).split(',');
+      for (var i = 0; i < segments.length; i++) {
+        var segment = segments[i].trim();
+        if (!segment) {
+          return null;
+        }
+
+        var rangeMatch = segment.match(/^(\d+)\s*-\s*(\d+)$/);
+        if (rangeMatch) {
+          var start = parseInt(rangeMatch[1], 10);
+          var end = parseInt(rangeMatch[2], 10);
+          if (isNaN(start) || isNaN(end) || start < 1 || end < start || end > slideCount) {
+            return null;
+          }
+          for (var page = start; page <= end; page++) {
+            values[page] = true;
+          }
+          continue;
+        }
+
+        var single = parseInt(segment, 10);
+        if (isNaN(single) || single < 1 || single > slideCount) {
+          return null;
+        }
+        values[single] = true;
+      }
+
+      return Object.keys(values).map(function(key) {
+        return parseInt(key, 10);
+      }).sort(function(a, b) {
+        return a - b;
+      });
+    }
+
+    function describeRange(rangeMode, rangeExpression) {
+      if (rangeMode === 'entire') {
+        return 'Entire presentation';
+      }
+      if (rangeMode === 'current') {
+        return 'Current slide (' + state.currentSlideIndex + ')';
+      }
+      return 'Custom pages (' + rangeExpression + ')';
+    }
+
+    function describeOutputMode(outputMode) {
+      return outputMode === 'create_new_file'
+        ? 'Create a new presentation'
+        : 'Append translated slides after originals';
+    }
+
     // ── UI helpers ──
     function hideLoading() {
       document.getElementById('loadingView').style.display = 'none';
@@ -1064,7 +1276,8 @@
       var message = resp.message || 'Translation canceled.';
       if (
         resp.output_mode === 'create_new_file' &&
-        resp.total_units_billed > 0
+        resp.total_units_billed > 0 &&
+        !!resp.output_document_url
       ) {
         message += ' The generated file was kept, and the generated slides were counted toward your quota.';
       }

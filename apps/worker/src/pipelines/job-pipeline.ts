@@ -16,7 +16,8 @@ import { getJobById, isCancelRequested, updateJobStatus } from "../repositories/
 import { insertUsageLedger } from "../repositories/usage-repo";
 import { setJobProgress } from "../cache/job-progress";
 import { extractSlides } from "../adapters/slides";
-import { buildPresentationStoryboard } from "../adapters/slides/storyboard";
+import { annotateSlidesWithLayoutSemanticsBestEffort } from "../adapters/slides/layout-semantics";
+import { buildDeckStoryboard } from "../adapters/slides/storyboard";
 import { writeBackAppend, writeBackNewFile, type WriteBackResult } from "../adapters/slides";
 import { selectRoute } from "../providers/router";
 import {
@@ -24,6 +25,8 @@ import {
   materializeTranslatedNodesWithVertexGemini,
   translateDeckAuthorityWithVertexGemini,
 } from "../providers/vertex-gemini-authority";
+import { requestSlideLayoutSemanticsWithVertexGemini } from "../providers/vertex-gemini-layout";
+import { scanSlidesForPromptInjectionRisk } from "../providers/llm-prompt-safety";
 import {
   extractGlossaryCandidates,
 } from "./context-pack";
@@ -33,6 +36,8 @@ import {
   mergeAuthorityNodes,
   projectNodesToAuthoritySourceNodes,
 } from "./authority";
+
+const MAX_PROVIDER_ATTEMPTS_PER_BATCH = 3;
 
 /**
  * Main job pipeline: extract → translate → write-back.
@@ -64,9 +69,11 @@ export async function runJobPipeline(
   const route = selectRoute(config, job.user_id as string);
   console.log(`Job ${job_id} route selected: ${route.provider}/${route.model}`);
   let writeResult: WriteBackResult = { outputUrl: "", committedUnits: 0, warnings: [] };
+  const billedSlideIndexes = new Set<number>();
+  let translatedUnitsBilled = 0;
 
   try {
-    await assertNotCanceled(pool, redis, job, writeResult);
+    await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
 
     // --- EXTRACTING ---
     console.log(`Job ${job_id} entering extracting stage`);
@@ -79,7 +86,7 @@ export async function runJobPipeline(
       current_step: "extracting_content",
       details: "Extracting presentation content",
     });
-    await assertNotCanceled(pool, redis, job, writeResult);
+    await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
 
     if (job.host_type !== "slides") {
       throw new PipelineError(
@@ -116,8 +123,27 @@ export async function runJobPipeline(
       );
     }
 
-    const totalSlides = extraction.extracted_slides.length;
-    await assertNotCanceled(pool, redis, job, writeResult);
+    const promptInjectionScan = scanSlidesForPromptInjectionRisk(extraction.extracted_slides);
+    const excludedSlideIndices = new Set(promptInjectionScan.hard_block_slide_indices);
+    const safeSlides = extraction.extracted_slides.filter(
+      (slide) => !excludedSlideIndices.has(slide.slide_index)
+    );
+    if (safeSlides.length === 0) {
+      const slideLabels = promptInjectionScan.hard_block_slide_indices.map((slideIndex) => slideIndex + 1);
+      throw new PipelineError(
+        "UNSAFE_LLM_INPUT",
+        `All selected slides were excluded due to prompt-injection risk: ${slideLabels.join(", ")}`
+      );
+    }
+
+    const extractionForTranslation = {
+      ...extraction,
+      extracted_slides: safeSlides,
+      all_nodes: safeSlides.flatMap((slide) => slide.nodes),
+      full_context_text: buildDeckPlaintextContext(safeSlides),
+    };
+    const totalSlides = extractionForTranslation.extracted_slides.length;
+    await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
 
     // --- TRANSLATING ---
     console.log(`Job ${job_id} entering translating stage`);
@@ -126,7 +152,10 @@ export async function runJobPipeline(
       status: "translating",
       progress_percent: 30,
       current_step: "translating_segments",
-      details: `Translating ${extraction.all_nodes.length} text segments`,
+      details:
+        excludedSlideIndices.size > 0
+          ? `Excluded ${excludedSlideIndices.size} risky slide(s); translating ${extractionForTranslation.all_nodes.length} text segments from ${totalSlides} safe slide(s)`
+          : `Translating ${extractionForTranslation.all_nodes.length} text segments`,
     });
 
     // Resolve target language code
@@ -135,32 +164,61 @@ export async function runJobPipeline(
       matchPresetLanguage(job.target_language_input) ??
       job.target_language_input;
 
-    const deckPlaintextContext = extraction.full_context_text;
-    const glossaryCandidates = extractGlossaryCandidates(extraction.all_nodes);
+    const deckPlaintextContext = extractionForTranslation.full_context_text;
     const providerRequestIds: string[] = [];
-    const storyboard = await buildPresentationStoryboard(job.source_doc_id);
+    const storyboard = await buildDeckStoryboard(job.source_doc_id, extractionForTranslation.extracted_slides);
     await setJobProgress(redis, job_id, {
       status: "translating",
       progress_percent: 35,
-      current_step: "authority_pass",
-      details: `Building authoritative deck translation for ${extraction.all_nodes.length} nodes`,
+      current_step: "layout_semantics",
+      details: `Analyzing layout semantics for ${extractionForTranslation.extracted_slides.length} safe slide(s)`,
     });
-    await assertNotCanceled(pool, redis, job, writeResult);
+    await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
 
-    const authorityResult = await translateDeckAuthorityWithVertexGemini(config, {
-      model: route.model,
-      source_language: "auto",
-      target_language: targetLangCode,
-      deck_title: extraction.title,
-      deck_plaintext_context: deckPlaintextContext,
-      glossary_candidates: glossaryCandidates,
-      nodes: projectNodesToAuthoritySourceNodes(extraction.all_nodes),
+    const slidesWithLayoutHints = await annotateSlidesWithLayoutSemanticsBestEffort(
+      extractionForTranslation.extracted_slides,
       storyboard,
+      async (input) =>
+        runProviderCallWithRetry(
+          `layout_semantics_slide_${input.slide_index + 1}`,
+          () =>
+            requestSlideLayoutSemanticsWithVertexGemini(config, {
+              model: route.model,
+              ...input,
+            })
+        )
+    );
+    const extractionWithLayoutHints = {
+      ...extractionForTranslation,
+      extracted_slides: slidesWithLayoutHints,
+      all_nodes: slidesWithLayoutHints.flatMap((slide) => slide.nodes),
+    };
+    const glossaryCandidates = extractGlossaryCandidates(extractionWithLayoutHints.all_nodes);
+
+    await setJobProgress(redis, job_id, {
+      status: "translating",
+      progress_percent: 38,
+      current_step: "authority_pass",
+      details: `Building authoritative deck translation for ${extractionWithLayoutHints.all_nodes.length} nodes`,
     });
+    await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
+
+    const authorityResult = await runProviderCallWithRetry("authority_batch_1", () =>
+      translateDeckAuthorityWithVertexGemini(config, {
+        model: route.model,
+        source_language: "auto",
+        target_language: targetLangCode,
+        deck_title: extractionWithLayoutHints.title,
+        deck_plaintext_context: deckPlaintextContext,
+        glossary_candidates: glossaryCandidates,
+        nodes: projectNodesToAuthoritySourceNodes(extractionWithLayoutHints.all_nodes),
+        storyboard,
+      })
+    );
     providerRequestIds.push(authorityResult.provider_request_id);
 
     let authorityNodes = authorityResult.nodes;
-    let authorityAudit = auditAuthorityCoverage(extraction.all_nodes, authorityNodes);
+    let authorityAudit = auditAuthorityCoverage(extractionWithLayoutHints.all_nodes, authorityNodes);
     if (authorityAudit.missing_nodes.length > 0) {
       await setJobProgress(redis, job_id, {
         status: "translating",
@@ -168,11 +226,11 @@ export async function runJobPipeline(
         current_step: "gap_fill",
         details: `Filling ${authorityAudit.missing_nodes.length} authority coverage gap(s)`,
       });
-      await assertNotCanceled(pool, redis, job, writeResult);
+      await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
 
       const missingNodesBySlide = groupNodesBySlide(authorityAudit.missing_nodes);
       const slideByIndex = new Map(
-        extraction.extracted_slides.map((slide) => [slide.slide_index, slide])
+        extractionWithLayoutHints.extracted_slides.map((slide) => [slide.slide_index, slide])
       );
       const frameBySlideIndex = new Map(
         storyboard.frames.map((frame) => [frame.slide_index, frame])
@@ -188,25 +246,29 @@ export async function runJobPipeline(
           );
         }
 
-        const gapFillResult = await fillMissingAuthorityWithVertexGemini(config, {
-          model: route.model,
-          source_language: "auto",
-          target_language: targetLangCode,
-          deck_title: extraction.title,
-          slide_index: slideIndex,
-          slide_plaintext_context: buildSlidePlaintextContext(slide),
-          glossary_candidates: glossaryCandidates,
-          existing_authority_nodes: authorityNodes,
-          missing_nodes: projectNodesToAuthoritySourceNodes(missingNodes),
-          storyboard_frame: frameBySlideIndex.get(slideIndex),
-        });
+        const gapFillResult = await runProviderCallWithRetry(
+          `gap_fill_slide_${slideIndex + 1}`,
+          () =>
+            fillMissingAuthorityWithVertexGemini(config, {
+              model: route.model,
+              source_language: "auto",
+              target_language: targetLangCode,
+              deck_title: extractionWithLayoutHints.title,
+              slide_index: slideIndex,
+              slide_plaintext_context: buildSlidePlaintextContext(slide),
+              glossary_candidates: glossaryCandidates,
+              existing_authority_nodes: authorityNodes,
+              missing_nodes: projectNodesToAuthoritySourceNodes(missingNodes),
+              storyboard_frame: frameBySlideIndex.get(slideIndex),
+            })
+        );
         providerRequestIds.push(gapFillResult.provider_request_id);
         gapFilledNodes.push(...gapFillResult.nodes);
-        await assertNotCanceled(pool, redis, job, writeResult);
+        await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
       }
 
       authorityNodes = mergeAuthorityNodes(authorityNodes, gapFilledNodes);
-      authorityAudit = auditAuthorityCoverage(extraction.all_nodes, authorityNodes);
+      authorityAudit = auditAuthorityCoverage(extractionWithLayoutHints.all_nodes, authorityNodes);
     }
 
     if (authorityAudit.missing_nodes.length > 0) {
@@ -216,7 +278,7 @@ export async function runJobPipeline(
       );
     }
 
-    const materializationGroups = buildMaterializationGroups(extraction.extracted_slides, {
+    const materializationGroups = buildMaterializationGroups(extractionWithLayoutHints.extracted_slides, {
       maxNodesPerGroup: 10,
       maxCharsPerGroup: 2_000,
     });
@@ -242,18 +304,33 @@ export async function runJobPipeline(
         return authorityNode;
       });
 
-      const groupResult = await materializeTranslatedNodesWithVertexGemini(config, {
-        model: route.model,
-        source_language: "auto",
-        target_language: targetLangCode,
-        deck_title: extraction.title,
-        glossary_candidates: glossaryCandidates,
-        node_summaries: group.node_summaries,
-        authority_nodes: authoritySubset,
-      });
+      const groupResult = await runProviderCallWithRetry(
+        `materialization_batch_${groupIndex + 1}`,
+        () =>
+          materializeTranslatedNodesWithVertexGemini(config, {
+            model: route.model,
+            source_language: "auto",
+            target_language: targetLangCode,
+            deck_title: extractionWithLayoutHints.title,
+            glossary_candidates: glossaryCandidates,
+            node_summaries: group.node_summaries,
+            authority_nodes: authoritySubset,
+          })
+      );
       validateTranslatedGroup(group.node_summaries, groupResult.nodes);
       translatedNodes.push(...groupResult.nodes);
       providerRequestIds.push(groupResult.provider_request_id);
+
+      const billedBefore = translatedUnitsBilled;
+      translatedUnitsBilled = registerBilledSlides(
+        billedSlideIndexes,
+        group.node_summaries.map((nodeSummary) => nodeSummary.slide_index)
+      );
+      if (translatedUnitsBilled !== billedBefore) {
+        await updateJobStatus(pool, job_id, "translating", {
+          totalUnitsBilled: translatedUnitsBilled,
+        });
+      }
 
       const translatedGroupCount = groupIndex + 1;
       const progressPercent = 50 + Math.round((translatedGroupCount / materializationGroups.length) * 20);
@@ -261,13 +338,15 @@ export async function runJobPipeline(
         status: "translating",
         progress_percent: progressPercent,
         current_step: "materialization_pass",
-        details: `Materialized batch ${translatedGroupCount} of ${materializationGroups.length}`,
+        details:
+          `Materialized batch ${translatedGroupCount} of ${materializationGroups.length}. ` +
+          `${translatedUnitsBilled} slide(s) already count toward quota.`,
       });
-      await assertNotCanceled(pool, redis, job, writeResult);
+      await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
     }
 
     const orderedTranslatedNodes = orderTranslatedNodes(
-      extraction.all_nodes,
+      extractionWithLayoutHints.all_nodes,
       translatedNodes
     );
 
@@ -280,10 +359,10 @@ export async function runJobPipeline(
     );
 
     // Validate response integrity
-    if (translationResult.nodes.length !== extraction.all_nodes.length) {
+    if (translationResult.nodes.length !== extractionWithLayoutHints.all_nodes.length) {
       throw new PipelineError(
         "LLM_PROVIDER_ERROR",
-        `Translation returned ${translationResult.nodes.length} nodes, expected ${extraction.all_nodes.length}`
+        `Translation returned ${translationResult.nodes.length} nodes, expected ${extractionWithLayoutHints.all_nodes.length}`
       );
     }
 
@@ -293,7 +372,7 @@ export async function runJobPipeline(
       current_step: "translating_segments",
       details: "Translation complete, preparing to write back",
     });
-    await assertNotCanceled(pool, redis, job, writeResult);
+    await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
 
     // --- WRITING ---
     console.log(`Job ${job_id} entering writing stage with mode ${job.output_mode}`);
@@ -304,15 +383,15 @@ export async function runJobPipeline(
       current_step: "writing_back",
       details: `Writing translated content back to ${job.output_mode === "create_new_file" ? "new file" : "presentation"}`,
     });
-    await assertNotCanceled(pool, redis, job, writeResult);
+    await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
 
     const onCommitted = async (result: WriteBackResult) => {
       writeResult = result;
       await updateJobStatus(pool, job_id, "writing", {
-        totalUnitsBilled: result.committedUnits,
+        totalUnitsBilled: translatedUnitsBilled,
         outputDocumentUrl: result.outputUrl,
       });
-      await assertNotCanceled(pool, redis, job, writeResult);
+      await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
     };
 
     if (job.output_mode === "create_new_file") {
@@ -325,14 +404,14 @@ export async function runJobPipeline(
 
       writeResult = await writeBackNewFile(
         job.target_doc_id,
-        extraction.extracted_slides,
+        extractionWithLayoutHints.extracted_slides,
         translationResult.nodes,
         onCommitted
       );
     } else {
       writeResult = await writeBackAppend(
         job.source_doc_id,
-        extraction.extracted_slides,
+        extractionWithLayoutHints.extracted_slides,
         translationResult.nodes,
         onCommitted
       );
@@ -346,14 +425,22 @@ export async function runJobPipeline(
       );
     }
 
-    await finalizeSuccessfulJob(pool, redis, job, job_id, targetLangCode, writeResult);
+    await finalizeSuccessfulJob(
+      pool,
+      redis,
+      job,
+      job_id,
+      targetLangCode,
+      writeResult,
+      translatedUnitsBilled
+    );
     console.log(`Job ${job_id} completed successfully: ${writeResult.outputUrl}`);
   } catch (err) {
     if (err instanceof CancellationRequestedError) {
       console.log(
         `Job ${job_id} canceled after ${err.writeResult.committedUnits} committed slides`
       );
-      await finalizeCanceledJob(pool, redis, job, job_id, err.writeResult);
+      await finalizeCanceledJob(pool, redis, job, job_id, err.writeResult, err.billedUnits);
       return;
     }
 
@@ -372,18 +459,16 @@ export async function runJobPipeline(
     console.error(`Job ${job_id} failed [${errorCode}]:`, safeMessage);
 
     try {
-      await updateJobStatus(pool, job_id, "failed", {
+      await finalizeFailedJob(
+        pool,
+        redis,
+        job,
+        job_id,
+        writeResult,
+        translatedUnitsBilled,
         errorCode,
-        errorMessage: safeMessage,
-      });
-
-      await setJobProgress(redis, job_id, {
-        status: "failed",
-        progress_percent: 0,
-        current_step: "failed",
-        details: safeMessage,
-      });
-      await redis.del(buildJobCancelKey(job_id));
+        safeMessage
+      );
     } catch (updateErr) {
       console.error(
         `Failed to update job ${job_id} status to failed:`,
@@ -395,7 +480,8 @@ export async function runJobPipeline(
 
 class CancellationRequestedError extends Error {
   constructor(
-    public readonly writeResult: WriteBackResult
+    public readonly writeResult: WriteBackResult,
+    public readonly billedUnits: number
   ) {
     super("Cancellation requested");
     this.name = "CancellationRequestedError";
@@ -406,7 +492,8 @@ async function assertNotCanceled(
   pool: Pool,
   redis: Redis,
   job: Awaited<ReturnType<typeof getJobById>>,
-  writeResult: WriteBackResult
+  writeResult: WriteBackResult,
+  billedUnits: number
 ): Promise<void> {
   if (!job) {
     return;
@@ -414,11 +501,11 @@ async function assertNotCanceled(
 
   const cancelRequested = await redis.get(buildJobCancelKey(job.id));
   if (cancelRequested) {
-    throw new CancellationRequestedError(writeResult);
+    throw new CancellationRequestedError(writeResult, billedUnits);
   }
 
   if (await isCancelRequested(pool, job.id)) {
-    throw new CancellationRequestedError(writeResult);
+    throw new CancellationRequestedError(writeResult, billedUnits);
   }
 }
 
@@ -428,7 +515,8 @@ async function finalizeSuccessfulJob(
   job: NonNullable<Awaited<ReturnType<typeof getJobById>>>,
   jobId: string,
   targetLangCode: string,
-  writeResult: WriteBackResult
+  writeResult: WriteBackResult,
+  billedUnits: number
 ): Promise<void> {
   const client = await pool.connect();
   const completedStatus = writeResult.warnings.length > 0
@@ -442,18 +530,18 @@ async function finalizeSuccessfulJob(
 
     await updateJobStatus(client, jobId, completedStatus, {
       outputDocumentUrl: writeResult.outputUrl,
-      totalUnitsBilled: writeResult.committedUnits,
+      totalUnitsBilled: billedUnits,
       targetLangCode,
       warnings: writeResult.warnings,
     });
 
-    if (writeResult.committedUnits > 0) {
+    if (billedUnits > 0) {
       await insertUsageLedger(client, {
         userId: job.user_id,
         jobId: job.id,
         hostType: "slides",
         usageUnit: "slides",
-        quantity: writeResult.committedUnits,
+        quantity: billedUnits,
         periodKey: billingPeriodKey(),
         reason: "translate_slides",
       });
@@ -485,26 +573,27 @@ async function finalizeCanceledJob(
   redis: Redis,
   job: NonNullable<Awaited<ReturnType<typeof getJobById>>>,
   jobId: string,
-  writeResult: WriteBackResult
+  writeResult: WriteBackResult,
+  billedUnits: number
 ): Promise<void> {
   const client = await pool.connect();
-  const detail = buildCanceledDetail(job.output_mode, writeResult.committedUnits);
+  const detail = buildCanceledDetail(billedUnits);
 
   try {
     await client.query("BEGIN");
 
     await updateJobStatus(client, jobId, "canceled", {
       outputDocumentUrl: writeResult.outputUrl || undefined,
-      totalUnitsBilled: writeResult.committedUnits,
+      totalUnitsBilled: billedUnits,
     });
 
-    if (writeResult.committedUnits > 0) {
+    if (billedUnits > 0) {
       await insertUsageLedger(client, {
         userId: job.user_id,
         jobId: job.id,
         hostType: "slides",
         usageUnit: "slides",
-        quantity: writeResult.committedUnits,
+        quantity: billedUnits,
         periodKey: billingPeriodKey(),
         reason: "translate_slides",
       });
@@ -523,7 +612,7 @@ async function finalizeCanceledJob(
   await Promise.all([
     setJobProgress(redis, jobId, {
       status: "canceled",
-      progress_percent: writeResult.committedUnits > 0 ? 100 : 0,
+      progress_percent: billedUnits > 0 ? 100 : 0,
       current_step: "canceled",
       details: detail,
     }),
@@ -531,19 +620,147 @@ async function finalizeCanceledJob(
   ]);
 }
 
-function buildCanceledDetail(outputMode: string, committedUnits: number): string {
-  if (outputMode === "create_new_file") {
-    if (committedUnits > 0) {
-      return `Canceled after generating the translated presentation. ${committedUnits} slides were billed.`;
+async function finalizeFailedJob(
+  pool: Pool,
+  redis: Redis,
+  job: NonNullable<Awaited<ReturnType<typeof getJobById>>>,
+  jobId: string,
+  writeResult: WriteBackResult,
+  billedUnits: number,
+  errorCode: string,
+  safeMessage: string
+): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    await updateJobStatus(client, jobId, "failed", {
+      errorCode,
+      errorMessage: safeMessage,
+      outputDocumentUrl: writeResult.outputUrl || undefined,
+      totalUnitsBilled: billedUnits,
+    });
+
+    if (billedUnits > 0) {
+      await insertUsageLedger(client, {
+        userId: job.user_id,
+        jobId: job.id,
+        hostType: "slides",
+        usageUnit: "slides",
+        quantity: billedUnits,
+        periodKey: billingPeriodKey(),
+        reason: "translate_slides",
+      });
     }
-    return "Canceled before the translated presentation was generated. No quota was charged.";
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch((rollbackErr) => {
+      console.error(`ROLLBACK failed for failed job ${jobId}:`, (rollbackErr as Error).message);
+    });
+    throw err;
+  } finally {
+    client.release();
   }
 
-  if (committedUnits > 0) {
-    return `Canceled after writing ${committedUnits} translated slides. Only visible slides were billed.`;
+  await Promise.all([
+    setJobProgress(redis, jobId, {
+      status: "failed",
+      progress_percent: 0,
+      current_step: "failed",
+      details: safeMessage,
+    }),
+    redis.del(buildJobCancelKey(jobId)),
+  ]);
+}
+
+function buildCanceledDetail(billedUnits: number): string {
+  if (billedUnits > 0) {
+    return `Canceled after ${billedUnits} slide(s) were successfully translated. Those slides were counted toward quota even though the job did not finish.`;
   }
 
-  return "Canceled before any translated slides were written. No quota was charged.";
+  return "Canceled before any slide translation succeeded. No quota was charged.";
+}
+
+async function runProviderCallWithRetry<T>(
+  label: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_PROVIDER_ATTEMPTS_PER_BATCH; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      console.warn(
+        `Provider call ${label} failed on attempt ${attempt}/${MAX_PROVIDER_ATTEMPTS_PER_BATCH}:`,
+        error instanceof Error ? error.message : String(error)
+      );
+      if (attempt >= MAX_PROVIDER_ATTEMPTS_PER_BATCH || !isRetryableProviderError(error)) {
+        throw error;
+      }
+      await delay(attempt * 500);
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Provider call ${label} failed`);
+}
+
+function registerBilledSlides(
+  billedSlideIndexes: Set<number>,
+  slideIndexes: readonly number[]
+): number {
+  for (const slideIndex of slideIndexes) {
+    billedSlideIndexes.add(slideIndex);
+  }
+  return billedSlideIndexes.size;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableProviderError(error: unknown): boolean {
+  const status = extractProviderHttpStatus(error);
+  if (status !== null) {
+    return status === 408 || status === 429 || status === 500 || status === 503 || status >= 500;
+  }
+
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    error.name === "AbortError" ||
+    message.includes("fetch failed") ||
+    message.includes("network") ||
+    message.includes("timed out") ||
+    message.includes("timeout") ||
+    message.includes("econnreset") ||
+    message.includes("socket hang up")
+  );
+}
+
+function extractProviderHttpStatus(error: unknown): number | null {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+
+  const directStatus = (error as Error & { status?: unknown }).status;
+  if (typeof directStatus === "number" && Number.isInteger(directStatus)) {
+    return directStatus;
+  }
+
+  const match = error.message.match(/\bstatus\s+(\d{3})\b/i);
+  if (!match) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(match[1] ?? "", 10);
+  return Number.isInteger(parsed) ? parsed : null;
 }
 
 class PipelineError extends Error {
@@ -564,6 +781,8 @@ function toSafeErrorMessage(code: string): string {
       return "Failed to access or update the Google Slides™ document.";
     case "LLM_PROVIDER_ERROR":
       return "The translation provider returned an invalid response.";
+    case "UNSAFE_LLM_INPUT":
+      return "All selected slides were excluded due to prompt-injection risk. Remove the risky slide from the translation range and try again.";
     case "JOB_INTERNAL_ERROR":
     default:
       return "The translation job failed due to an internal error.";
@@ -617,12 +836,21 @@ function groupNodesBySlide<T extends { slide_index: number }>(
   return grouped;
 }
 
+function buildDeckPlaintextContext(
+  slides: readonly {
+    readonly slide_index: number;
+    readonly nodes: readonly { full_text: string }[];
+  }[]
+): string {
+  return slides.map((slide) => buildSlidePlaintextContext(slide)).join("\n");
+}
+
 function buildSlidePlaintextContext(slide: {
   readonly slide_index: number;
   readonly nodes: readonly { full_text: string }[];
 }): string {
   return [
-    `[Slide ${slide.slide_index}]`,
+    `[Slide ${slide.slide_index + 1}]`,
     ...slide.nodes.map((node) => node.full_text),
   ].join("\n");
 }

@@ -184,10 +184,9 @@ test("translateWithVertexGemini sends system instructions and a constrained JSON
     assert.match(userPrompt, /TARGET NODE STRUCTURE/i);
     assert.match(userPrompt, /segment_id/);
     assert.match(userPrompt, /bullet_behavior/);
-    const [, deckContextSection = ""] =
-      userPrompt.match(/DECK CONTEXT PACK:\n([\s\S]*?)\n\nTARGET NODE STRUCTURE:/) ?? [];
-    assert.doesNotMatch(deckContextSection, /"full_text"/);
-    assert.doesNotMatch(deckContextSection, /"text":/);
+    assert.match(userPrompt, /PROMPT SAFETY RULES:/);
+    assert.match(userPrompt, /<BEGIN_OPAQUE_USER_DATA_JSON>/);
+    assert.match(userPrompt, /<END_OPAQUE_USER_DATA_JSON>/);
     assert.match(userPrompt, /Translate only the target nodes/i);
     assert.doesNotMatch(userPrompt, /for reference only/i);
     assert.doesNotMatch(

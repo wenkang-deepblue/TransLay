@@ -70,21 +70,13 @@ function isRunningStatus(status: JobStatus): status is JobInProgressStatus {
 }
 
 function buildCanceledMessage(job: {
-  output_mode: CreateJobRequest["output_mode"];
   total_units_billed: number;
 }): string {
-  if (job.output_mode === "create_new_file") {
-    if (job.total_units_billed > 0) {
-      return `Translation canceled after the translated presentation was generated. ${job.total_units_billed} slides were counted toward your quota.`;
-    }
-    return "Translation canceled before the translated presentation was generated. No quota was charged.";
-  }
-
   if (job.total_units_billed > 0) {
-    return `Translation canceled after ${job.total_units_billed} translated slides were written. Only those visible slides were counted toward your quota.`;
+    return `Translation canceled after ${job.total_units_billed} slide(s) were successfully translated. Those slides were counted toward your quota even though the job did not finish.`;
   }
 
-  return "Translation canceled before any translated slides were written. No quota was charged.";
+  return "Translation canceled before any slide translation succeeded. No quota was charged.";
 }
 
 function buildCompletedMessage(reviewContainerCount: number): string {
@@ -155,6 +147,7 @@ function buildJobStatusResponse(
     progress_percent: progress?.progress_percent ? parseInt(progress.progress_percent, 10) : 0,
     current_step: progress?.current_step,
     details: progress?.details,
+    translated_units_billed: job.total_units_billed,
   };
 
   return response;

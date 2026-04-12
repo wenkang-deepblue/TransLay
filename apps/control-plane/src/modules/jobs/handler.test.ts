@@ -92,3 +92,48 @@ test("job handler tolerates null warnings on historical rows without crashing", 
     message: "Translation completed successfully.",
   });
 });
+
+test("job handler returns in-progress billed slide count for cancel warnings", () => {
+  const response = __buildJobStatusResponseForTests(
+    {
+      ...createBaseJob(),
+      status: "translating",
+      total_units_billed: 3,
+      completed_at: null,
+    },
+    {
+      status: "translating",
+      progress_percent: "64",
+      current_step: "materialization_pass",
+      details: "Materialized batch 4 of 8. 3 slide(s) already count toward quota.",
+    }
+  );
+
+  assert.deepEqual(response, {
+    job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+    status: "translating",
+    progress_percent: 64,
+    current_step: "materialization_pass",
+    details: "Materialized batch 4 of 8. 3 slide(s) already count toward quota.",
+    translated_units_billed: 3,
+  });
+});
+
+test("job handler returns canceled payload with translated-slide billing message", () => {
+  const response = __buildJobStatusResponseForTests({
+    ...createBaseJob(),
+    status: "canceled",
+    total_units_billed: 2,
+    completed_at: new Date("2026-04-10T10:01:00.000Z"),
+  });
+
+  assert.deepEqual(response, {
+    job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+    status: "canceled",
+    message:
+      "Translation canceled after 2 slide(s) were successfully translated. Those slides were counted toward your quota even though the job did not finish.",
+    total_units_billed: 2,
+    output_mode: "create_new_file",
+    output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
+  });
+});

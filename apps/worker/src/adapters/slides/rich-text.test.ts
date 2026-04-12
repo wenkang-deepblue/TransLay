@@ -4,6 +4,8 @@ import type { slides_v1 } from "googleapis";
 import {
   buildRichTextNode,
   extractBoxGeometry,
+  extractTableCellVisibleStyleSummary,
+  extractVisibleStyleSummary,
 } from "./rich-text";
 
 test("buildRichTextNode preserves bullet paragraphs, styles, and box geometry", () => {
@@ -83,6 +85,121 @@ test("buildRichTextNode preserves bullet paragraphs, styles, and box geometry", 
   assert.equal(node.paragraphs[0]?.runs[0]?.text_style?.bold, true);
   assert.equal(node.box.width_emu, 120 * 12700);
   assert.equal(node.box.translate_y_emu, 72 * 12700);
+});
+
+test("extractVisibleStyleSummary captures text metrics and visible shape colors", () => {
+  const element = {
+    objectId: "shape_1",
+    shape: {
+      shapeProperties: {
+        shapeBackgroundFill: {
+          solidFill: {
+            color: {
+              rgbColor: {
+                red: 0.1,
+                green: 0.2,
+                blue: 0.3,
+              },
+            },
+          },
+        },
+        outline: {
+          outlineFill: {
+            solidFill: {
+              color: {
+                rgbColor: {
+                  red: 0.7,
+                  green: 0.8,
+                  blue: 0.9,
+                },
+              },
+            },
+          },
+        },
+      },
+      text: {
+        textElements: [
+          {
+            startIndex: 0,
+            paragraphMarker: {
+              style: { alignment: "CENTER" },
+            },
+          },
+          {
+            startIndex: 0,
+            endIndex: 6,
+            textRun: {
+              content: "Badge\n",
+              style: {
+                fontSize: { magnitude: 16, unit: "PT" },
+                weightedFontFamily: { fontFamily: "Inter" },
+              },
+            },
+          },
+        ],
+      },
+    },
+  } as unknown as slides_v1.Schema$PageElement;
+
+  const summary = extractVisibleStyleSummary(element, element.shape!.text!);
+
+  assert.deepEqual(summary, {
+    alignment: "CENTER",
+    font_family: "Inter",
+    min_font_size_pt: 16,
+    max_font_size_pt: 16,
+    fill_color_hex: "#1a334d",
+    outline_color_hex: "#b3cce6",
+  });
+});
+
+test("extractTableCellVisibleStyleSummary captures table cell background fill", () => {
+  const cell = {
+    tableCellProperties: {
+      tableCellBackgroundFill: {
+        solidFill: {
+          color: {
+            rgbColor: {
+              red: 1.2,
+              green: 0.5,
+              blue: -0.2,
+            },
+          },
+        },
+      },
+    },
+    text: {
+      textElements: [
+        {
+          startIndex: 0,
+          paragraphMarker: {
+            style: { alignment: "CENTER" },
+          },
+        },
+        {
+          startIndex: 0,
+          endIndex: 5,
+          textRun: {
+            content: "Cell\n",
+            style: {
+              fontSize: { magnitude: 12, unit: "PT" },
+              weightedFontFamily: { fontFamily: "Arial" },
+            },
+          },
+        },
+      ],
+    },
+  } as unknown as slides_v1.Schema$TableCell;
+
+  const summary = extractTableCellVisibleStyleSummary(cell, cell.text!);
+
+  assert.deepEqual(summary, {
+    alignment: "CENTER",
+    font_family: "Arial",
+    min_font_size_pt: 12,
+    max_font_size_pt: 12,
+    fill_color_hex: "#ff8000",
+  });
 });
 
 test("buildRichTextNode classifies metric cards and assigns metric style roles", () => {

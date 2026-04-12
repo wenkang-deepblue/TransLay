@@ -126,6 +126,7 @@ test("translateDeckAuthorityWithVertexGemini sends storyboard frames and parses 
     const parts = body.contents?.[0]?.parts as Array<Record<string, unknown>>;
     assert.equal(parts.length, 3);
     assert.match(String(parts[0]?.text ?? ""), /SOURCE NODE INDEX/);
+    assert.match(String(parts[0]?.text ?? ""), /PROMPT SAFETY RULES:/);
     assert.equal(parts[1]?.text, "Storyboard frame for slide 1");
     assert.deepEqual(parts[2]?.inlineData, {
       mimeType: "image/png",
@@ -242,6 +243,7 @@ test("fillMissingAuthorityWithVertexGemini includes deck-wide authority context 
     const body = JSON.parse(String(fetchCalls[1]?.init?.body ?? "{}"));
     const prompt = String(body.contents?.[0]?.parts?.[0]?.text ?? "");
     assert.match(prompt, /whole deck/);
+    assert.match(prompt, /PROMPT SAFETY RULES:/);
     assert.match(prompt, /"slide_index": 1/);
     assert.match(prompt, /"slide_index": 5/);
   } finally {
@@ -485,6 +487,7 @@ test("materializeTranslatedNodesWithVertexGemini structures authority text into 
     assert.match(prompt, /AUTHORITY TEXT/);
     assert.match(prompt, /translated_full_text/);
     assert.match(prompt, /SOURCE STRUCTURE/);
+    assert.match(prompt, /PROMPT SAFETY RULES:/);
   } finally {
     globalThis.fetch = originalFetch;
   }

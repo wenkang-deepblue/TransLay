@@ -7,6 +7,7 @@ import type {
   SlideRunStyleRole,
   SlideTextNode,
   SlideTextRun,
+  SlideVisibleStyleSummary,
 } from "./types";
 
 const PT_TO_EMU = 12700;
@@ -20,6 +21,7 @@ interface BuildRichTextNodeParams {
   readonly elementType: ExtractableElementType;
   readonly textContent: slides_v1.Schema$TextContent;
   readonly box: SlideBoxGeometry;
+  readonly visibleStyle?: SlideVisibleStyleSummary;
   readonly rowIndex?: number;
   readonly colIndex?: number;
 }
@@ -49,6 +51,7 @@ export function buildRichTextNode(
     extractedParagraphs
   );
   const paragraphs = assignStyleRoles(extractedParagraphs, archetype);
+  const visibleStyle = params.visibleStyle ?? summarizeVisibleStyleFromParagraphs(paragraphs);
 
   return {
     node_id: params.nodeId,
@@ -60,6 +63,7 @@ export function buildRichTextNode(
     object_id: params.objectId,
     box: params.box,
     paragraphs,
+    visible_style: visibleStyle,
     row_index: params.rowIndex,
     col_index: params.colIndex,
   };
@@ -129,6 +133,46 @@ export function extractBoxGeometry(
     translate_x_emu: magnitudeToEmu(transform?.translateX, transform?.unit),
     translate_y_emu: magnitudeToEmu(transform?.translateY, transform?.unit),
     rotation_deg: affineRotationDeg(transform),
+  };
+}
+
+export function extractVisibleStyleSummary(
+  element: slides_v1.Schema$PageElement,
+  textContent: slides_v1.Schema$TextContent
+): SlideVisibleStyleSummary | undefined {
+  const base = summarizeVisibleStyleFromParagraphs(extractParagraphs(textContent));
+  const fillColorHex = extractThemeAgnosticColorHex(
+    element.shape?.shapeProperties?.shapeBackgroundFill?.solidFill?.color
+  );
+  const outlineColorHex = extractThemeAgnosticColorHex(
+    element.shape?.shapeProperties?.outline?.outlineFill?.solidFill?.color
+  );
+
+  if (!base && !fillColorHex && !outlineColorHex) {
+    return undefined;
+  }
+
+  return {
+    ...base,
+    fill_color_hex: fillColorHex,
+    outline_color_hex: outlineColorHex,
+  };
+}
+
+export function extractTableCellVisibleStyleSummary(
+  cell: unknown,
+  textContent: slides_v1.Schema$TextContent
+): SlideVisibleStyleSummary | undefined {
+  const base = summarizeVisibleStyleFromParagraphs(extractParagraphs(textContent));
+  const fillColorHex = extractTableCellFillColorHex(cell);
+
+  if (!base && !fillColorHex) {
+    return undefined;
+  }
+
+  return {
+    ...base,
+    fill_color_hex: fillColorHex,
   };
 }
 
@@ -304,6 +348,33 @@ function resolveMetricRunStyleRole(
   return "suffix";
 }
 
+function summarizeVisibleStyleFromParagraphs(
+  paragraphs: readonly SlideParagraph[]
+): SlideVisibleStyleSummary | undefined {
+  const fontSizes = paragraphs
+    .flatMap((paragraph) => paragraph.runs)
+    .map((run) => run.text_style.fontSize?.magnitude)
+    .filter((value): value is number => typeof value === "number" && value > 0);
+
+  const alignment = paragraphs.find((paragraph) => Boolean(paragraph.paragraph_style.alignment))
+    ?.paragraph_style.alignment;
+  const fontFamily = paragraphs
+    .flatMap((paragraph) => paragraph.runs)
+    .map((run) => run.text_style.weightedFontFamily?.fontFamily)
+    .find((value): value is string => typeof value === "string" && value.length > 0);
+
+  if (!alignment && !fontFamily && fontSizes.length === 0) {
+    return undefined;
+  }
+
+  return {
+    alignment: typeof alignment === "string" ? alignment : undefined,
+    font_family: fontFamily,
+    min_font_size_pt: fontSizes.length > 0 ? Math.min(...fontSizes) : undefined,
+    max_font_size_pt: fontSizes.length > 0 ? Math.max(...fontSizes) : undefined,
+  };
+}
+
 function mostCommonStyleSignature(paragraphs: readonly SlideParagraph[]): string {
   const counts = new Map<string, number>();
 
@@ -399,6 +470,65 @@ function colorSignature(color?: slides_v1.Schema$OptionalColor): string | null {
   }
 
   return `${rgb.red ?? 0}:${rgb.green ?? 0}:${rgb.blue ?? 0}`;
+}
+
+function extractThemeAgnosticColorHex(color: unknown): string | undefined {
+  if (!isRecord(color)) {
+    return undefined;
+  }
+
+  const rgbColor = color.rgbColor;
+  if (!isRecord(rgbColor)) {
+    return undefined;
+  }
+
+  const red = clampColorChannel(rgbColor.red);
+  const green = clampColorChannel(rgbColor.green);
+  const blue = clampColorChannel(rgbColor.blue);
+  if (red === null || green === null || blue === null) {
+    return undefined;
+  }
+
+  return `#${toHexChannel(red)}${toHexChannel(green)}${toHexChannel(blue)}`;
+}
+
+function clampColorChannel(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.round(Math.min(1, Math.max(0, value)) * 255);
+}
+
+function toHexChannel(value: number): string {
+  return value.toString(16).padStart(2, "0");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function extractTableCellFillColorHex(cell: unknown): string | undefined {
+  if (!isRecord(cell)) {
+    return undefined;
+  }
+
+  const tableCellProperties = cell.tableCellProperties;
+  if (!isRecord(tableCellProperties)) {
+    return undefined;
+  }
+
+  const tableCellBackgroundFill = tableCellProperties.tableCellBackgroundFill;
+  if (!isRecord(tableCellBackgroundFill)) {
+    return undefined;
+  }
+
+  const solidFill = tableCellBackgroundFill.solidFill;
+  if (!isRecord(solidFill)) {
+    return undefined;
+  }
+
+  return extractThemeAgnosticColorHex(solidFill.color);
 }
 
 function dimensionToEmu(dimension?: slides_v1.Schema$Dimension): number {

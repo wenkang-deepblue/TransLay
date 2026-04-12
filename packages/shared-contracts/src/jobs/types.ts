@@ -91,6 +91,7 @@ export interface JobProgressResponse {
   readonly progress_percent: number;
   readonly current_step?: string;
   readonly details?: string;
+  readonly translated_units_billed?: number;
 }
 
 /** GET /api/jobs/:jobId — completed response. */
