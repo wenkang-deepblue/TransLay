@@ -37,6 +37,8 @@ function createNode(
       rotation_deg: 0,
     },
     paragraphs: overrides.paragraphs ?? [],
+    visible_style: overrides.visible_style,
+    layout_hint: overrides.layout_hint,
     row_index: overrides.row_index,
     col_index: overrides.col_index,
   };
@@ -863,6 +865,13 @@ test("writer emits structured warning metadata without leaking source or transla
       slide_index: 6,
       archetype: "metric_card",
       risk_level: "high",
+      risk_reason: "layout_semantics_fallback_applied",
+    },
+    {
+      node_id: "metric_warning",
+      slide_index: 6,
+      archetype: "metric_card",
+      risk_level: "high",
       risk_reason: "mixed_style_alignment_low_confidence",
     },
   ]);
@@ -870,4 +879,233 @@ test("writer emits structured warning metadata without leaking source or transla
   const serializedWarnings = JSON.stringify(warnings);
   assert.equal(serializedWarnings.includes(sourceNode.full_text), false);
   assert.equal(serializedWarnings.includes(translatedNode.translated_full_text), false);
+});
+
+test("writer emits layout semantics fallback warning when a node has no layout hint", () => {
+  const sourceNode = createNode({
+    node_id: "fallback_warning",
+    text: "Pipeline overview",
+    full_text: "Pipeline overview",
+    slide_index: 7,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "fallback_warning",
+    box: {
+      width_emu: 160 * 12700,
+      height_emu: 40 * 12700,
+      translate_x_emu: 0,
+      translate_y_emu: 0,
+      rotation_deg: 0,
+    },
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        text: "Pipeline overview",
+        start_index: 0,
+        end_index: 17,
+        paragraph_style: {},
+        runs: [
+          {
+            run_id: "r0",
+            text: "Pipeline overview",
+            start_index: 0,
+            end_index: 17,
+            style_role: "default",
+            text_style: {
+              fontSize: { magnitude: 20, unit: "PT" },
+            },
+          },
+        ],
+      },
+    ],
+  });
+  const translatedNode: TranslatedNode = {
+    node_id: "fallback_warning",
+    translated_full_text: "Resumen del pipeline",
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        translated_text: "Resumen del pipeline",
+        bullet_behavior: "none",
+      },
+    ],
+    segments: [
+      {
+        segment_id: "r0",
+        translated_text: "Resumen del pipeline",
+        style_role: "default",
+      },
+    ],
+  };
+
+  const warnings = __buildNodeWarningsForTests({
+    sourceNode,
+    translatedNode,
+    objectId: "fallback_warning_copy",
+  });
+
+  assert.deepEqual(warnings, [
+    {
+      node_id: "fallback_warning",
+      slide_index: 7,
+      archetype: "plain_text",
+      risk_level: "medium",
+      risk_reason: "layout_semantics_fallback_applied",
+    },
+  ]);
+});
+
+test("writer does not emit fallback warning when the model explicitly returns default-valued hints", () => {
+  const sourceNode = createNode({
+    node_id: "default_hint_from_model",
+    text: "Pipeline overview",
+    full_text: "Pipeline overview",
+    slide_index: 7,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "default_hint_from_model",
+    box: {
+      width_emu: 160 * 12700,
+      height_emu: 40 * 12700,
+      translate_x_emu: 0,
+      translate_y_emu: 0,
+      rotation_deg: 0,
+    },
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        text: "Pipeline overview",
+        start_index: 0,
+        end_index: 17,
+        paragraph_style: {},
+        runs: [
+          {
+            run_id: "r0",
+            text: "Pipeline overview",
+            start_index: 0,
+            end_index: 17,
+            style_role: "default",
+            text_style: {
+              fontSize: { magnitude: 20, unit: "PT" },
+            },
+          },
+        ],
+      },
+    ],
+    layout_hint: {
+      node_id: "default_hint_from_model",
+      visual_role: "unknown",
+      cluster_id: "default_hint_from_model",
+      line_policy: "allow_wrap",
+      scale_sync: "independent",
+      confidence: 0,
+    },
+  });
+  const translatedNode: TranslatedNode = {
+    node_id: "default_hint_from_model",
+    translated_full_text: "Resumen del pipeline",
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        translated_text: "Resumen del pipeline",
+        bullet_behavior: "none",
+      },
+    ],
+    segments: [
+      {
+        segment_id: "r0",
+        translated_text: "Resumen del pipeline",
+        style_role: "default",
+      },
+    ],
+  };
+
+  const warnings = __buildNodeWarningsForTests({
+    sourceNode,
+    translatedNode,
+    objectId: "default_hint_from_model_copy",
+  });
+
+  assert.equal(
+    warnings.some((warning) => warning.risk_reason === "layout_semantics_fallback_applied"),
+    false
+  );
+});
+
+test("writer emits single-line degradation warning when a preferred single-line title still cannot fit", () => {
+  const sourceNode = createNode({
+    node_id: "single_line_warning",
+    text: "Executive summary",
+    full_text: "Executive summary",
+    slide_index: 8,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "single_line_warning",
+    box: {
+      width_emu: 68 * 12700,
+      height_emu: 24 * 12700,
+      translate_x_emu: 0,
+      translate_y_emu: 0,
+      rotation_deg: 0,
+    },
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        text: "Executive summary",
+        start_index: 0,
+        end_index: 17,
+        paragraph_style: {},
+        runs: [
+          {
+            run_id: "r0",
+            text: "Executive summary",
+            start_index: 0,
+            end_index: 17,
+            style_role: "default",
+            text_style: {
+              fontSize: { magnitude: 28, unit: "PT" },
+              bold: true,
+            },
+          },
+        ],
+      },
+    ],
+    layout_hint: {
+      node_id: "single_line_warning",
+      visual_role: "title",
+      cluster_id: "single_line_warning",
+      line_policy: "prefer_single_line",
+      scale_sync: "independent",
+      confidence: 0.94,
+    },
+  });
+  const translatedNode: TranslatedNode = {
+    node_id: "single_line_warning",
+    translated_full_text: "Resumen ejecutivo trimestral completamente detallado",
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        translated_text: "Resumen ejecutivo trimestral completamente detallado",
+        bullet_behavior: "none",
+      },
+    ],
+    segments: [
+      {
+        segment_id: "r0",
+        translated_text: "Resumen ejecutivo trimestral completamente detallado",
+        style_role: "default",
+      },
+    ],
+  };
+
+  const warnings = __buildNodeWarningsForTests({
+    sourceNode,
+    translatedNode,
+    objectId: "single_line_warning_copy",
+  });
+
+  assert.equal(
+    warnings.some((warning) => warning.risk_reason === "single_line_policy_degraded"),
+    true
+  );
 });

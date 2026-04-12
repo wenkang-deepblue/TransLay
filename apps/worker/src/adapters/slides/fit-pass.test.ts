@@ -7,6 +7,7 @@ import {
   estimateOverflow,
   fitTranslatedNode,
   measureTextWeight,
+  resolveSlideNodeFits,
 } from "./fit-pass";
 
 function createNode(
@@ -58,6 +59,8 @@ function createNode(
         ],
       },
     ],
+    visible_style: overrides.visible_style,
+    layout_hint: overrides.layout_hint,
     row_index: overrides.row_index,
     col_index: overrides.col_index,
   };
@@ -400,6 +403,305 @@ test("fitTranslatedNode shrinks dense CJK metric values to stay within the origi
   assert.ok(riskRank(fit.risk) >= riskRank("medium"));
 });
 
+test("fitTranslatedNode honors prefer_single_line by shrinking more aggressively than wrap-allowed fit", () => {
+  const translatedNode = createTranslatedNode({
+    node_id: "title_wrap",
+    translated_full_text: "Revenue growth accelerated",
+  });
+
+  const wrapAllowedNode = createNode({
+    node_id: "title_wrap",
+    text: "Revenue growth",
+    full_text: "Revenue growth",
+    slide_index: 5,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "title_wrap",
+    box: {
+      width_emu: 260 * 12700,
+      height_emu: 64 * 12700,
+      translate_x_emu: 0,
+      translate_y_emu: 0,
+      rotation_deg: 0,
+    },
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        text: "Revenue growth",
+        start_index: 0,
+        end_index: 14,
+        paragraph_style: {},
+        runs: [
+          {
+            run_id: "r0",
+            text: "Revenue growth",
+            start_index: 0,
+            end_index: 14,
+            style_role: "default",
+            text_style: { fontSize: { magnitude: 26, unit: "PT" } },
+          },
+        ],
+      },
+    ],
+  });
+  const singleLineNode = {
+    ...wrapAllowedNode,
+    layout_hint: {
+      node_id: "title_wrap",
+      visual_role: "title" as const,
+      cluster_id: "title_wrap",
+      line_policy: "prefer_single_line" as const,
+      scale_sync: "independent" as const,
+      confidence: 0.96,
+    },
+  };
+
+  const wrapFit = fitTranslatedNode(wrapAllowedNode, translatedNode);
+  const singleLineFit = fitTranslatedNode(singleLineNode, translatedNode);
+
+  assert.ok(singleLineFit.scale < wrapFit.scale);
+  assert.equal(singleLineFit.degradedSingleLine, false);
+});
+
+test("fitWithSingleLinePriority does not relax metric-card archetype minScale", () => {
+  const sourceNode = createNode({
+    node_id: "metric_title",
+    text: "ARR",
+    full_text: "ARR",
+    slide_index: 5,
+    element_type: "shape",
+    archetype: "metric_card",
+    object_id: "metric_title",
+    box: {
+      width_emu: 140 * 12700,
+      height_emu: 34 * 12700,
+      translate_x_emu: 0,
+      translate_y_emu: 0,
+      rotation_deg: 0,
+    },
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        text: "ARR",
+        start_index: 0,
+        end_index: 3,
+        paragraph_style: {},
+        runs: [
+          {
+            run_id: "r0",
+            text: "ARR",
+            start_index: 0,
+            end_index: 3,
+            style_role: "metric_value",
+            text_style: { fontSize: { magnitude: 32, unit: "PT" } },
+          },
+        ],
+      },
+    ],
+    layout_hint: {
+      node_id: "metric_title",
+      visual_role: "title",
+      cluster_id: "metric_title",
+      line_policy: "prefer_single_line",
+      scale_sync: "independent",
+      confidence: 0.97,
+    },
+  });
+  const translatedNode = createTranslatedNode({
+    node_id: "metric_title",
+    translated_full_text: "Annual recurring revenue growth",
+    segments: [
+      {
+        segment_id: "r0",
+        translated_text: "Annual recurring revenue growth",
+        style_role: "metric_value",
+      },
+    ],
+  });
+
+  const fit = fitTranslatedNode(sourceNode, translatedNode);
+
+  assert.ok(fit.scale >= 0.84);
+});
+
+test("fitTranslatedNode keeps fixed_multiline nodes on wrap path without single-line degradation", () => {
+  const sourceNode = createNode({
+    node_id: "fixed_multiline_body",
+    text: "Short body",
+    full_text: "Short body",
+    slide_index: 5,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "fixed_multiline_body",
+    box: {
+      width_emu: 150 * 12700,
+      height_emu: 72 * 12700,
+      translate_x_emu: 0,
+      translate_y_emu: 0,
+      rotation_deg: 0,
+    },
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        text: "Short body",
+        start_index: 0,
+        end_index: 10,
+        paragraph_style: {},
+        runs: [
+          {
+            run_id: "r0",
+            text: "Short body",
+            start_index: 0,
+            end_index: 10,
+            style_role: "default",
+            text_style: { fontSize: { magnitude: 20, unit: "PT" } },
+          },
+        ],
+      },
+    ],
+    layout_hint: {
+      node_id: "fixed_multiline_body",
+      visual_role: "body",
+      cluster_id: "fixed_multiline_body",
+      line_policy: "fixed_multiline",
+      scale_sync: "independent",
+      confidence: 0.92,
+    },
+  });
+  const translatedNode = createTranslatedNode({
+    node_id: "fixed_multiline_body",
+    translated_full_text: "This body text can wrap across multiple lines without forcing a single-line fit.",
+  });
+
+  const fixedMultilineFit = fitTranslatedNode(sourceNode, translatedNode);
+  const wrapFit = fitTranslatedNode(
+    {
+      ...sourceNode,
+      layout_hint: {
+        ...sourceNode.layout_hint!,
+        line_policy: "allow_wrap",
+      },
+    },
+    translatedNode
+  );
+
+  assert.equal(fixedMultilineFit.degradedSingleLine, false);
+  assert.equal(fixedMultilineFit.scale, wrapFit.scale);
+});
+
+test("resolveSlideNodeFits applies a shared scale to sync_with_group clusters", () => {
+  const sourceNodes = [
+    createNode({
+      node_id: "agenda_1",
+      text: "Plan",
+      full_text: "Plan",
+      slide_index: 6,
+      element_type: "shape",
+      archetype: "plain_text",
+      object_id: "agenda_1",
+      box: {
+        width_emu: 132 * 12700,
+        height_emu: 34 * 12700,
+        translate_x_emu: 0,
+        translate_y_emu: 0,
+        rotation_deg: 0,
+      },
+      paragraphs: [
+        {
+          paragraph_id: "p0",
+          text: "Plan",
+          start_index: 0,
+          end_index: 4,
+          paragraph_style: {},
+          runs: [
+            {
+              run_id: "r0",
+              text: "Plan",
+              start_index: 0,
+              end_index: 4,
+              style_role: "default",
+              text_style: { fontSize: { magnitude: 22, unit: "PT" } },
+            },
+          ],
+        },
+      ],
+      layout_hint: {
+        node_id: "agenda_1",
+        visual_role: "agenda_item",
+        cluster_id: "agenda_cluster",
+        line_policy: "prefer_single_line",
+        scale_sync: "sync_with_group",
+        confidence: 0.95,
+      },
+    }),
+    createNode({
+      node_id: "agenda_2",
+      text: "Measure",
+      full_text: "Measure",
+      slide_index: 6,
+      element_type: "shape",
+      archetype: "plain_text",
+      object_id: "agenda_2",
+      box: {
+        width_emu: 132 * 12700,
+        height_emu: 34 * 12700,
+        translate_x_emu: 0,
+        translate_y_emu: 0,
+        rotation_deg: 0,
+      },
+      paragraphs: [
+        {
+          paragraph_id: "p0",
+          text: "Measure",
+          start_index: 0,
+          end_index: 7,
+          paragraph_style: {},
+          runs: [
+            {
+              run_id: "r0",
+              text: "Measure",
+              start_index: 0,
+              end_index: 7,
+              style_role: "default",
+              text_style: { fontSize: { magnitude: 22, unit: "PT" } },
+            },
+          ],
+        },
+      ],
+      layout_hint: {
+        node_id: "agenda_2",
+        visual_role: "agenda_item",
+        cluster_id: "agenda_cluster",
+        line_policy: "prefer_single_line",
+        scale_sync: "sync_with_group",
+        confidence: 0.95,
+      },
+    }),
+  ];
+  const translatedNodes = [
+    createTranslatedNode({
+      node_id: "agenda_1",
+      translated_full_text: "Plan",
+    }),
+    createTranslatedNode({
+      node_id: "agenda_2",
+      translated_full_text: "Measure overall revenue acceleration",
+    }),
+  ];
+
+  const standaloneShort = fitTranslatedNode(sourceNodes[0], translatedNodes[0]);
+  const standaloneLong = fitTranslatedNode(sourceNodes[1], translatedNodes[1]);
+  const resolvedFits = resolveSlideNodeFits(sourceNodes, translatedNodes);
+  const shortFit = resolvedFits.get("agenda_1");
+  const longFit = resolvedFits.get("agenda_2");
+
+  assert.ok(shortFit);
+  assert.ok(longFit);
+  assert.equal(shortFit?.scale, longFit?.scale);
+  assert.equal(shortFit?.scale, Math.min(standaloneShort.scale, standaloneLong.scale));
+  assert.ok((shortFit?.scale ?? 1) < standaloneShort.scale);
+});
+
 test("applyFitToTextStyle injects fallback font size for inherited theme runs when shrinking", () => {
   const scaled = applyFitToTextStyle(
     {
@@ -411,6 +713,8 @@ test("applyFitToTextStyle injects fallback font size for inherited theme runs wh
       applyTighterParagraphSpacing: false,
       compactness: "normal",
       avoidExpansion: true,
+      degradedSingleLine: false,
+      usedFallbackLayoutHint: false,
     },
     20
   );

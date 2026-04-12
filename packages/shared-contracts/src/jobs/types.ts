@@ -35,6 +35,8 @@ export const JOB_WARNING_REASONS = [
   "possible_overflow",
   "mixed_style_alignment_low_confidence",
   "bullet_structure_rebuilt_with_compaction",
+  "single_line_policy_degraded",
+  "layout_semantics_fallback_applied",
   "manual_review_recommended",
 ] as const;
 export type JobWarningReason = (typeof JOB_WARNING_REASONS)[number];

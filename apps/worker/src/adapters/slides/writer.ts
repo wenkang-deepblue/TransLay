@@ -8,9 +8,11 @@ import {
 import type { SlideTextNode, SlideExtractionResult } from "./types";
 import { getSlidesClient } from "./auth";
 import {
+  type FitPassResult,
   applyFitToParagraphStyle,
   applyFitToTextStyle,
   fitTranslatedNode,
+  resolveSlideNodeFits,
 } from "./fit-pass";
 
 interface SlideDuplicatePlan {
@@ -25,6 +27,7 @@ interface NodeWriteRequestParams {
   readonly translatedNode: TranslatedNode;
   readonly objectId: string;
   readonly cellLocation?: slides_v1.Schema$TableCellLocation;
+  readonly fit?: FitPassResult;
 }
 
 export interface WriteBackResult {
@@ -307,6 +310,12 @@ function buildReplacePlan(
 ): ReplacePlan {
   const requests: slides_v1.Schema$Request[] = [];
   const warnings: JobWarning[] = [];
+  const fitByNodeId = resolveSlideNodeFits(
+    originalNodes,
+    originalNodes
+      .map((node) => translationMap.get(node.node_id))
+      .filter((translatedNode): translatedNode is TranslatedNode => Boolean(translatedNode))
+  );
 
   for (const node of originalNodes) {
     const translated = translationMap.get(node.node_id);
@@ -329,6 +338,7 @@ function buildReplacePlan(
         sourceNode: node,
         translatedNode: translated,
         objectId: resolvedObjectId,
+        fit: fitByNodeId.get(node.node_id),
       });
       requests.push(...artifacts.requests);
       warnings.push(...artifacts.warnings);
@@ -353,6 +363,7 @@ function buildReplacePlan(
           rowIndex: node.row_index ?? 0,
           columnIndex: node.col_index ?? 0,
         },
+        fit: fitByNodeId.get(node.node_id),
       });
       requests.push(...artifacts.requests);
       warnings.push(...artifacts.warnings);
@@ -368,6 +379,7 @@ function buildReplacePlan(
       sourceNode: node,
       translatedNode: translated,
       objectId: resolvedObjectId,
+      fit: fitByNodeId.get(node.node_id),
     });
     requests.push(...artifacts.requests);
     warnings.push(...artifacts.warnings);
@@ -386,7 +398,7 @@ function buildNodeWriteArtifacts(
   params: NodeWriteRequestParams
 ): NodeWriteArtifacts {
   const plan = buildRichTextWritePlan(params.sourceNode, params.translatedNode);
-  const fit = fitTranslatedNode(params.sourceNode, params.translatedNode);
+  const fit = params.fit ?? fitTranslatedNode(params.sourceNode, params.translatedNode);
   const warnings = buildNodeWarnings(params.sourceNode, params.translatedNode, fit);
   const requests: slides_v1.Schema$Request[] = [
     {
@@ -655,6 +667,8 @@ const KNOWN_JOB_WARNING_REASONS = new Set<JobWarningReason>([
   "possible_overflow",
   "mixed_style_alignment_low_confidence",
   "bullet_structure_rebuilt_with_compaction",
+  "single_line_policy_degraded",
+  "layout_semantics_fallback_applied",
   "manual_review_recommended",
 ]);
 
@@ -676,6 +690,14 @@ function buildNodeWarnings(
 
   if (fit.risk === "high") {
     pushReason("possible_overflow");
+  }
+
+  if (fit.degradedSingleLine) {
+    pushReason("single_line_policy_degraded");
+  }
+
+  if (fit.usedFallbackLayoutHint) {
+    pushReason("layout_semantics_fallback_applied");
   }
 
   if (sourceNode.archetype === "bullet_list" && fit.applyTighterParagraphSpacing) {
