@@ -1,7 +1,9 @@
 import type {
   TranslationContextGlossaryCandidate,
+  TranslationContextNodeLayoutHint,
   TranslationContextPack,
   TranslationContextNodeSummary,
+  TranslationContextNodeVisibleStyleSummary,
   TranslationNode,
 } from "@translay/shared-contracts";
 import type { SlideTextNode } from "../adapters/slides";
@@ -77,6 +79,8 @@ export function projectNodesToContextSummaries(
     archetype: node.archetype,
     slide_index: node.slide_index,
     full_text: node.full_text,
+    visible_style: projectVisibleStyle(node),
+    layout_hint: projectLayoutHint(node),
     paragraphs: node.paragraphs.map((paragraph) => ({
       paragraph_id: paragraph.paragraph_id,
       text: paragraph.text,
@@ -91,6 +95,40 @@ export function projectNodesToContextSummaries(
       })),
     })),
   }));
+}
+
+export function projectVisibleStyle(
+  node: SlideTextNode
+): TranslationContextNodeVisibleStyleSummary | undefined {
+  if (!node.visible_style) {
+    return undefined;
+  }
+
+  return {
+    alignment: node.visible_style.alignment,
+    font_family: node.visible_style.font_family,
+    min_font_size_pt: node.visible_style.min_font_size_pt,
+    max_font_size_pt: node.visible_style.max_font_size_pt,
+    fill_color_hex: node.visible_style.fill_color_hex,
+    outline_color_hex: node.visible_style.outline_color_hex,
+  };
+}
+
+export function projectLayoutHint(
+  node: SlideTextNode
+): TranslationContextNodeLayoutHint | undefined {
+  if (!node.layout_hint) {
+    return undefined;
+  }
+
+  return {
+    node_id: node.layout_hint.node_id,
+    visual_role: node.layout_hint.visual_role,
+    cluster_id: node.layout_hint.cluster_id,
+    line_policy: node.layout_hint.line_policy,
+    scale_sync: node.layout_hint.scale_sync,
+    confidence: node.layout_hint.confidence,
+  };
 }
 
 export function extractGlossaryCandidates(

@@ -6,6 +6,7 @@ import {
   auditAuthorityCoverage,
   buildMaterializationGroups,
   mergeAuthorityNodes,
+  projectNodesToAuthoritySourceNodes,
 } from "./authority";
 
 function createNode(
@@ -49,6 +50,8 @@ function createNode(
         ],
       },
     ],
+    visible_style: overrides.visible_style,
+    layout_hint: overrides.layout_hint,
     row_index: overrides.row_index,
     col_index: overrides.col_index,
   };
@@ -190,4 +193,76 @@ test("buildMaterializationGroups groups nodes per slide and respects small limit
     groups.map((group) => group.node_summaries.map((node) => node.node_id)),
     [["s1-n1"], ["s1-n2"], ["s2-n1"]]
   );
+});
+
+test("projectNodesToAuthoritySourceNodes carries layout semantics and visible style summaries", () => {
+  const nodes = projectNodesToAuthoritySourceNodes([
+    createNode({
+      node_id: "title-node",
+      text: "Revenue headline",
+      full_text: "Revenue headline",
+      slide_index: 4,
+      element_type: "shape",
+      archetype: "plain_text",
+      object_id: "shape_title",
+      visible_style: {
+        alignment: "CENTER",
+        font_family: "Inter",
+        min_font_size_pt: 20,
+        max_font_size_pt: 28,
+        fill_color_hex: "#123456",
+        outline_color_hex: "#abcdef",
+      },
+      layout_hint: {
+        node_id: "title-node",
+        visual_role: "title",
+        cluster_id: "cluster-title",
+        line_policy: "prefer_single_line",
+        scale_sync: "sync_with_group",
+        confidence: 0.95,
+      },
+    }),
+  ]);
+
+  assert.deepEqual(nodes[0], {
+    node_id: "title-node",
+    slide_index: 4,
+    object_id: "shape_title",
+    element_type: "shape",
+    archetype: "plain_text",
+    full_text: "Revenue headline",
+    visible_style: {
+      alignment: "CENTER",
+      font_family: "Inter",
+      min_font_size_pt: 20,
+      max_font_size_pt: 28,
+      fill_color_hex: "#123456",
+      outline_color_hex: "#abcdef",
+    },
+    layout_hint: {
+      node_id: "title-node",
+      visual_role: "title",
+      cluster_id: "cluster-title",
+      line_policy: "prefer_single_line",
+      scale_sync: "sync_with_group",
+      confidence: 0.95,
+    },
+  });
+});
+
+test("projectNodesToAuthoritySourceNodes keeps layout metadata undefined when absent", () => {
+  const nodes = projectNodesToAuthoritySourceNodes([
+    createNode({
+      node_id: "body-node",
+      text: "Revenue detail",
+      full_text: "Revenue detail",
+      slide_index: 5,
+      element_type: "shape",
+      archetype: "plain_text",
+      object_id: "shape_body",
+    }),
+  ]);
+
+  assert.equal(nodes[0]?.visible_style, undefined);
+  assert.equal(nodes[0]?.layout_hint, undefined);
 });

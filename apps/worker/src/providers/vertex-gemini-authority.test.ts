@@ -605,3 +605,235 @@ test("materializeTranslatedNodesWithVertexGemini accepts empty structural segmen
     globalThis.fetch = originalFetch;
   }
 });
+
+test("translateDeckAuthorityWithVertexGemini includes layout hints and visible style summaries in source node context", async () => {
+  __resetAccessTokenCacheForTests();
+  const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    fetchCalls.push({ url, init });
+
+    if (url.includes("metadata.google.internal")) {
+      return new Response(JSON.stringify({ access_token: "test-token" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify([
+                    {
+                      node_id: "title-like",
+                      slide_index: 1,
+                      translated_full_text: "Umsatzwachstum",
+                    },
+                  ]),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    await translateDeckAuthorityWithVertexGemini(createConfig(), {
+      model: "gemini-3.1-flash-lite-preview",
+      source_language: "English",
+      target_language: "German",
+      deck_title: "Q3 Product Presentation",
+      deck_plaintext_context: "[Slide 1] Revenue growth",
+      glossary_candidates: [],
+      nodes: [
+        {
+          node_id: "title-like",
+          slide_index: 1,
+          object_id: "shape_title",
+          element_type: "shape",
+          archetype: "plain_text",
+          full_text: "Revenue growth",
+          visible_style: {
+            alignment: "CENTER",
+            font_family: "Inter",
+            min_font_size_pt: 22,
+            max_font_size_pt: 30,
+            fill_color_hex: "#112233",
+            outline_color_hex: "#445566",
+          },
+          layout_hint: {
+            node_id: "title-like",
+            visual_role: "title",
+            cluster_id: "hero-title",
+            line_policy: "prefer_single_line",
+            scale_sync: "sync_with_group",
+            confidence: 0.96,
+          },
+        },
+      ],
+      storyboard: {
+        frames: [
+          {
+            slide_index: 1,
+            slide_object_id: "slide_1",
+            mime_type: "image/png",
+            base64_data: "ZmFrZQ==",
+          },
+        ],
+      },
+    });
+
+    const body = JSON.parse(String(fetchCalls[1]?.init?.body ?? "{}"));
+    const systemInstruction = String(
+      body.systemInstruction?.parts?.[0]?.text ?? ""
+    );
+    const prompt = String(body.contents?.[0]?.parts?.[0]?.text ?? "");
+
+    assert.match(systemInstruction, /layout hint/i);
+    assert.match(prompt, /"visual_role":\s*"title"/);
+    assert.match(prompt, /"line_policy":\s*"prefer_single_line"/);
+    assert.match(prompt, /"scale_sync":\s*"sync_with_group"/);
+    assert.match(prompt, /"alignment":\s*"CENTER"/);
+    assert.match(prompt, /"max_font_size_pt":\s*30/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("materializeTranslatedNodesWithVertexGemini includes layout hints and visible style summaries in source structure", async () => {
+  __resetAccessTokenCacheForTests();
+  const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    fetchCalls.push({ url, init });
+
+    if (url.includes("metadata.google.internal")) {
+      return new Response(JSON.stringify({ access_token: "test-token" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify([
+                    {
+                      node_id: "title-like",
+                      translated_full_text: "Umsatzwachstum",
+                      paragraphs: [
+                        {
+                          paragraph_id: "p0",
+                          translated_text: "Umsatzwachstum",
+                          bullet_behavior: "none",
+                        },
+                      ],
+                      segments: [
+                        {
+                          segment_id: "r0",
+                          translated_text: "Umsatzwachstum",
+                          style_role: "default",
+                        },
+                      ],
+                    },
+                  ]),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    await materializeTranslatedNodesWithVertexGemini(createConfig(), {
+      model: "gemini-3.1-flash-lite-preview",
+      source_language: "English",
+      target_language: "German",
+      deck_title: "Q3 Product Presentation",
+      glossary_candidates: [],
+      node_summaries: [
+        {
+          node_id: "title-like",
+          archetype: "plain_text",
+          slide_index: 1,
+          full_text: "Revenue growth",
+          visible_style: {
+            alignment: "CENTER",
+            font_family: "Inter",
+            min_font_size_pt: 22,
+            max_font_size_pt: 30,
+            fill_color_hex: "#112233",
+            outline_color_hex: "#445566",
+          },
+          layout_hint: {
+            node_id: "title-like",
+            visual_role: "title",
+            cluster_id: "hero-title",
+            line_policy: "prefer_single_line",
+            scale_sync: "sync_with_group",
+            confidence: 0.96,
+          },
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "Revenue growth",
+              style_roles: ["default"],
+              segments: [
+                {
+                  segment_id: "r0",
+                  text: "Revenue growth",
+                  style_role: "default",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      authority_nodes: [
+        {
+          node_id: "title-like",
+          slide_index: 1,
+          translated_full_text: "Umsatzwachstum",
+        },
+      ],
+    });
+
+    const body = JSON.parse(String(fetchCalls[1]?.init?.body ?? "{}"));
+    const systemInstruction = String(
+      body.systemInstruction?.parts?.[0]?.text ?? ""
+    );
+    const prompt = String(body.contents?.[0]?.parts?.[0]?.text ?? "");
+
+    assert.match(systemInstruction, /layout hint/i);
+    assert.match(prompt, /"visual_role":\s*"title"/);
+    assert.match(prompt, /"line_policy":\s*"prefer_single_line"/);
+    assert.match(prompt, /"alignment":\s*"CENTER"/);
+    assert.match(prompt, /"max_font_size_pt":\s*30/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

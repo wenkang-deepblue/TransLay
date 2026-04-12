@@ -4,7 +4,10 @@ import type { SlideTextNode } from "../adapters/slides";
 import {
   buildDeckContextPack,
   groupNodesForTranslation,
+  projectLayoutHint,
+  projectNodesToContextSummaries,
   projectGroupToTranslationNodes,
+  projectVisibleStyle,
 } from "./context-pack";
 
 function createNode(overrides: Partial<SlideTextNode> & Pick<SlideTextNode, "node_id" | "text" | "full_text" | "slide_index" | "element_type" | "archetype" | "object_id">): SlideTextNode {
@@ -42,6 +45,8 @@ function createNode(overrides: Partial<SlideTextNode> & Pick<SlideTextNode, "nod
         ],
       },
     ],
+    visible_style: overrides.visible_style,
+    layout_hint: overrides.layout_hint,
     row_index: overrides.row_index,
     col_index: overrides.col_index,
   };
@@ -308,4 +313,70 @@ test("buildDeckContextPack extracts repeated CJK glossary candidates", () => {
         candidate.source_term === "年经常性收入" && candidate.occurrences >= 2
     )
   );
+});
+
+test("projectNodesToContextSummaries preserves layout hints and visible style summaries", () => {
+  const node = createNode({
+    node_id: "title-like",
+    text: "Annual recurring revenue",
+    full_text: "Annual recurring revenue",
+    slide_index: 3,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_title_like",
+    visible_style: {
+      alignment: "CENTER",
+      font_family: "Inter",
+      min_font_size_pt: 18,
+      max_font_size_pt: 28,
+      fill_color_hex: "#112233",
+      outline_color_hex: "#445566",
+    },
+    layout_hint: {
+      node_id: "title-like",
+      visual_role: "title",
+      cluster_id: "title-cluster",
+      line_policy: "prefer_single_line",
+      scale_sync: "sync_with_group",
+      confidence: 0.97,
+    },
+  });
+
+  const summaries = projectNodesToContextSummaries([node]);
+
+  assert.deepEqual(summaries[0]?.visible_style, {
+    alignment: "CENTER",
+    font_family: "Inter",
+    min_font_size_pt: 18,
+    max_font_size_pt: 28,
+    fill_color_hex: "#112233",
+    outline_color_hex: "#445566",
+  });
+  assert.deepEqual(summaries[0]?.layout_hint, {
+    node_id: "title-like",
+    visual_role: "title",
+    cluster_id: "title-cluster",
+    line_policy: "prefer_single_line",
+    scale_sync: "sync_with_group",
+    confidence: 0.97,
+  });
+});
+
+test("projectVisibleStyle and projectLayoutHint return undefined when source node has no layout metadata", () => {
+  const node = createNode({
+    node_id: "plain-node",
+    text: "Plain body copy",
+    full_text: "Plain body copy",
+    slide_index: 4,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_plain",
+  });
+
+  assert.equal(projectVisibleStyle(node), undefined);
+  assert.equal(projectLayoutHint(node), undefined);
+
+  const summaries = projectNodesToContextSummaries([node]);
+  assert.equal(summaries[0]?.visible_style, undefined);
+  assert.equal(summaries[0]?.layout_hint, undefined);
 });

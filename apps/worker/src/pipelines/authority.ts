@@ -4,7 +4,12 @@ import type {
 } from "@translay/shared-contracts";
 import type { SlideExtractionResult, SlideTextNode } from "../adapters/slides";
 import type { AuthoritySourceNode } from "../providers/vertex-gemini-authority";
-import { groupNodesForTranslation, projectNodesToContextSummaries } from "./context-pack";
+import {
+  groupNodesForTranslation,
+  projectLayoutHint,
+  projectNodesToContextSummaries,
+  projectVisibleStyle,
+} from "./context-pack";
 
 export interface AuthorityCoverageAuditResult {
   readonly authority_nodes: readonly AuthorityTranslationNode[];
@@ -21,6 +26,8 @@ export function projectNodesToAuthoritySourceNodes(
     element_type: node.element_type,
     archetype: node.archetype,
     full_text: node.full_text,
+    visible_style: projectVisibleStyle(node),
+    layout_hint: projectLayoutHint(node),
   }));
 }
 

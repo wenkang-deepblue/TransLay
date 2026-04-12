@@ -58,11 +58,41 @@ export interface TranslationContextSegmentSummary {
   readonly style_role: TranslationSegmentStyleRole;
 }
 
+export interface TranslationContextNodeVisibleStyleSummary {
+  readonly alignment?: string;
+  readonly font_family?: string;
+  readonly min_font_size_pt?: number;
+  readonly max_font_size_pt?: number;
+  readonly fill_color_hex?: string;
+  readonly outline_color_hex?: string;
+}
+
+export interface TranslationContextNodeLayoutHint {
+  readonly node_id: string;
+  readonly visual_role:
+    | "title"
+    | "subtitle"
+    | "section_label"
+    | "agenda_item"
+    | "step_label"
+    | "body"
+    | "caption"
+    | "badge"
+    | "decorative_text"
+    | "unknown";
+  readonly cluster_id: string;
+  readonly line_policy: "prefer_single_line" | "allow_wrap" | "fixed_multiline";
+  readonly scale_sync: "sync_with_group" | "independent";
+  readonly confidence: number;
+}
+
 export interface TranslationContextNodeSummary {
   readonly node_id: string;
   readonly archetype: TranslationNodeArchetype;
   readonly slide_index: number;
   readonly full_text: string;
+  readonly visible_style?: TranslationContextNodeVisibleStyleSummary;
+  readonly layout_hint?: TranslationContextNodeLayoutHint;
   readonly paragraphs: readonly TranslationContextParagraphSummary[];
 }
 
