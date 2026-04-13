@@ -169,7 +169,7 @@ export async function runJobPipeline(
       all_nodes: safeSlides.flatMap((slide) => slide.nodes),
       full_context_text: buildDeckPlaintextContext(safeSlides),
     };
-    const totalSlides = extractionForTranslation.extracted_slides.length;
+    const totalSafeSlides = extractionForTranslation.extracted_slides.length;
     await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
 
     // --- TRANSLATING ---
@@ -181,7 +181,7 @@ export async function runJobPipeline(
       current_step: "translating_segments",
       details:
         excludedSlideIndices.size > 0
-          ? `Excluded ${excludedSlideIndices.size} risky slide(s); translating ${extractionForTranslation.all_nodes.length} text segments from ${totalSlides} safe slide(s)`
+          ? `Excluded ${excludedSlideIndices.size} risky slide(s); translating ${extractionForTranslation.all_nodes.length} text segments from ${totalSafeSlides} safe slide(s)`
           : `Translating ${extractionForTranslation.all_nodes.length} text segments`,
     });
 
@@ -230,7 +230,7 @@ export async function runJobPipeline(
     });
     await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
 
-    let authorityResult: AuthorityTranslationResponse;
+    let authorityResult: AuthorityTranslationResponse | null = null;
     try {
       authorityResult = await runProviderCallWithRetry("authority_batch_1", () =>
         translateDeckAuthorityWithVertexGemini(config, {
@@ -245,17 +245,17 @@ export async function runJobPipeline(
         })
       );
     } catch (error) {
-      markSlideFailures(
-        slideResults,
-        extractionWithLayoutHints.extracted_slides.map((slide) => slide.slide_index),
-        "authority",
-        toSlideFailureReasonCode(error)
+      console.warn(
+        `Authority batch failed; falling back to slide-level recovery: ${
+          error instanceof Error ? error.message : String(error)
+        }`
       );
-      throw error;
     }
-    providerRequestIds.push(authorityResult.provider_request_id);
+    if (authorityResult) {
+      providerRequestIds.push(authorityResult.provider_request_id);
+    }
 
-    let authorityNodes = authorityResult.nodes;
+    let authorityNodes = authorityResult?.nodes ?? [];
     let authorityAudit = auditAuthorityCoverage(extractionWithLayoutHints.all_nodes, authorityNodes);
     if (authorityAudit.missing_nodes.length > 0) {
       await setJobProgress(redis, job_id, {
@@ -279,10 +279,10 @@ export async function runJobPipeline(
         const slide = slideByIndex.get(slideIndex);
         if (!slide) {
           markSlideFailure(slideResults, slideIndex, "authority", "JOB_INTERNAL_ERROR");
-          throw new PipelineError(
-            "JOB_INTERNAL_ERROR",
-            `Missing extracted slide context for slide ${slideIndex}`
+          console.warn(
+            `Skipping slide ${slideIndex + 1} during authority gap-fill because extracted slide context is missing`
           );
+          continue;
         }
 
         let gapFillResult: AuthorityTranslationResponse;
@@ -310,7 +310,7 @@ export async function runJobPipeline(
             "authority",
             toSlideFailureReasonCode(error)
           );
-          throw error;
+          continue;
         }
         providerRequestIds.push(gapFillResult.provider_request_id);
         gapFilledNodes.push(...gapFillResult.nodes);
@@ -328,14 +328,26 @@ export async function runJobPipeline(
         "authority",
         "LLM_PROVIDER_ERROR"
       );
+    }
+
+    const authorityReadySlides = selectSlidesReadyForMaterialization(
+      extractionWithLayoutHints.extracted_slides,
+      slideResults
+    );
+    if (authorityReadySlides.length === 0) {
       throw new PipelineError(
         "LLM_PROVIDER_ERROR",
-        `Authority translation missed ${authorityAudit.missing_nodes.length} node(s)`
+        "Authority translation could not recover any safe slide"
       );
     }
 
+    const authorityReadyNodeIds = new Set(
+      authorityReadySlides.flatMap((slide) => slide.nodes.map((node) => node.node_id))
+    );
+    authorityNodes = authorityNodes.filter((node) => authorityReadyNodeIds.has(node.node_id));
+
     const materializationGroups = buildMaterializationGroups(
-      extractionWithLayoutHints.extracted_slides,
+      authorityReadySlides,
       {
         maxNodesPerGroup: 10,
         maxCharsPerGroup: 2_000,
@@ -343,11 +355,11 @@ export async function runJobPipeline(
     );
     const translatedNodes: TranslatedNode[] = [];
     const authorityById = new Map(
-      authorityAudit.authority_nodes.map((node) => [node.node_id, node])
+      authorityNodes.map((node) => [node.node_id, node])
     );
     const materializationQueue = [...materializationGroups];
     const pendingNodeIdsBySlide = buildPendingNodeIdsBySlide(
-      extractionWithLayoutHints.all_nodes
+      authorityReadySlides.flatMap((slide) => slide.nodes)
     );
 
     for (let groupIndex = 0; groupIndex < materializationQueue.length; groupIndex += 1) {
@@ -355,17 +367,32 @@ export async function runJobPipeline(
       if (!group) {
         continue;
       }
+      const groupSlideIndices = uniqueSlideIndices(group.node_summaries);
+      if (
+        groupSlideIndices.some((slideIndex) =>
+          !isSlideReadyForMaterialization(slideResults, slideIndex)
+        )
+      ) {
+        continue;
+      }
 
       const authoritySubset = group.node_summaries.map((nodeSummary) => {
         const authorityNode = authorityById.get(nodeSummary.node_id);
         if (!authorityNode) {
-          throw new PipelineError(
-            "JOB_INTERNAL_ERROR",
-            `Authority translation missing for node ${nodeSummary.node_id}`
+          markSlideFailure(
+            slideResults,
+            nodeSummary.slide_index,
+            "authority",
+            "JOB_INTERNAL_ERROR"
           );
+          return null;
         }
         return authorityNode;
-      });
+      }).filter((node): node is AuthorityTranslationNode => node !== null);
+
+      if (authoritySubset.length !== group.node_summaries.length) {
+        continue;
+      }
 
       let groupResult: TranslationResponse;
       try {
@@ -398,11 +425,11 @@ export async function runJobPipeline(
         }
         markSlideFailures(
           slideResults,
-          uniqueSlideIndices(group.node_summaries),
+          groupSlideIndices,
           "materialization",
           toSlideFailureReasonCode(error)
         );
-        throw error;
+        continue;
       }
 
       try {
@@ -410,11 +437,11 @@ export async function runJobPipeline(
       } catch (error) {
         markSlideFailures(
           slideResults,
-          uniqueSlideIndices(group.node_summaries),
+          groupSlideIndices,
           "materialization",
           toSlideFailureReasonCode(error)
         );
-        throw error;
+        continue;
       }
       translatedNodes.push(...groupResult.nodes);
       providerRequestIds.push(groupResult.provider_request_id);
@@ -453,20 +480,45 @@ export async function runJobPipeline(
       await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
     }
 
+    let writableSlides = selectSlidesReadyForWrite(
+      authorityReadySlides,
+      slideResults
+    );
+    let writableSourceNodes = writableSlides.flatMap((slide) => slide.nodes);
+    if (writableSlides.length === 0) {
+      throw new PipelineError(
+        "LLM_PROVIDER_ERROR",
+        "Materialization could not produce any deliverable slide"
+      );
+    }
+
     let orderedTranslatedNodes: TranslatedNode[];
     try {
       orderedTranslatedNodes = orderTranslatedNodes(
-        extractionWithLayoutHints.all_nodes,
+        writableSourceNodes,
         translatedNodes
       );
     } catch (error) {
       markSlideFailures(
         slideResults,
-        findSlidesMissingTranslatedNodes(extractionWithLayoutHints.all_nodes, translatedNodes),
+        findSlidesMissingTranslatedNodes(writableSourceNodes, translatedNodes),
         "materialization",
         toSlideFailureReasonCode(error)
       );
-      throw error;
+      const recoveredWritableSlides = selectSlidesReadyForWrite(authorityReadySlides, slideResults);
+      const recoveredWritableSourceNodes = recoveredWritableSlides.flatMap((slide) => slide.nodes);
+      if (recoveredWritableSlides.length === 0) {
+        throw new PipelineError(
+          "LLM_PROVIDER_ERROR",
+          "Materialization could not recover any deliverable slide"
+        );
+      }
+      writableSlides = recoveredWritableSlides;
+      writableSourceNodes = recoveredWritableSourceNodes;
+      orderedTranslatedNodes = orderTranslatedNodes(
+        recoveredWritableSourceNodes,
+        translatedNodes
+      );
     }
 
     const translationResult = {
@@ -478,10 +530,10 @@ export async function runJobPipeline(
     );
 
     // Validate response integrity
-    if (translationResult.nodes.length !== extractionWithLayoutHints.all_nodes.length) {
+    if (translationResult.nodes.length !== writableSourceNodes.length) {
       throw new PipelineError(
         "LLM_PROVIDER_ERROR",
-        `Translation returned ${translationResult.nodes.length} nodes, expected ${extractionWithLayoutHints.all_nodes.length}`
+        `Translation returned ${translationResult.nodes.length} nodes, expected ${writableSourceNodes.length}`
       );
     }
 
@@ -489,7 +541,7 @@ export async function runJobPipeline(
       status: "translating",
       progress_percent: 70,
       current_step: "translating_segments",
-      details: "Translation complete, preparing to write back",
+      details: `Translation complete for ${writableSlides.length} deliverable slide(s), preparing to write back`,
     });
     await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
 
@@ -505,7 +557,7 @@ export async function runJobPipeline(
     await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
     writeCommitOrder = buildWriteCommitOrder(
       job.output_mode,
-      extractionWithLayoutHints.extracted_slides
+      writableSlides
     );
 
     const onCommitted = async (result: WriteBackResult) => {
@@ -533,14 +585,14 @@ export async function runJobPipeline(
 
         writeResult = await writeBackNewFile(
           job.target_doc_id,
-          extractionWithLayoutHints.extracted_slides,
+          writableSlides,
           translationResult.nodes,
           onCommitted
         );
       } else {
         writeResult = await writeBackAppend(
           job.source_doc_id,
-          extractionWithLayoutHints.extracted_slides,
+          writableSlides,
           translationResult.nodes,
           onCommitted
         );
@@ -562,7 +614,7 @@ export async function runJobPipeline(
     }
     console.log(`Job ${job_id} write-back completed`);
 
-    if (writeResult.committedUnits !== totalSlides) {
+    if (writeResult.committedUnits !== writableSlides.length) {
       const failedWriteSlideIndex = getNextUncommittedWriteSlideIndex(
         slideResults,
         writeCommitOrder
@@ -572,7 +624,7 @@ export async function runJobPipeline(
       }
       throw new PipelineError(
         "JOB_INTERNAL_ERROR",
-        `Committed ${writeResult.committedUnits} slides, expected ${totalSlides}`
+        `Committed ${writeResult.committedUnits} slides, expected ${writableSlides.length}`
       );
     }
 
@@ -584,6 +636,7 @@ export async function runJobPipeline(
       targetLangCode,
       writeResult,
       pipelineWarnings,
+      slideResults,
       translatedUnitsBilled
     );
     console.log(`Job ${job_id} slide results:`, JSON.stringify(listJobSlideResults(slideResults)));
@@ -681,16 +734,15 @@ async function finalizeSuccessfulJob(
   targetLangCode: string,
   writeResult: WriteBackResult,
   pipelineWarnings: readonly JobWarning[],
+  slideResults: ReturnType<typeof initializeJobSlideResults>,
   billedUnits: number
 ): Promise<void> {
   const client = await pool.connect();
   const finalWarnings = [...pipelineWarnings, ...writeResult.warnings];
-  const completedStatus = finalWarnings.length > 0
+  const completedStatus = finalWarnings.length > 0 || hasSlideExecutionWarnings(slideResults)
     ? "completed_with_warnings"
     : "completed";
-  const completionDetail = finalWarnings.length > 0
-    ? `Translation completed with ${finalWarnings.length} warning(s). Review the translated Slides for excluded pages or minor layout issues.`
-    : "Translation completed successfully.";
+  const completionDetail = buildSuccessfulCompletionDetail(finalWarnings.length, slideResults);
   try {
     await client.query("BEGIN");
 
@@ -732,6 +784,26 @@ async function finalizeSuccessfulJob(
     }),
     redis.del(buildJobCancelKey(jobId)),
   ]);
+}
+
+function buildSuccessfulCompletionDetail(
+  warningCount: number,
+  slideResults: ReturnType<typeof initializeJobSlideResults>
+): string {
+  const slideSummary = summarizeSlideExecution(slideResults);
+  if (slideSummary.skipped_slides > 0) {
+    return `Translation completed with warnings. Delivered ${slideSummary.committed_slides} slide(s), skipped ${slideSummary.skipped_slides} slide(s), and excluded ${slideSummary.excluded_slides} unsafe slide(s).`;
+  }
+
+  if (slideSummary.excluded_slides > 0 && warningCount === 0) {
+    return `Translation completed with warnings. Excluded ${slideSummary.excluded_slides} unsafe slide(s) before translation.`;
+  }
+
+  if (warningCount > 0 || slideSummary.excluded_slides > 0) {
+    return `Translation completed with ${warningCount} warning(s). Review the translated Slides for excluded pages or minor layout issues.`;
+  }
+
+  return "Translation completed successfully.";
 }
 
 function buildUnsafeSlideExcludedWarnings(
@@ -882,6 +954,35 @@ function markSlideFailures(
   }
 }
 
+function isSlideReadyForMaterialization(
+  slideResults: ReturnType<typeof initializeJobSlideResults>,
+  slideIndex: number
+): boolean {
+  const slideResult = slideResults.get(slideIndex);
+  if (!slideResult) {
+    return false;
+  }
+
+  return (
+    slideResult.status === "pending" ||
+    slideResult.status === "translated"
+  );
+}
+
+function selectSlidesReadyForMaterialization<T extends { readonly slide_index: number }>(
+  slides: readonly T[],
+  slideResults: ReturnType<typeof initializeJobSlideResults>
+): T[] {
+  return slides.filter((slide) => isSlideReadyForMaterialization(slideResults, slide.slide_index));
+}
+
+function selectSlidesReadyForWrite<T extends { readonly slide_index: number }>(
+  slides: readonly T[],
+  slideResults: ReturnType<typeof initializeJobSlideResults>
+): T[] {
+  return slides.filter((slide) => slideResults.get(slide.slide_index)?.status === "translated");
+}
+
 function buildCanceledDetail(billedUnits: number): string {
   if (billedUnits > 0) {
     return `Canceled after ${billedUnits} slide(s) were successfully translated. Those slides were counted toward quota even though the job did not finish.`;
@@ -941,6 +1042,88 @@ function registerBilledSlides(
 
 function toSlideFailureReasonCode(error: unknown): string {
   return error instanceof PipelineError ? error.code : "JOB_INTERNAL_ERROR";
+}
+
+function hasSlideExecutionWarnings(
+  slideResults: ReturnType<typeof initializeJobSlideResults>
+): boolean {
+  return listJobSlideResults(slideResults).some((slideResult) => {
+    return (
+      slideResult.status === "excluded_unsafe" ||
+      slideResult.status === "skipped_translation_failed" ||
+      slideResult.status === "skipped_materialization_failed" ||
+      slideResult.status === "skipped_write_failed" ||
+      slideResult.refund_required
+    );
+  });
+}
+
+function summarizeSlideExecution(
+  slideResults: ReturnType<typeof initializeJobSlideResults>
+): {
+  committed_slides: number;
+  skipped_slides: number;
+  excluded_slides: number;
+} {
+  let committedSlides = 0;
+  let skippedSlides = 0;
+  let excludedSlides = 0;
+
+  for (const slideResult of listJobSlideResults(slideResults)) {
+    if (slideResult.status === "committed") {
+      committedSlides += 1;
+      continue;
+    }
+
+    if (slideResult.status === "excluded_unsafe") {
+      excludedSlides += 1;
+      continue;
+    }
+
+    if (
+      slideResult.status === "skipped_translation_failed" ||
+      slideResult.status === "skipped_materialization_failed" ||
+      slideResult.status === "skipped_write_failed"
+    ) {
+      skippedSlides += 1;
+    }
+  }
+
+  return {
+    committed_slides: committedSlides,
+    skipped_slides: skippedSlides,
+    excluded_slides: excludedSlides,
+  };
+}
+
+export function __selectSlidesReadyForMaterializationForTests<T extends { readonly slide_index: number }>(
+  slides: readonly T[],
+  slideResults: ReturnType<typeof initializeJobSlideResults>
+): T[] {
+  return selectSlidesReadyForMaterialization(slides, slideResults);
+}
+
+export function __selectSlidesReadyForWriteForTests<T extends { readonly slide_index: number }>(
+  slides: readonly T[],
+  slideResults: ReturnType<typeof initializeJobSlideResults>
+): T[] {
+  return selectSlidesReadyForWrite(slides, slideResults);
+}
+
+export function __hasSlideExecutionWarningsForTests(
+  slideResults: ReturnType<typeof initializeJobSlideResults>
+): boolean {
+  return hasSlideExecutionWarnings(slideResults);
+}
+
+export function __summarizeSlideExecutionForTests(
+  slideResults: ReturnType<typeof initializeJobSlideResults>
+): {
+  committed_slides: number;
+  skipped_slides: number;
+  excluded_slides: number;
+} {
+  return summarizeSlideExecution(slideResults);
 }
 
 function uniqueSlideIndices(
