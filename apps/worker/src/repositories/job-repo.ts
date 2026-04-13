@@ -25,6 +25,10 @@ export interface JobRow {
   range_expression: string | null;
   provider_route: Record<string, unknown>;
   status: JobStatus;
+  provisionally_billed_units: number;
+  gross_billed_slides: number;
+  refunded_slides: number;
+  net_billed_slides: number;
   total_units_billed: number;
   output_document_url: string | null;
   error_code: string | null;
@@ -37,7 +41,8 @@ export interface JobRow {
 
 const JOB_COLUMNS = `id, user_id, host_type, source_doc_id, source_doc_name, target_doc_id,
   source_language_mode, source_language, target_language_input, target_language_code,
-  output_mode, range_mode, range_expression, provider_route, status, total_units_billed,
+  output_mode, range_mode, range_expression, provider_route, status,
+  provisionally_billed_units, gross_billed_slides, refunded_slides, net_billed_slides, total_units_billed,
   output_document_url, error_code, error_message, warnings, cancel_requested_at, started_at, completed_at`;
 
 export async function getJobById(pool: Pool, jobId: string): Promise<JobRow | null> {
@@ -59,6 +64,10 @@ export async function updateJobStatus(
     errorMessage?: string;
     outputDocumentUrl?: string;
     providerRoute?: Record<string, unknown>;
+    provisionallyBilledUnits?: number;
+    grossBilledSlides?: number;
+    refundedSlides?: number;
+    netBilledSlides?: number;
     totalUnitsBilled?: number;
     sourceLang?: string;
     targetLangCode?: string;
@@ -98,6 +107,26 @@ export async function updateJobStatus(
   if (extra?.providerRoute) {
     setClauses.push(`provider_route = $${idx}`);
     params.push(JSON.stringify(extra.providerRoute));
+    idx++;
+  }
+  if (extra?.provisionallyBilledUnits !== undefined) {
+    setClauses.push(`provisionally_billed_units = $${idx}`);
+    params.push(extra.provisionallyBilledUnits);
+    idx++;
+  }
+  if (extra?.grossBilledSlides !== undefined) {
+    setClauses.push(`gross_billed_slides = $${idx}`);
+    params.push(extra.grossBilledSlides);
+    idx++;
+  }
+  if (extra?.refundedSlides !== undefined) {
+    setClauses.push(`refunded_slides = $${idx}`);
+    params.push(extra.refundedSlides);
+    idx++;
+  }
+  if (extra?.netBilledSlides !== undefined) {
+    setClauses.push(`net_billed_slides = $${idx}`);
+    params.push(extra.netBilledSlides);
     idx++;
   }
   if (extra?.totalUnitsBilled !== undefined) {

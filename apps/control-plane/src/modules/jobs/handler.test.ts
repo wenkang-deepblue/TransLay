@@ -20,6 +20,10 @@ function createBaseJob() {
     range_expression: null,
     provider_route: null,
     status: "completed" as const,
+    provisionally_billed_units: 12,
+    gross_billed_slides: 12,
+    refunded_slides: 0,
+    net_billed_slides: 12,
     total_units_billed: 12,
     output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
     error_code: null,
@@ -204,6 +208,7 @@ test("job handler returns in-progress billed slide count for cancel warnings", (
     {
       ...createBaseJob(),
       status: "translating",
+      provisionally_billed_units: 3,
       total_units_billed: 3,
       completed_at: null,
     },
@@ -229,6 +234,10 @@ test("job handler returns canceled payload with translated-slide billing message
   const response = __buildJobStatusResponseForTests({
     ...createBaseJob(),
     status: "canceled",
+    provisionally_billed_units: 2,
+    gross_billed_slides: 2,
+    refunded_slides: 0,
+    net_billed_slides: 2,
     total_units_billed: 2,
     completed_at: new Date("2026-04-10T10:01:00.000Z"),
   });
@@ -239,6 +248,28 @@ test("job handler returns canceled payload with translated-slide billing message
     message:
       "Translation canceled after 2 slide(s) were successfully translated. Those slides were counted toward your quota even though the job did not finish.",
     total_units_billed: 2,
+    output_mode: "create_new_file",
+    output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
+  });
+});
+
+test("job handler returns no-charge canceled message when net billed slides are zero", () => {
+  const response = __buildJobStatusResponseForTests({
+    ...createBaseJob(),
+    status: "canceled",
+    provisionally_billed_units: 2,
+    gross_billed_slides: 2,
+    refunded_slides: 2,
+    net_billed_slides: 0,
+    total_units_billed: 2,
+    completed_at: new Date("2026-04-10T10:01:00.000Z"),
+  });
+
+  assert.deepEqual(response, {
+    job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+    status: "canceled",
+    message: "Translation canceled before any slide translation succeeded. No quota was charged.",
+    total_units_billed: 0,
     output_mode: "create_new_file",
     output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
   });

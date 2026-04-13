@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   __applyWriteResultToSlideResultsForTests,
+  __buildSlideBillingSettlementForTests,
   __hasSlideExecutionWarningsForTests,
   __selectSlidesReadyForMaterializationForTests,
   __selectSlidesReadyForWriteForTests,
@@ -9,6 +10,7 @@ import {
 } from "./job-pipeline";
 import {
   initializeJobSlideResults,
+  markSlideCanceledAfterTranslation,
   markSlideCommitted,
   markSlideExcludedUnsafe,
   markSlideFailure,
@@ -99,5 +101,56 @@ test("applyWriteResultToSlideResults marks committed and failed write slides exp
     committed_slides: 1,
     skipped_slides: 1,
     excluded_slides: 0,
+  });
+});
+
+test("billing settlement refunds undelivered slides after successful job completion", () => {
+  const slideResults = initializeJobSlideResults([1, 2, 3]);
+  markSlideTranslated(slideResults, 1);
+  markSlideCommitted(slideResults, 1);
+  markSlideTranslated(slideResults, 2);
+  markSlideFailure(slideResults, 2, "write", "HOST_ADAPTER_ERROR");
+  markSlideExcludedUnsafe(slideResults, 3);
+
+  assert.deepEqual(__buildSlideBillingSettlementForTests(slideResults, "successful"), {
+    provisionally_billed_units: 2,
+    gross_billed_slides: 2,
+    refunded_slides: 1,
+    net_billed_slides: 1,
+    provisional_slide_indices: [1, 2],
+    refunded_slide_indices: [2],
+  });
+});
+
+test("billing settlement keeps provisionally billed slides on user cancellation", () => {
+  const slideResults = initializeJobSlideResults([1, 2]);
+  markSlideTranslated(slideResults, 1);
+  markSlideCommitted(slideResults, 1);
+  markSlideTranslated(slideResults, 2);
+  markSlideCanceledAfterTranslation(slideResults, 2);
+
+  assert.deepEqual(__buildSlideBillingSettlementForTests(slideResults, "canceled"), {
+    provisionally_billed_units: 2,
+    gross_billed_slides: 2,
+    refunded_slides: 0,
+    net_billed_slides: 2,
+    provisional_slide_indices: [1, 2],
+    refunded_slide_indices: [],
+  });
+});
+
+test("billing settlement refunds provisional slides on terminal failure", () => {
+  const slideResults = initializeJobSlideResults([4, 5]);
+  markSlideTranslated(slideResults, 4);
+  markSlideTranslated(slideResults, 5);
+  markSlideCommitted(slideResults, 5);
+
+  assert.deepEqual(__buildSlideBillingSettlementForTests(slideResults, "failed"), {
+    provisionally_billed_units: 2,
+    gross_billed_slides: 2,
+    refunded_slides: 1,
+    net_billed_slides: 1,
+    provisional_slide_indices: [4, 5],
+    refunded_slide_indices: [4],
   });
 });

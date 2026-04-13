@@ -70,10 +70,11 @@ function isRunningStatus(status: JobStatus): status is JobInProgressStatus {
 }
 
 function buildCanceledMessage(job: {
-  total_units_billed: number;
+  net_billed_slides: number;
 }): string {
-  if (job.total_units_billed > 0) {
-    return `Translation canceled after ${job.total_units_billed} slide(s) were successfully translated. Those slides were counted toward your quota even though the job did not finish.`;
+  const billedSlides = job.net_billed_slides;
+  if (billedSlides > 0) {
+    return `Translation canceled after ${billedSlides} slide(s) were successfully translated. Those slides were counted toward your quota even though the job did not finish.`;
   }
 
   return "Translation canceled before any slide translation succeeded. No quota was charged.";
@@ -168,7 +169,7 @@ function buildJobStatusResponse(
       job_id: job.id,
       status: "canceled",
       message: buildCanceledMessage(job),
-      total_units_billed: job.total_units_billed,
+      total_units_billed: job.net_billed_slides,
       output_mode: job.output_mode,
       output_document_url: job.output_document_url ?? undefined,
     };
@@ -186,7 +187,7 @@ function buildJobStatusResponse(
     progress_percent: progress?.progress_percent ? parseInt(progress.progress_percent, 10) : 0,
     current_step: progress?.current_step,
     details: progress?.details,
-    translated_units_billed: job.total_units_billed,
+    translated_units_billed: job.provisionally_billed_units,
   };
 
   return response;

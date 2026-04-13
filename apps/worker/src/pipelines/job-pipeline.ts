@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import type Redis from "ioredis";
 import type { WorkerConfig } from "@translay/shared-config";
 import type {
@@ -52,6 +52,17 @@ import {
 
 const MAX_PROVIDER_ATTEMPTS_PER_BATCH = 3;
 
+type SlideBillingSettlementMode = "successful" | "failed" | "canceled";
+
+type SlideBillingSettlement = {
+  provisionally_billed_units: number;
+  gross_billed_slides: number;
+  refunded_slides: number;
+  net_billed_slides: number;
+  provisional_slide_indices: number[];
+  refunded_slide_indices: number[];
+};
+
 /**
  * Main job pipeline: extract → translate → write-back.
  * Updates job status and Redis progress at each step.
@@ -90,12 +101,12 @@ export async function runJobPipeline(
     warnings: [],
   };
   const pipelineWarnings: JobWarning[] = [];
-  const billedSlideIndexes = new Set<number>();
-  let translatedUnitsBilled = 0;
+  const provisionallyBilledSlideIndexes = new Set<number>();
+  let provisionallyBilledUnits = 0;
   let slideResults = initializeJobSlideResults([]);
 
   try {
-    await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
+    await assertNotCanceled(pool, redis, job, writeResult, provisionallyBilledUnits);
 
     // --- EXTRACTING ---
     console.log(`Job ${job_id} entering extracting stage`);
@@ -108,7 +119,7 @@ export async function runJobPipeline(
       current_step: "extracting_content",
       details: "Extracting presentation content",
     });
-    await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
+    await assertNotCanceled(pool, redis, job, writeResult, provisionallyBilledUnits);
 
     if (job.host_type !== "slides") {
       throw new PipelineError(
@@ -174,7 +185,7 @@ export async function runJobPipeline(
       full_context_text: buildDeckPlaintextContext(safeSlides),
     };
     const totalSafeSlides = extractionForTranslation.extracted_slides.length;
-    await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
+    await assertNotCanceled(pool, redis, job, writeResult, provisionallyBilledUnits);
 
     // --- TRANSLATING ---
     console.log(`Job ${job_id} entering translating stage`);
@@ -204,7 +215,7 @@ export async function runJobPipeline(
       current_step: "layout_semantics",
       details: `Analyzing layout semantics for ${extractionForTranslation.extracted_slides.length} safe slide(s)`,
     });
-    await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
+    await assertNotCanceled(pool, redis, job, writeResult, provisionallyBilledUnits);
 
     const slidesWithLayoutHints = await annotateSlidesWithLayoutSemanticsBestEffort(
       extractionForTranslation.extracted_slides,
@@ -232,7 +243,7 @@ export async function runJobPipeline(
       current_step: "authority_pass",
       details: `Building authoritative deck translation for ${extractionWithLayoutHints.all_nodes.length} nodes`,
     });
-    await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
+    await assertNotCanceled(pool, redis, job, writeResult, provisionallyBilledUnits);
 
     let authorityResult: AuthorityTranslationResponse | null = null;
     try {
@@ -268,7 +279,7 @@ export async function runJobPipeline(
         current_step: "gap_fill",
         details: `Filling ${authorityAudit.missing_nodes.length} authority coverage gap(s)`,
       });
-      await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
+      await assertNotCanceled(pool, redis, job, writeResult, provisionallyBilledUnits);
 
       const missingNodesBySlide = groupNodesBySlide(authorityAudit.missing_nodes);
       const slideByIndex = new Map(
@@ -318,7 +329,7 @@ export async function runJobPipeline(
         }
         providerRequestIds.push(gapFillResult.provider_request_id);
         gapFilledNodes.push(...gapFillResult.nodes);
-        await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
+        await assertNotCanceled(pool, redis, job, writeResult, provisionallyBilledUnits);
       }
 
       authorityNodes = mergeAuthorityNodes(authorityNodes, gapFilledNodes);
@@ -458,14 +469,14 @@ export async function runJobPipeline(
         markSlideTranslated(slideResults, slideIndex);
       }
 
-      const billedBefore = translatedUnitsBilled;
-      translatedUnitsBilled = registerBilledSlides(
-        billedSlideIndexes,
+      const billedBefore = provisionallyBilledUnits;
+      provisionallyBilledUnits = registerBilledSlides(
+        provisionallyBilledSlideIndexes,
         newlyTranslatedSlideIndexes
       );
-      if (translatedUnitsBilled !== billedBefore) {
+      if (provisionallyBilledUnits !== billedBefore) {
         await updateJobStatus(pool, job_id, "translating", {
-          totalUnitsBilled: translatedUnitsBilled,
+          provisionallyBilledUnits,
         });
       }
 
@@ -479,9 +490,9 @@ export async function runJobPipeline(
         current_step: "materialization_pass",
         details:
           `Materialized batch ${translatedGroupCount} of ${materializationQueue.length}. ` +
-          `${translatedUnitsBilled} slide(s) already count toward quota.`,
+          `${provisionallyBilledUnits} slide(s) have been provisionally billed.`,
       });
-      await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
+      await assertNotCanceled(pool, redis, job, writeResult, provisionallyBilledUnits);
     }
 
     let writableSlides = selectSlidesReadyForWrite(
@@ -547,7 +558,7 @@ export async function runJobPipeline(
       current_step: "translating_segments",
       details: `Translation complete for ${writableSlides.length} deliverable slide(s), preparing to write back`,
     });
-    await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
+    await assertNotCanceled(pool, redis, job, writeResult, provisionallyBilledUnits);
 
     // --- WRITING ---
     console.log(`Job ${job_id} entering writing stage with mode ${job.output_mode}`);
@@ -558,7 +569,7 @@ export async function runJobPipeline(
       current_step: "writing_back",
       details: `Writing translated content back to ${job.output_mode === "create_new_file" ? "new file" : "presentation"}`,
     });
-    await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
+    await assertNotCanceled(pool, redis, job, writeResult, provisionallyBilledUnits);
     const appliedWriteSlideIndexes = new Set<number>();
     const onWriteProgress = async (result: WriteBackResult) => {
       writeResult = result;
@@ -568,10 +579,10 @@ export async function runJobPipeline(
         appliedWriteSlideIndexes
       );
       await updateJobStatus(pool, job_id, "writing", {
-        totalUnitsBilled: translatedUnitsBilled,
+        provisionallyBilledUnits,
         outputDocumentUrl: result.outputUrl,
       });
-      await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
+      await assertNotCanceled(pool, redis, job, writeResult, provisionallyBilledUnits);
     };
 
     try {
@@ -640,7 +651,7 @@ export async function runJobPipeline(
       writeResult,
       pipelineWarnings,
       slideResults,
-      translatedUnitsBilled
+      provisionallyBilledUnits
     );
     console.log(`Job ${job_id} slide results:`, JSON.stringify(listJobSlideResults(slideResults)));
     console.log(`Job ${job_id} completed successfully: ${writeResult.outputUrl}`);
@@ -658,7 +669,7 @@ export async function runJobPipeline(
       console.log(
         `Job ${job_id} canceled after ${err.writeResult.committedUnits} committed slides`
       );
-      await finalizeCanceledJob(pool, redis, job, job_id, err.writeResult, err.billedUnits);
+      await finalizeCanceledJob(pool, redis, job, job_id, err.writeResult, err.billedUnits, slideResults);
       return;
     }
 
@@ -685,7 +696,8 @@ export async function runJobPipeline(
         job_id,
         writeResult,
         pipelineWarnings,
-        translatedUnitsBilled,
+        provisionallyBilledUnits,
+        slideResults,
         errorCode,
         safeMessage
       );
@@ -738,7 +750,7 @@ async function finalizeSuccessfulJob(
   writeResult: WriteBackResult,
   pipelineWarnings: readonly JobWarning[],
   slideResults: ReturnType<typeof initializeJobSlideResults>,
-  billedUnits: number
+  provisionallyBilledUnits: number
 ): Promise<void> {
   const client = await pool.connect();
   const finalWarnings = [...pipelineWarnings, ...writeResult.warnings];
@@ -748,25 +760,18 @@ async function finalizeSuccessfulJob(
   const completionDetail = buildSuccessfulCompletionDetail(finalWarnings.length, slideResults);
   try {
     await client.query("BEGIN");
+    const settlement = await settleSlideBilling(client, job, slideResults, "successful");
 
     await updateJobStatus(client, jobId, completedStatus, {
       outputDocumentUrl: writeResult.outputUrl,
-      totalUnitsBilled: billedUnits,
+      provisionallyBilledUnits,
+      grossBilledSlides: settlement.gross_billed_slides,
+      refundedSlides: settlement.refunded_slides,
+      netBilledSlides: settlement.net_billed_slides,
+      totalUnitsBilled: settlement.net_billed_slides,
       targetLangCode,
       warnings: finalWarnings,
     });
-
-    if (billedUnits > 0) {
-      await insertUsageLedger(client, {
-        userId: job.user_id,
-        jobId: job.id,
-        hostType: "slides",
-        usageUnit: "slides",
-        quantity: billedUnits,
-        periodKey: billingPeriodKey(),
-        reason: "translate_slides",
-      });
-    }
 
     await client.query("COMMIT");
   } catch (err) {
@@ -843,30 +848,24 @@ async function finalizeCanceledJob(
   job: NonNullable<Awaited<ReturnType<typeof getJobById>>>,
   jobId: string,
   writeResult: WriteBackResult,
-  billedUnits: number
+  provisionallyBilledUnits: number,
+  slideResults: ReturnType<typeof initializeJobSlideResults>
 ): Promise<void> {
   const client = await pool.connect();
-  const detail = buildCanceledDetail(billedUnits);
+  const detail = buildCanceledDetail(provisionallyBilledUnits);
 
   try {
     await client.query("BEGIN");
+    const settlement = await settleSlideBilling(client, job, slideResults, "canceled");
 
     await updateJobStatus(client, jobId, "canceled", {
       outputDocumentUrl: writeResult.outputUrl || undefined,
-      totalUnitsBilled: billedUnits,
+      provisionallyBilledUnits,
+      grossBilledSlides: settlement.gross_billed_slides,
+      refundedSlides: settlement.refunded_slides,
+      netBilledSlides: settlement.net_billed_slides,
+      totalUnitsBilled: settlement.net_billed_slides,
     });
-
-    if (billedUnits > 0) {
-      await insertUsageLedger(client, {
-        userId: job.user_id,
-        jobId: job.id,
-        hostType: "slides",
-        usageUnit: "slides",
-        quantity: billedUnits,
-        periodKey: billingPeriodKey(),
-        reason: "translate_slides",
-      });
-    }
 
     await client.query("COMMIT");
   } catch (err) {
@@ -881,7 +880,7 @@ async function finalizeCanceledJob(
   await Promise.all([
     setJobProgress(redis, jobId, {
       status: "canceled",
-      progress_percent: billedUnits > 0 ? 100 : 0,
+      progress_percent: provisionallyBilledUnits > 0 ? 100 : 0,
       current_step: "canceled",
       details: detail,
     }),
@@ -896,7 +895,8 @@ async function finalizeFailedJob(
   jobId: string,
   writeResult: WriteBackResult,
   pipelineWarnings: readonly JobWarning[],
-  billedUnits: number,
+  provisionallyBilledUnits: number,
+  slideResults: ReturnType<typeof initializeJobSlideResults>,
   errorCode: string,
   safeMessage: string
 ): Promise<void> {
@@ -904,26 +904,19 @@ async function finalizeFailedJob(
   const finalWarnings = [...pipelineWarnings, ...writeResult.warnings];
   try {
     await client.query("BEGIN");
+    const settlement = await settleSlideBilling(client, job, slideResults, "failed");
 
     await updateJobStatus(client, jobId, "failed", {
       errorCode,
       errorMessage: safeMessage,
       outputDocumentUrl: writeResult.outputUrl || undefined,
-      totalUnitsBilled: billedUnits,
+      provisionallyBilledUnits,
+      grossBilledSlides: settlement.gross_billed_slides,
+      refundedSlides: settlement.refunded_slides,
+      netBilledSlides: settlement.net_billed_slides,
+      totalUnitsBilled: settlement.net_billed_slides,
       warnings: finalWarnings,
     });
-
-    if (billedUnits > 0) {
-      await insertUsageLedger(client, {
-        userId: job.user_id,
-        jobId: job.id,
-        hostType: "slides",
-        usageUnit: "slides",
-        quantity: billedUnits,
-        periodKey: billingPeriodKey(),
-        reason: "translate_slides",
-      });
-    }
 
     await client.query("COMMIT");
   } catch (err) {
@@ -1059,13 +1052,117 @@ function shouldExplodeMaterializationGroup(
 }
 
 function registerBilledSlides(
-  billedSlideIndexes: Set<number>,
+  provisionallyBilledSlideIndexes: Set<number>,
   slideIndexes: readonly number[]
 ): number {
   for (const slideIndex of slideIndexes) {
-    billedSlideIndexes.add(slideIndex);
+    provisionallyBilledSlideIndexes.add(slideIndex);
   }
-  return billedSlideIndexes.size;
+  return provisionallyBilledSlideIndexes.size;
+}
+
+function buildSlideBillingSettlement(
+  slideResults: ReturnType<typeof initializeJobSlideResults>,
+  mode: SlideBillingSettlementMode
+): SlideBillingSettlement {
+  const settlement: SlideBillingSettlement = {
+    provisionally_billed_units: 0,
+    gross_billed_slides: 0,
+    refunded_slides: 0,
+    net_billed_slides: 0,
+    provisional_slide_indices: [],
+    refunded_slide_indices: [],
+  };
+
+  for (const slideResult of listJobSlideResults(slideResults)) {
+    if (!slideResult.provisionally_billed) {
+      continue;
+    }
+
+    settlement.provisionally_billed_units += 1;
+    settlement.gross_billed_slides += 1;
+    settlement.provisional_slide_indices.push(slideResult.slide_index);
+
+    if (shouldRefundProvisionallyBilledSlide(slideResult, mode)) {
+      settlement.refunded_slides += 1;
+      settlement.refunded_slide_indices.push(slideResult.slide_index);
+    }
+  }
+
+  settlement.net_billed_slides =
+    settlement.gross_billed_slides - settlement.refunded_slides;
+
+  return settlement;
+}
+
+function shouldRefundProvisionallyBilledSlide(
+  slideResult: ReturnType<typeof listJobSlideResults>[number],
+  mode: SlideBillingSettlementMode
+): boolean {
+  if (!slideResult.provisionally_billed) {
+    return false;
+  }
+
+  if (slideResult.final_billable || slideResult.output_visible) {
+    return false;
+  }
+
+  if (mode === "canceled") {
+    return slideResult.status !== "canceled_after_translation" && slideResult.refund_required;
+  }
+
+  if (mode === "failed") {
+    return slideResult.status !== "canceled_after_translation";
+  }
+
+  return slideResult.refund_required || slideResult.status === "translated";
+}
+
+async function settleSlideBilling(
+  client: PoolClient,
+  job: NonNullable<Awaited<ReturnType<typeof getJobById>>>,
+  slideResults: ReturnType<typeof initializeJobSlideResults>,
+  mode: SlideBillingSettlementMode
+): Promise<SlideBillingSettlement> {
+  const settlement = buildSlideBillingSettlement(slideResults, mode);
+  if (settlement.gross_billed_slides === 0) {
+    return settlement;
+  }
+
+  const periodKey = billingPeriodKey();
+  const provisionalLedgerIds = new Map<number, string>();
+
+  for (const slideIndex of settlement.provisional_slide_indices) {
+    const ledgerId = await insertUsageLedger(client, {
+      userId: job.user_id,
+      jobId: job.id,
+      hostType: "slides",
+      usageUnit: "slides",
+      quantity: 1,
+      periodKey,
+      reason: "translate_slides_provisional",
+      slideIndex,
+      ledgerStage: "provisional",
+    });
+    provisionalLedgerIds.set(slideIndex, ledgerId);
+  }
+
+  for (const slideIndex of settlement.refunded_slide_indices) {
+    await insertUsageLedger(client, {
+      userId: job.user_id,
+      jobId: job.id,
+      hostType: "slides",
+      usageUnit: "slides",
+      quantity: -1,
+      periodKey,
+      reason: "translate_slides_refund",
+      slideIndex,
+      ledgerStage: "refund",
+      relatedUsageId: provisionalLedgerIds.get(slideIndex),
+    });
+  }
+
+  return settlement;
 }
 
 function toSlideFailureReasonCode(error: unknown): string {
@@ -1159,6 +1256,13 @@ export function __summarizeSlideExecutionForTests(
   excluded_slides: number;
 } {
   return summarizeSlideExecution(slideResults);
+}
+
+export function __buildSlideBillingSettlementForTests(
+  slideResults: ReturnType<typeof initializeJobSlideResults>,
+  mode: SlideBillingSettlementMode
+): SlideBillingSettlement {
+  return buildSlideBillingSettlement(slideResults, mode);
 }
 
 function uniqueSlideIndices(

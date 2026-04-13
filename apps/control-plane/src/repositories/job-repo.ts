@@ -26,6 +26,10 @@ export interface JobRow {
   range_expression: string | null;
   provider_route: string | null;
   status: JobStatus;
+  provisionally_billed_units: number;
+  gross_billed_slides: number;
+  refunded_slides: number;
+  net_billed_slides: number;
   total_units_billed: number;
   output_document_url: string | null;
   error_code: string | null;
@@ -39,7 +43,8 @@ export interface JobRow {
 // S7: Explicit column list instead of SELECT *
 const JOB_COLUMNS = `id, user_id, host_type, source_doc_id, source_doc_name, target_doc_id,
   source_language_mode, source_language, target_language_input, target_language_code,
-  output_mode, range_mode, range_expression, provider_route, status, total_units_billed,
+  output_mode, range_mode, range_expression, provider_route, status,
+  provisionally_billed_units, gross_billed_slides, refunded_slides, net_billed_slides, total_units_billed,
   output_document_url, error_code, error_message, warnings, cancel_requested_at, started_at, completed_at`;
 
 export async function createJob(
@@ -115,6 +120,11 @@ export async function updateJobStatus(
     errorCode?: string;
     errorMessage?: string;
     outputDocumentUrl?: string;
+    provisionallyBilledUnits?: number;
+    grossBilledSlides?: number;
+    refundedSlides?: number;
+    netBilledSlides?: number;
+    totalUnitsBilled?: number;
     warnings?: readonly JobWarning[];
   }
 ): Promise<void> {
@@ -143,6 +153,31 @@ export async function updateJobStatus(
   if (extra?.outputDocumentUrl) {
     setClauses.push(`output_document_url = $${idx}`);
     params.push(extra.outputDocumentUrl);
+    idx++;
+  }
+  if (extra?.provisionallyBilledUnits !== undefined) {
+    setClauses.push(`provisionally_billed_units = $${idx}`);
+    params.push(extra.provisionallyBilledUnits);
+    idx++;
+  }
+  if (extra?.grossBilledSlides !== undefined) {
+    setClauses.push(`gross_billed_slides = $${idx}`);
+    params.push(extra.grossBilledSlides);
+    idx++;
+  }
+  if (extra?.refundedSlides !== undefined) {
+    setClauses.push(`refunded_slides = $${idx}`);
+    params.push(extra.refundedSlides);
+    idx++;
+  }
+  if (extra?.netBilledSlides !== undefined) {
+    setClauses.push(`net_billed_slides = $${idx}`);
+    params.push(extra.netBilledSlides);
+    idx++;
+  }
+  if (extra?.totalUnitsBilled !== undefined) {
+    setClauses.push(`total_units_billed = $${idx}`);
+    params.push(extra.totalUnitsBilled);
     idx++;
   }
   if (extra?.warnings !== undefined) {
