@@ -31,3 +31,19 @@ export function getSlidesClient(): {
 export function getSlidesAuth(): InstanceType<typeof google.auth.GoogleAuth> {
   return getSlidesClient().auth;
 }
+
+export function __setSlidesClientForTests(
+  nextClients: NonNullable<typeof clients>
+): void {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Test Slides client injection is disabled in production");
+  }
+  clients = nextClients;
+}
+
+export function __resetSlidesClientForTests(): void {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Test Slides client reset is disabled in production");
+  }
+  clients = null;
+}

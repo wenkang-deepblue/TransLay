@@ -41,14 +41,12 @@ import {
   projectNodesToAuthoritySourceNodes,
 } from "./authority";
 import {
-  buildWriteCommitOrder,
-  getNextUncommittedWriteSlideIndex,
   initializeJobSlideResults,
   listJobSlideResults,
-  markCommittedSlidesThroughCount,
   markSlideCanceledAfterTranslation,
   markSlideExcludedUnsafe,
   markSlideFailure,
+  markSlideCommitted,
   markSlideTranslated,
 } from "./slide-results";
 
@@ -83,12 +81,18 @@ export async function runJobPipeline(
 
   const route = selectRoute(config, job.user_id as string);
   console.log(`Job ${job_id} route selected: ${route.provider}/${route.model}`);
-  let writeResult: WriteBackResult = { outputUrl: "", committedUnits: 0, warnings: [] };
+  let writeResult: WriteBackResult = {
+    outputUrl: "",
+    committedUnits: 0,
+    committed_slide_indexes: [],
+    failed_slide_indexes: [],
+    slide_results: [],
+    warnings: [],
+  };
   const pipelineWarnings: JobWarning[] = [];
   const billedSlideIndexes = new Set<number>();
   let translatedUnitsBilled = 0;
   let slideResults = initializeJobSlideResults([]);
-  let writeCommitOrder: number[] = [];
 
   try {
     await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
@@ -555,17 +559,13 @@ export async function runJobPipeline(
       details: `Writing translated content back to ${job.output_mode === "create_new_file" ? "new file" : "presentation"}`,
     });
     await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
-    writeCommitOrder = buildWriteCommitOrder(
-      job.output_mode,
-      writableSlides
-    );
-
-    const onCommitted = async (result: WriteBackResult) => {
+    const appliedWriteSlideIndexes = new Set<number>();
+    const onWriteProgress = async (result: WriteBackResult) => {
       writeResult = result;
-      markCommittedSlidesThroughCount(
+      applyWriteResultToSlideResults(
         slideResults,
-        writeCommitOrder,
-        result.committedUnits
+        result,
+        appliedWriteSlideIndexes
       );
       await updateJobStatus(pool, job_id, "writing", {
         totalUnitsBilled: translatedUnitsBilled,
@@ -587,44 +587,47 @@ export async function runJobPipeline(
           job.target_doc_id,
           writableSlides,
           translationResult.nodes,
-          onCommitted
+          onWriteProgress
         );
       } else {
         writeResult = await writeBackAppend(
           job.source_doc_id,
           writableSlides,
           translationResult.nodes,
-          onCommitted
+          onWriteProgress
         );
       }
     } catch (error) {
-      const failedWriteSlideIndex = getNextUncommittedWriteSlideIndex(
+      applyWriteResultToSlideResults(
         slideResults,
-        writeCommitOrder
+        writeResult,
+        appliedWriteSlideIndexes
       );
-      if (failedWriteSlideIndex !== null) {
-        markSlideFailure(
-          slideResults,
-          failedWriteSlideIndex,
-          "write",
-          toSlideFailureReasonCode(error)
-        );
-      }
       throw error;
     }
     console.log(`Job ${job_id} write-back completed`);
 
-    if (writeResult.committedUnits !== writableSlides.length) {
-      const failedWriteSlideIndex = getNextUncommittedWriteSlideIndex(
-        slideResults,
-        writeCommitOrder
-      );
-      if (failedWriteSlideIndex !== null) {
-        markSlideFailure(slideResults, failedWriteSlideIndex, "write", "JOB_INTERNAL_ERROR");
-      }
+    applyWriteResultToSlideResults(
+      slideResults,
+      writeResult,
+      appliedWriteSlideIndexes
+    );
+
+    if (writeResult.committedUnits === 0) {
       throw new PipelineError(
         "JOB_INTERNAL_ERROR",
-        `Committed ${writeResult.committedUnits} slides, expected ${writableSlides.length}`
+        "Writer could not commit any deliverable slide"
+      );
+    }
+
+    if (writeResult.failed_slide_indexes.length > 0) {
+      console.warn(
+        `Job ${job_id} completed write stage with partial slide delivery`,
+        JSON.stringify({
+          committed_slides: writeResult.committed_slide_indexes.length,
+          failed_slides: writeResult.failed_slide_indexes.length,
+          deliverable_slides: writableSlides.length,
+        })
       );
     }
 
@@ -954,6 +957,31 @@ function markSlideFailures(
   }
 }
 
+function applyWriteResultToSlideResults(
+  slideResults: ReturnType<typeof initializeJobSlideResults>,
+  writeResult: WriteBackResult,
+  appliedSlideIndexes?: Set<number>
+): void {
+  for (const slideResult of writeResult.slide_results) {
+    if (appliedSlideIndexes?.has(slideResult.slide_index)) {
+      continue;
+    }
+
+    if (slideResult.status === "committed") {
+      markSlideCommitted(slideResults, slideResult.slide_index);
+    } else {
+      markSlideFailure(
+        slideResults,
+        slideResult.slide_index,
+        "write",
+        slideResult.error_code ?? "JOB_INTERNAL_ERROR"
+      );
+    }
+
+    appliedSlideIndexes?.add(slideResult.slide_index);
+  }
+}
+
 function isSlideReadyForMaterialization(
   slideResults: ReturnType<typeof initializeJobSlideResults>,
   slideIndex: number
@@ -1114,6 +1142,13 @@ export function __hasSlideExecutionWarningsForTests(
   slideResults: ReturnType<typeof initializeJobSlideResults>
 ): boolean {
   return hasSlideExecutionWarnings(slideResults);
+}
+
+export function __applyWriteResultToSlideResultsForTests(
+  slideResults: ReturnType<typeof initializeJobSlideResults>,
+  writeResult: WriteBackResult
+): void {
+  applyWriteResultToSlideResults(slideResults, writeResult);
 }
 
 export function __summarizeSlideExecutionForTests(

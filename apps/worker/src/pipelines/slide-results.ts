@@ -1,6 +1,5 @@
 import type {
   JobSlideResult,
-  OutputMode,
   SlideFailureStage,
   SlideExecutionStatus,
 } from "@translay/shared-contracts";
@@ -141,44 +140,6 @@ export function listJobSlideResults(
   slideResults: JobSlideResultMap
 ): JobSlideResult[] {
   return [...slideResults.values()].sort((left, right) => left.slide_index - right.slide_index);
-}
-
-export function buildWriteCommitOrder(
-  outputMode: OutputMode,
-  slides: readonly { readonly slide_index: number }[]
-): number[] {
-  const slideIndices = slides.map((slide) => slide.slide_index);
-  if (outputMode === "append_in_file") {
-    return [...slideIndices].sort((left, right) => right - left);
-  }
-  return slideIndices;
-}
-
-export function markCommittedSlidesThroughCount(
-  slideResults: JobSlideResultMap,
-  writeCommitOrder: readonly number[],
-  committedCount: number
-): void {
-  const boundedCount = Math.max(0, Math.min(committedCount, writeCommitOrder.length));
-  for (let index = 0; index < boundedCount; index += 1) {
-    const slideIndex = writeCommitOrder[index];
-    if (slideIndex !== undefined) {
-      markSlideCommitted(slideResults, slideIndex);
-    }
-  }
-}
-
-export function getNextUncommittedWriteSlideIndex(
-  slideResults: JobSlideResultMap,
-  writeCommitOrder: readonly number[]
-): number | null {
-  for (const slideIndex of writeCommitOrder) {
-    const slideResult = slideResults.get(slideIndex);
-    if (slideResult && slideResult.status !== "committed") {
-      return slideIndex;
-    }
-  }
-  return null;
 }
 
 function createPendingSlideResult(slideIndex: number): JobSlideResult {

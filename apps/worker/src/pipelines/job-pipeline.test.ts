@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  __applyWriteResultToSlideResultsForTests,
   __hasSlideExecutionWarningsForTests,
   __selectSlidesReadyForMaterializationForTests,
   __selectSlidesReadyForWriteForTests,
@@ -8,11 +9,12 @@ import {
 } from "./job-pipeline";
 import {
   initializeJobSlideResults,
-  markCommittedSlidesThroughCount,
+  markSlideCommitted,
   markSlideExcludedUnsafe,
   markSlideFailure,
   markSlideTranslated,
 } from "./slide-results";
+import type { WriteBackResult } from "../adapters/slides";
 
 test("selectSlidesReadyForMaterialization skips excluded and failed slides", () => {
   const slideResults = initializeJobSlideResults([1, 2, 3, 4]);
@@ -39,7 +41,7 @@ test("selectSlidesReadyForWrite keeps only translated slides", () => {
   const slideResults = initializeJobSlideResults([1, 2, 3]);
   markSlideTranslated(slideResults, 1);
   markSlideFailure(slideResults, 2, "materialization", "LLM_PROVIDER_ERROR");
-  markCommittedSlidesThroughCount(slideResults, [1], 1);
+  markSlideCommitted(slideResults, 1);
 
   const slides = [{ slide_index: 1 }, { slide_index: 2 }, { slide_index: 3 }];
 
@@ -62,5 +64,40 @@ test("hasSlideExecutionWarnings detects skipped and excluded slides", () => {
     committed_slides: 0,
     skipped_slides: 1,
     excluded_slides: 1,
+  });
+});
+
+test("applyWriteResultToSlideResults marks committed and failed write slides explicitly", () => {
+  const slideResults = initializeJobSlideResults([1, 2]);
+  markSlideTranslated(slideResults, 1);
+  markSlideTranslated(slideResults, 2);
+
+  const writeResult: WriteBackResult = {
+    outputUrl: "https://docs.google.com/presentation/d/test/edit",
+    committedUnits: 1,
+    committed_slide_indexes: [1],
+    failed_slide_indexes: [2],
+    slide_results: [
+      {
+        slide_index: 1,
+        status: "committed",
+        warning_codes: [],
+      },
+      {
+        slide_index: 2,
+        status: "skipped_write_failed",
+        warning_codes: [],
+        error_code: "HOST_ADAPTER_ERROR",
+      },
+    ],
+    warnings: [],
+  };
+
+  __applyWriteResultToSlideResultsForTests(slideResults, writeResult);
+
+  assert.deepEqual(__summarizeSlideExecutionForTests(slideResults), {
+    committed_slides: 1,
+    skipped_slides: 1,
+    excluded_slides: 0,
   });
 });

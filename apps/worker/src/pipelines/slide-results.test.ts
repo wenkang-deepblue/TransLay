@@ -1,11 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  buildWriteCommitOrder,
-  getNextUncommittedWriteSlideIndex,
   initializeJobSlideResults,
   listJobSlideResults,
-  markCommittedSlidesThroughCount,
+  markSlideCommitted,
   markSlideCanceledAfterTranslation,
   markSlideExcludedUnsafe,
   markSlideFailure,
@@ -112,52 +110,35 @@ test("markSlideTranslated is idempotent for an already translated slide", () => 
   ]);
 });
 
-test("markCommittedSlidesThroughCount follows append write order", () => {
+test("markSlideCommitted makes translated slides visible and billable", () => {
   const slideResults = initializeJobSlideResults([1, 3, 2]);
   for (const slideIndex of [1, 2, 3]) {
     markSlideTranslated(slideResults, slideIndex);
   }
 
-  const writeCommitOrder = buildWriteCommitOrder("append_in_file", [
-    { slide_index: 1 },
-    { slide_index: 3 },
-    { slide_index: 2 },
-  ]);
+  markSlideCommitted(slideResults, 2);
+  markSlideCommitted(slideResults, 3);
 
-  markCommittedSlidesThroughCount(slideResults, writeCommitOrder, 2);
-
-  assert.deepEqual(writeCommitOrder, [3, 2, 1]);
   assert.deepEqual(
-    listJobSlideResults(slideResults).map((slide) => [slide.slide_index, slide.status, slide.output_visible]),
+    listJobSlideResults(slideResults).map((slide) => [
+      slide.slide_index,
+      slide.status,
+      slide.output_visible,
+      slide.final_billable,
+    ]),
     [
-      [1, "translated", false],
-      [2, "committed", true],
-      [3, "committed", true],
+      [1, "translated", false, false],
+      [2, "committed", true, true],
+      [3, "committed", true, true],
     ]
   );
-  assert.equal(getNextUncommittedWriteSlideIndex(slideResults, writeCommitOrder), 1);
-});
-
-test("buildWriteCommitOrder keeps original order for create_new_file", () => {
-  const writeCommitOrder = buildWriteCommitOrder("create_new_file", [
-    { slide_index: 4 },
-    { slide_index: 1 },
-    { slide_index: 9 },
-  ]);
-
-  assert.deepEqual(writeCommitOrder, [4, 1, 9]);
 });
 
 test("markSlideCanceledAfterTranslation only changes non-visible translated slides", () => {
   const slideResults = initializeJobSlideResults([1, 2]);
   markSlideTranslated(slideResults, 1);
   markSlideTranslated(slideResults, 2);
-
-  const writeCommitOrder = buildWriteCommitOrder("create_new_file", [
-    { slide_index: 1 },
-    { slide_index: 2 },
-  ]);
-  markCommittedSlidesThroughCount(slideResults, writeCommitOrder, 1);
+  markSlideCommitted(slideResults, 1);
   markSlideCanceledAfterTranslation(slideResults, 1);
   markSlideCanceledAfterTranslation(slideResults, 2);
 
@@ -169,18 +150,4 @@ test("markSlideCanceledAfterTranslation only changes non-visible translated slid
     ]
   );
   assert.equal(listJobSlideResults(slideResults)[1]?.refund_required, false);
-});
-
-test("getNextUncommittedWriteSlideIndex returns null when all slides are committed", () => {
-  const slideResults = initializeJobSlideResults([1, 2]);
-  markSlideTranslated(slideResults, 1);
-  markSlideTranslated(slideResults, 2);
-
-  const writeCommitOrder = buildWriteCommitOrder("create_new_file", [
-    { slide_index: 1 },
-    { slide_index: 2 },
-  ]);
-  markCommittedSlidesThroughCount(slideResults, writeCommitOrder, 2);
-
-  assert.equal(getNextUncommittedWriteSlideIndex(slideResults, writeCommitOrder), null);
 });

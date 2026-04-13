@@ -30,9 +30,19 @@ interface NodeWriteRequestParams {
   readonly fit?: FitPassResult;
 }
 
+export interface SlideWriteResult {
+  readonly slide_index: number;
+  readonly status: "committed" | "skipped_write_failed";
+  readonly warning_codes: readonly string[];
+  readonly error_code?: string;
+}
+
 export interface WriteBackResult {
   readonly outputUrl: string;
   readonly committedUnits: number;
+  readonly committed_slide_indexes: readonly number[];
+  readonly failed_slide_indexes: readonly number[];
+  readonly slide_results: readonly SlideWriteResult[];
   readonly warnings: readonly JobWarning[];
 }
 
@@ -78,20 +88,41 @@ interface RichTextWritePlan {
 }
 
 const DEFAULT_BULLET_PRESET = "BULLET_DISC_CIRCLE_SQUARE";
+const WRITE_CIRCUIT_BREAKER_THRESHOLD = 2;
+const LOCAL_WRITER_VALIDATION_PATTERN =
+  /missing an object ID|missing segment|missing paragraph|unexpected paragraphs|unexpected segments|paragraph reconstruction|full text does not match/i;
+
+type WriteSystemicFailureCategory =
+  | "auth"
+  | "access"
+  | "rate_limit"
+  | "quota"
+  | "host_api_unavailable";
+
+interface ClassifiedWriteError {
+  readonly errorCode: string;
+  readonly systemicCategory: WriteSystemicFailureCategory | null;
+  readonly metadata: Record<string, unknown>;
+}
+
+interface WriteCircuitBreakerState {
+  readonly category: WriteSystemicFailureCategory | null;
+  readonly streak: number;
+}
 
 export async function writeBackAppend(
   presentationId: string,
   extractedSlides: SlideExtractionResult[],
   translatedNodes: readonly TranslatedNode[],
-  onCommitted?: (result: WriteBackResult) => Promise<void>
+  onProgress?: (result: WriteBackResult) => Promise<void>
 ): Promise<WriteBackResult> {
   const { slides } = getSlidesClient();
   const translationMap = buildTranslationMap(translatedNodes);
   const outputUrl = `https://docs.google.com/presentation/d/${presentationId}/edit`;
-  const warnings: JobWarning[] = [];
+  let writeResult = createEmptyWriteBackResult(outputUrl);
 
   if (extractedSlides.length === 0) {
-    return { outputUrl, committedUnits: 0, warnings };
+    return writeResult;
   }
 
   const pres = await slides.presentations.get({ presentationId });
@@ -100,15 +131,30 @@ export async function writeBackAppend(
     (a, b) => b.slide_index - a.slide_index
   );
   const duplicatePrefix = buildExecutionPrefix();
+  let breakerState: WriteCircuitBreakerState = {
+    category: null,
+    streak: 0,
+  };
 
-  const plans: SlideDuplicatePlan[] = [];
-  for (const extracted of sortedSlides) {
+  for (let index = 0; index < sortedSlides.length; index += 1) {
+    const extracted = sortedSlides[index]!;
     const sourceSlide = allSlides[extracted.slide_index];
     if (!sourceSlide?.objectId) {
-      throw new Error(`Source slide ${extracted.slide_index} is missing an object ID`);
+      console.error(
+        `[slides-writer] append slide ${extracted.slide_index + 1} cannot start because source object id is missing`
+      );
+      writeResult = appendFailedSlideResult(
+        writeResult,
+        extracted.slide_index,
+        "HOST_ADAPTER_ERROR"
+      );
+      if (onProgress) {
+        await onProgress(writeResult);
+      }
+      continue;
     }
 
-    plans.push({
+    const plan: SlideDuplicatePlan = {
       sourceSlide,
       extractedSlide: extracted,
       newSlideId: buildDuplicateId(duplicatePrefix, extracted.slide_index, "slide"),
@@ -117,11 +163,8 @@ export async function writeBackAppend(
         extracted.slide_index,
         duplicatePrefix
       ),
-    });
-  }
+    };
 
-  let committedUnits = 0;
-  for (const plan of plans) {
     let duplicated = false;
     try {
       await slides.presentations.batchUpdate({
@@ -159,72 +202,426 @@ export async function writeBackAppend(
         });
       }
 
-      warnings.push(...replacePlan.warnings);
-
-      committedUnits += 1;
-      if (onCommitted) {
-        await onCommitted({ outputUrl, committedUnits, warnings });
+      writeResult = appendCommittedSlideResult(
+        writeResult,
+        extracted.slide_index,
+        replacePlan.warnings
+      );
+      if (onProgress) {
+        await onProgress(writeResult);
       }
     } catch (err) {
+      const classifiedError = classifyWriteError(err);
+      logWriteFailure("append_in_file", extracted.slide_index, classifiedError, {
+        presentationId,
+        cleanup_attempted: duplicated,
+      });
       if (duplicated) {
-        await cleanupDuplicatedSlides(slides, presentationId, [plan.newSlideId]);
+        await cleanupDuplicatedSlides(
+          slides,
+          presentationId,
+          [plan.newSlideId],
+          extracted.slide_index
+        );
       }
-      throw err;
+      writeResult = appendFailedSlideResult(
+        writeResult,
+        extracted.slide_index,
+        classifiedError.errorCode
+      );
+      const remainingSlideIndexes = sortedSlides
+        .slice(index + 1)
+        .map((slide) => slide.slide_index);
+      const breakerEvaluation = evaluateWriteCircuitBreaker(
+        breakerState,
+        classifiedError,
+        remainingSlideIndexes.length
+      );
+      breakerState = breakerEvaluation.nextState;
+      if (breakerEvaluation.shouldBreak) {
+        console.error(
+          `[slides-writer] append circuit breaker tripped after repeated ${classifiedError.systemicCategory} failures`,
+          JSON.stringify({
+            presentation_id: presentationId,
+            remaining_slide_indexes: remainingSlideIndexes,
+            error_code: classifiedError.errorCode,
+            streak: breakerEvaluation.nextState.streak,
+          })
+        );
+        writeResult = appendFailedSlidesResult(
+          writeResult,
+          remainingSlideIndexes,
+          classifiedError.errorCode
+        );
+      }
+      if (onProgress) {
+        await onProgress(writeResult);
+      }
+      if (breakerEvaluation.shouldBreak) {
+        break;
+      }
+      continue;
     }
   }
 
-  return { outputUrl, committedUnits, warnings };
+  return writeResult;
 }
 
 export async function writeBackNewFile(
   targetPresentationId: string,
   extractedSlides: SlideExtractionResult[],
   translatedNodes: readonly TranslatedNode[],
-  onCommitted?: (result: WriteBackResult) => Promise<void>
+  onProgress?: (result: WriteBackResult) => Promise<void>
 ): Promise<WriteBackResult> {
   const { slides } = getSlidesClient();
   const translationMap = buildTranslationMap(translatedNodes);
   const outputUrl = `https://docs.google.com/presentation/d/${targetPresentationId}/edit`;
-  const warnings: JobWarning[] = [];
+  let writeResult = createEmptyWriteBackResult(outputUrl);
   if (extractedSlides.length === 0) {
-    return { outputUrl, committedUnits: 0, warnings };
+    return writeResult;
   }
 
   const newPres = await slides.presentations.get({
     presentationId: targetPresentationId,
   });
   const newSlides = newPres.data.slides ?? [];
+  let breakerState: WriteCircuitBreakerState = {
+    category: null,
+    streak: 0,
+  };
 
-  let committedUnits = 0;
-  for (const extracted of extractedSlides) {
+  for (let index = 0; index < extractedSlides.length; index += 1) {
+    const extracted = extractedSlides[index]!;
     const slide = newSlides[extracted.slide_index];
     if (!slide) {
-      throw new Error(`Copied slide ${extracted.slide_index} is missing`);
+      console.error(
+        `[slides-writer] new-file slide ${extracted.slide_index + 1} cannot start because copied slide is missing`
+      );
+      writeResult = appendFailedSlideResult(
+        writeResult,
+        extracted.slide_index,
+        "HOST_ADAPTER_ERROR"
+      );
+      if (onProgress) {
+        await onProgress(writeResult);
+      }
+      continue;
     }
 
-    const replacePlan = buildReplacePlan(
-      slide,
-      extracted.nodes,
-      translationMap,
-      (sourceObjectId) => sourceObjectId
-    );
+    try {
+      const replacePlan = buildReplacePlan(
+        slide,
+        extracted.nodes,
+        translationMap,
+        (sourceObjectId) => sourceObjectId
+      );
 
-    if (replacePlan.requests.length > 0) {
-      await slides.presentations.batchUpdate({
-        presentationId: targetPresentationId,
-        requestBody: { requests: replacePlan.requests },
+      if (replacePlan.requests.length > 0) {
+        await slides.presentations.batchUpdate({
+          presentationId: targetPresentationId,
+          requestBody: { requests: replacePlan.requests },
+        });
+      }
+
+      writeResult = appendCommittedSlideResult(
+        writeResult,
+        extracted.slide_index,
+        replacePlan.warnings
+      );
+      if (onProgress) {
+        await onProgress(writeResult);
+      }
+    } catch (err) {
+      const classifiedError = classifyWriteError(err);
+      logWriteFailure("create_new_file", extracted.slide_index, classifiedError, {
+        target_presentation_id: targetPresentationId,
       });
-    }
-
-    warnings.push(...replacePlan.warnings);
-
-    committedUnits += 1;
-    if (onCommitted) {
-      await onCommitted({ outputUrl, committedUnits, warnings });
+      writeResult = appendFailedSlideResult(
+        writeResult,
+        extracted.slide_index,
+        classifiedError.errorCode
+      );
+      const remainingSlideIndexes = extractedSlides
+        .slice(index + 1)
+        .map((slideItem) => slideItem.slide_index);
+      const breakerEvaluation = evaluateWriteCircuitBreaker(
+        breakerState,
+        classifiedError,
+        remainingSlideIndexes.length
+      );
+      breakerState = breakerEvaluation.nextState;
+      if (breakerEvaluation.shouldBreak) {
+        console.error(
+          `[slides-writer] new-file circuit breaker tripped after repeated ${classifiedError.systemicCategory} failures`,
+          JSON.stringify({
+            target_presentation_id: targetPresentationId,
+            remaining_slide_indexes: remainingSlideIndexes,
+            error_code: classifiedError.errorCode,
+            streak: breakerEvaluation.nextState.streak,
+          })
+        );
+        writeResult = appendFailedSlidesResult(
+          writeResult,
+          remainingSlideIndexes,
+          classifiedError.errorCode
+        );
+      }
+      if (onProgress) {
+        await onProgress(writeResult);
+      }
+      if (breakerEvaluation.shouldBreak) {
+        break;
+      }
+      continue;
     }
   }
 
-  return { outputUrl, committedUnits, warnings };
+  return writeResult;
+}
+
+function createEmptyWriteBackResult(outputUrl: string): WriteBackResult {
+  return {
+    outputUrl,
+    committedUnits: 0,
+    committed_slide_indexes: [],
+    failed_slide_indexes: [],
+    slide_results: [],
+    warnings: [],
+  };
+}
+
+function appendCommittedSlideResult(
+  current: WriteBackResult,
+  slideIndex: number,
+  warningsForSlide: readonly JobWarning[]
+): WriteBackResult {
+  return {
+    ...current,
+    committedUnits: current.committedUnits + 1,
+    committed_slide_indexes: [...current.committed_slide_indexes, slideIndex],
+    slide_results: [
+      ...current.slide_results,
+      {
+        slide_index: slideIndex,
+        status: "committed",
+        warning_codes: collectWarningCodes(warningsForSlide),
+      },
+    ],
+    warnings: [...current.warnings, ...warningsForSlide],
+  };
+}
+
+function appendFailedSlideResult(
+  current: WriteBackResult,
+  slideIndex: number,
+  errorCode: string
+): WriteBackResult {
+  return {
+    ...current,
+    failed_slide_indexes: current.failed_slide_indexes.includes(slideIndex)
+      ? current.failed_slide_indexes
+      : [...current.failed_slide_indexes, slideIndex],
+    slide_results: [
+      ...current.slide_results,
+      {
+        slide_index: slideIndex,
+        status: "skipped_write_failed",
+        warning_codes: [],
+        error_code: errorCode,
+      },
+    ],
+  };
+}
+
+function appendFailedSlidesResult(
+  current: WriteBackResult,
+  slideIndexes: readonly number[],
+  errorCode: string
+): WriteBackResult {
+  let nextResult = current;
+  for (const slideIndex of slideIndexes) {
+    nextResult = appendFailedSlideResult(nextResult, slideIndex, errorCode);
+  }
+  return nextResult;
+}
+
+function collectWarningCodes(
+  warnings: readonly JobWarning[]
+): string[] {
+  return [...new Set(warnings.map((warning) => warning.risk_reason))];
+}
+
+function classifyWriteError(error: unknown): ClassifiedWriteError {
+  const metadata = buildWriteErrorMetadata(error);
+  const httpStatus =
+    typeof metadata.http_status === "number" ? metadata.http_status : undefined;
+  const googleReasons = Array.isArray(metadata.google_reasons)
+    ? metadata.google_reasons.filter((reason): reason is string => typeof reason === "string")
+    : [];
+  const errorMessage =
+    typeof metadata.error_message === "string" ? metadata.error_message : "";
+  const transportCode =
+    typeof metadata.transport_code === "string" ? metadata.transport_code : undefined;
+
+  if (LOCAL_WRITER_VALIDATION_PATTERN.test(errorMessage)) {
+    return {
+      errorCode: "JOB_INTERNAL_ERROR",
+      systemicCategory: null,
+      metadata,
+    };
+  }
+
+  if (httpStatus === 401) {
+    return {
+      errorCode: "UNAUTHORIZED",
+      systemicCategory: "auth",
+      metadata,
+    };
+  }
+
+  if (httpStatus === 403) {
+    if (googleReasons.some((reason) => /quotaExceeded|dailyLimitExceeded/i.test(reason))) {
+      return {
+        errorCode: "QUOTA_EXCEEDED",
+        systemicCategory: "quota",
+        metadata,
+      };
+    }
+
+    if (
+      googleReasons.some((reason) =>
+        /rateLimitExceeded|userRateLimitExceeded|tooManyRequests/i.test(reason)
+      )
+    ) {
+      return {
+        errorCode: "GOOGLE_API_RATE_LIMIT",
+        systemicCategory: "rate_limit",
+        metadata,
+      };
+    }
+
+    return {
+      errorCode: "ACCESS_DENIED",
+      systemicCategory: "access",
+      metadata,
+    };
+  }
+
+  if (httpStatus === 429) {
+    return {
+      errorCode: "GOOGLE_API_RATE_LIMIT",
+      systemicCategory: "rate_limit",
+      metadata,
+    };
+  }
+
+  if (httpStatus !== undefined && httpStatus >= 500) {
+    return {
+      errorCode: "HOST_ADAPTER_ERROR",
+      systemicCategory: "host_api_unavailable",
+      metadata,
+    };
+  }
+
+  if (
+    transportCode &&
+    /ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|ECONNREFUSED|EPIPE/i.test(transportCode)
+  ) {
+    return {
+      errorCode: "HOST_ADAPTER_ERROR",
+      systemicCategory: "host_api_unavailable",
+      metadata,
+    };
+  }
+
+  return {
+    errorCode: "HOST_ADAPTER_ERROR",
+    systemicCategory: null,
+    metadata,
+  };
+}
+
+function buildWriteErrorMetadata(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) {
+    return {
+      error_name: typeof error,
+      error_message: String(error),
+    };
+  }
+
+  const errorWithResponse = error as Error & {
+    code?: string;
+    response?: {
+      status?: number;
+      data?: {
+        error?: {
+          code?: number;
+          status?: string;
+          message?: string;
+          errors?: Array<{ reason?: string }>;
+        };
+      };
+    };
+  };
+
+  return {
+    error_name: error.name,
+    error_message: error.message,
+    transport_code: errorWithResponse.code,
+    http_status: errorWithResponse.response?.status,
+    google_error_status: errorWithResponse.response?.data?.error?.status,
+    google_reasons:
+      errorWithResponse.response?.data?.error?.errors
+        ?.map((entry) => entry.reason)
+        .filter((reason): reason is string => Boolean(reason)) ?? [],
+  };
+}
+
+function logWriteFailure(
+  outputMode: "append_in_file" | "create_new_file",
+  slideIndex: number,
+  classifiedError: ClassifiedWriteError,
+  extraMetadata: Record<string, unknown>
+): void {
+  console.error(
+    `[slides-writer] ${outputMode} failed on slide ${slideIndex + 1}`,
+    JSON.stringify({
+      slide_index: slideIndex,
+      error_code: classifiedError.errorCode,
+      systemic_category: classifiedError.systemicCategory,
+      ...extraMetadata,
+      ...classifiedError.metadata,
+    })
+  );
+}
+
+function evaluateWriteCircuitBreaker(
+  current: WriteCircuitBreakerState,
+  classifiedError: ClassifiedWriteError,
+  remainingSlideCount: number
+): {
+  readonly nextState: WriteCircuitBreakerState;
+  readonly shouldBreak: boolean;
+} {
+  if (!classifiedError.systemicCategory) {
+    return {
+      nextState: { category: null, streak: 0 },
+      shouldBreak: false,
+    };
+  }
+
+  const streak =
+    current.category === classifiedError.systemicCategory ? current.streak + 1 : 1;
+  const nextState: WriteCircuitBreakerState = {
+    category: classifiedError.systemicCategory,
+    streak,
+  };
+
+  return {
+    nextState,
+    shouldBreak:
+      remainingSlideCount > 0 && streak >= WRITE_CIRCUIT_BREAKER_THRESHOLD,
+  };
 }
 
 function buildTranslationMap(
@@ -809,18 +1206,34 @@ function findSpeakerNotesBody(
 async function cleanupDuplicatedSlides(
   slides: ReturnType<typeof getSlidesClient>["slides"],
   presentationId: string,
-  slideObjectIds: readonly string[]
+  slideObjectIds: readonly string[],
+  slideIndex: number
 ): Promise<void> {
   if (slideObjectIds.length === 0) {
     return;
   }
 
-  await slides.presentations.batchUpdate({
-    presentationId,
-    requestBody: {
-      requests: slideObjectIds.map((objectId) => ({
-        deleteObject: { objectId },
-      })),
-    },
-  }).catch(() => undefined);
+  try {
+    await slides.presentations.batchUpdate({
+      presentationId,
+      requestBody: {
+        requests: slideObjectIds.map((objectId) => ({
+          deleteObject: { objectId },
+        })),
+      },
+    });
+  } catch (error) {
+    const classifiedError = classifyWriteError(error);
+    console.error(
+      `[slides-writer] failed to clean up duplicated slide ${slideIndex + 1}`,
+      JSON.stringify({
+        presentation_id: presentationId,
+        slide_index: slideIndex,
+        duplicated_object_ids: slideObjectIds,
+        error_code: classifiedError.errorCode,
+        systemic_category: classifiedError.systemicCategory,
+        ...classifiedError.metadata,
+      })
+    );
+  }
 }

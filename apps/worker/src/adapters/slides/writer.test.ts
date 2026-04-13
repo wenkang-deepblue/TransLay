@@ -6,7 +6,13 @@ import type { SlideTextNode } from "./types";
 import {
   __buildNodeWarningsForTests,
   __buildNodeWriteRequestsForTests,
+  writeBackAppend,
+  writeBackNewFile,
 } from "./writer";
+import {
+  __resetSlidesClientForTests,
+  __setSlidesClientForTests,
+} from "./auth";
 
 function createNode(
   overrides: Partial<SlideTextNode> &
@@ -42,6 +48,106 @@ function createNode(
     layout_hint_source: overrides.layout_hint_source,
     row_index: overrides.row_index,
     col_index: overrides.col_index,
+  };
+}
+
+function createSingleParagraphNode(
+  overrides: Partial<SlideTextNode> &
+    Pick<
+      SlideTextNode,
+      | "node_id"
+      | "text"
+      | "full_text"
+      | "slide_index"
+      | "element_type"
+      | "archetype"
+      | "object_id"
+    >
+): SlideTextNode {
+  return createNode({
+    ...overrides,
+    paragraphs: overrides.paragraphs ?? [
+      {
+        paragraph_id: `${overrides.node_id}_p0`,
+        text: overrides.full_text,
+        start_index: 0,
+        end_index: overrides.full_text.length,
+        paragraph_style: {},
+        runs: [
+          {
+            run_id: `${overrides.node_id}_r0`,
+            text: overrides.full_text,
+            start_index: 0,
+            end_index: overrides.full_text.length,
+            style_role: "default",
+            text_style: {},
+          },
+        ],
+      },
+    ],
+  });
+}
+
+function createValidTranslatedNode(node: SlideTextNode, translatedText: string): TranslatedNode {
+  const paragraph = node.paragraphs[0];
+  const run = paragraph?.runs[0];
+  assert.ok(paragraph);
+  assert.ok(run);
+
+  return {
+    node_id: node.node_id,
+    translated_full_text: translatedText,
+    paragraphs: [
+      {
+        paragraph_id: paragraph.paragraph_id,
+        translated_text: translatedText,
+        bullet_behavior: "none",
+      },
+    ],
+    segments: [
+      {
+        segment_id: run.run_id,
+        translated_text: translatedText,
+        style_role: "default",
+      },
+    ],
+  };
+}
+
+function createInvalidTranslatedNode(node: SlideTextNode, translatedText: string): TranslatedNode {
+  const paragraph = node.paragraphs[0];
+  assert.ok(paragraph);
+
+  return {
+    node_id: node.node_id,
+    translated_full_text: translatedText,
+    paragraphs: [
+      {
+        paragraph_id: paragraph.paragraph_id,
+        translated_text: translatedText,
+        bullet_behavior: "none",
+      },
+    ],
+    segments: [],
+  };
+}
+
+function createShapeSlide(
+  slideObjectId: string,
+  shapeObjectId: string
+): slides_v1.Schema$Page {
+  return {
+    objectId: slideObjectId,
+    pageElements: [
+      {
+        objectId: shapeObjectId,
+        shape: {
+          text: {
+            textElements: [{ textRun: { content: "placeholder" } }],
+          },
+        },
+      },
+    ],
   };
 }
 
@@ -1190,4 +1296,253 @@ test("writer emits single-line degradation warning when a preferred single-line 
     warnings.some((warning) => warning.risk_reason === "single_line_policy_degraded"),
     true
   );
+});
+
+test("writeBackAppend cleans up failed duplicated slide and continues later slides", async () => {
+  const failingNode = createSingleParagraphNode({
+    node_id: "shape_fail",
+    text: "Broken",
+    full_text: "Broken",
+    slide_index: 1,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_fail",
+  });
+  const successfulNode = createSingleParagraphNode({
+    node_id: "shape_ok",
+    text: "Healthy",
+    full_text: "Healthy",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_ok",
+  });
+
+  const batchUpdateCalls: Array<slides_v1.Params$Resource$Presentations$Batchupdate> = [];
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async () => ({
+          data: {
+            slides: [
+              createShapeSlide("slide_0", "shape_ok"),
+              createShapeSlide("slide_1", "shape_fail"),
+            ],
+          },
+        }),
+        batchUpdate: async (
+          params: slides_v1.Params$Resource$Presentations$Batchupdate
+        ) => {
+          batchUpdateCalls.push(params);
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackAppend(
+      "presentation_123",
+      [
+        { slide_index: 0, slide_object_id: "slide_0", nodes: [successfulNode] },
+        { slide_index: 1, slide_object_id: "slide_1", nodes: [failingNode] },
+      ],
+      [
+        createInvalidTranslatedNode(failingNode, "Rotto"),
+        createValidTranslatedNode(successfulNode, "Saludable"),
+      ]
+    );
+
+    assert.equal(result.committedUnits, 1);
+    assert.deepEqual(result.committed_slide_indexes, [0]);
+    assert.deepEqual(result.failed_slide_indexes, [1]);
+    assert.deepEqual(
+      result.slide_results.map((item) => [item.slide_index, item.status]),
+      [
+        [1, "skipped_write_failed"],
+        [0, "committed"],
+      ]
+    );
+    assert.ok(
+      batchUpdateCalls.some((call) =>
+        (call.requestBody?.requests ?? []).some((request) => request.deleteObject)
+      )
+    );
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
+test("writeBackNewFile keeps committed slides when one slide write fails", async () => {
+  const firstNode = createSingleParagraphNode({
+    node_id: "shape_first",
+    text: "First",
+    full_text: "First",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_first",
+  });
+  const secondNode = createSingleParagraphNode({
+    node_id: "shape_second",
+    text: "Second",
+    full_text: "Second",
+    slide_index: 1,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_second",
+  });
+
+  let replaceAttempt = 0;
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async () => ({
+          data: {
+            slides: [
+              createShapeSlide("slide_copy_0", "shape_first"),
+              createShapeSlide("slide_copy_1", "shape_second"),
+            ],
+          },
+        }),
+        batchUpdate: async () => {
+          replaceAttempt += 1;
+          if (replaceAttempt === 1) {
+            throw new Error("batchUpdate failed");
+          }
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackNewFile(
+      "new_presentation_123",
+      [
+        { slide_index: 0, slide_object_id: "slide_copy_0", nodes: [firstNode] },
+        { slide_index: 1, slide_object_id: "slide_copy_1", nodes: [secondNode] },
+      ],
+      [
+        createValidTranslatedNode(firstNode, "Prima"),
+        createValidTranslatedNode(secondNode, "Seconda"),
+      ]
+    );
+
+    assert.equal(result.committedUnits, 1);
+    assert.deepEqual(result.committed_slide_indexes, [1]);
+    assert.deepEqual(result.failed_slide_indexes, [0]);
+    assert.deepEqual(
+      result.slide_results.map((item) => [item.slide_index, item.status]),
+      [
+        [0, "skipped_write_failed"],
+        [1, "committed"],
+      ]
+    );
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
+test("writeBackAppend trips circuit breaker after repeated systemic auth failures", async () => {
+  const firstNode = createSingleParagraphNode({
+    node_id: "shape_auth_1",
+    text: "First",
+    full_text: "First",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_auth_1",
+  });
+  const secondNode = createSingleParagraphNode({
+    node_id: "shape_auth_2",
+    text: "Second",
+    full_text: "Second",
+    slide_index: 1,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_auth_2",
+  });
+  const thirdNode = createSingleParagraphNode({
+    node_id: "shape_auth_3",
+    text: "Third",
+    full_text: "Third",
+    slide_index: 2,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_auth_3",
+  });
+
+  let batchUpdateCalls = 0;
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async () => ({
+          data: {
+            slides: [
+              createShapeSlide("slide_0", "shape_auth_1"),
+              createShapeSlide("slide_1", "shape_auth_2"),
+              createShapeSlide("slide_2", "shape_auth_3"),
+            ],
+          },
+        }),
+        batchUpdate: async () => {
+          batchUpdateCalls += 1;
+          throw Object.assign(new Error("Unauthorized"), {
+            response: {
+              status: 401,
+              data: { error: { status: "UNAUTHENTICATED" } },
+            },
+          });
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackAppend(
+      "presentation_auth",
+      [
+        { slide_index: 0, slide_object_id: "slide_0", nodes: [firstNode] },
+        { slide_index: 1, slide_object_id: "slide_1", nodes: [secondNode] },
+        { slide_index: 2, slide_object_id: "slide_2", nodes: [thirdNode] },
+      ],
+      [
+        createValidTranslatedNode(firstNode, "Uno"),
+        createValidTranslatedNode(secondNode, "Dos"),
+        createValidTranslatedNode(thirdNode, "Tres"),
+      ]
+    );
+
+    assert.equal(batchUpdateCalls, 2);
+    assert.equal(result.committedUnits, 0);
+    assert.deepEqual(result.failed_slide_indexes, [2, 1, 0]);
+    assert.deepEqual(
+      result.slide_results.map((item) => item.error_code),
+      ["UNAUTHORIZED", "UNAUTHORIZED", "UNAUTHORIZED"]
+    );
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
+test("test Slides client injection is blocked in production", () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+
+  try {
+    assert.throws(
+      () =>
+        __setSlidesClientForTests({
+          auth: {} as never,
+          slides: {} as never,
+        }),
+      /disabled in production/
+    );
+  } finally {
+    process.env.NODE_ENV = originalNodeEnv;
+  }
 });
