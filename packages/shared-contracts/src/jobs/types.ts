@@ -42,6 +42,43 @@ export const JOB_WARNING_REASONS = [
 ] as const;
 export type JobWarningReason = (typeof JOB_WARNING_REASONS)[number];
 
+export const SLIDE_EXECUTION_STATUSES = [
+  "pending",
+  "excluded_unsafe",
+  "translated",
+  "committed",
+  "skipped_translation_failed",
+  "skipped_materialization_failed",
+  "skipped_write_failed",
+  "canceled_after_translation",
+] as const;
+export type SlideExecutionStatus = (typeof SLIDE_EXECUTION_STATUSES)[number];
+
+export const SLIDE_FAILURE_STAGES = [
+  "extract",
+  "authority",
+  "materialization",
+  "write",
+] as const;
+export type SlideFailureStage = (typeof SLIDE_FAILURE_STAGES)[number];
+
+/**
+ * Slide-level execution truth tracked in-memory by the worker.
+ * Phase 4B.1 freezes failure attribution to slide boundaries before
+ * provisional billing, refunds, and API exposure are implemented.
+ */
+export interface JobSlideResult {
+  readonly slide_index: number;
+  readonly status: SlideExecutionStatus;
+  readonly failure_stage?: SlideFailureStage;
+  readonly failure_reason_code?: string;
+  readonly warning_codes: readonly string[];
+  readonly provisionally_billed: boolean;
+  readonly final_billable: boolean;
+  readonly refund_required: boolean;
+  readonly output_visible: boolean;
+}
+
 /** Structured warning metadata exposed to clients without persisting document content. */
 export interface JobWarning {
   readonly node_id: string;

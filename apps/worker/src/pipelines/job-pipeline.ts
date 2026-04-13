@@ -2,9 +2,11 @@ import type { Pool } from "pg";
 import type Redis from "ioredis";
 import type { WorkerConfig } from "@translay/shared-config";
 import type {
+  AuthorityTranslationResponse,
   AuthorityTranslationNode,
   JobWarning,
   TaskPayload,
+  TranslationResponse,
   TranslatedNode,
 } from "@translay/shared-contracts";
 import {
@@ -38,6 +40,17 @@ import {
   mergeAuthorityNodes,
   projectNodesToAuthoritySourceNodes,
 } from "./authority";
+import {
+  buildWriteCommitOrder,
+  getNextUncommittedWriteSlideIndex,
+  initializeJobSlideResults,
+  listJobSlideResults,
+  markCommittedSlidesThroughCount,
+  markSlideCanceledAfterTranslation,
+  markSlideExcludedUnsafe,
+  markSlideFailure,
+  markSlideTranslated,
+} from "./slide-results";
 
 const MAX_PROVIDER_ATTEMPTS_PER_BATCH = 3;
 
@@ -74,6 +87,8 @@ export async function runJobPipeline(
   const pipelineWarnings: JobWarning[] = [];
   const billedSlideIndexes = new Set<number>();
   let translatedUnitsBilled = 0;
+  let slideResults = initializeJobSlideResults([]);
+  let writeCommitOrder: number[] = [];
 
   try {
     await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
@@ -127,6 +142,12 @@ export async function runJobPipeline(
     }
 
     const promptInjectionScan = scanSlidesForPromptInjectionRisk(extraction.extracted_slides);
+    slideResults = initializeJobSlideResults(
+      extraction.extracted_slides.map((slide) => slide.slide_index)
+    );
+    for (const slideIndex of promptInjectionScan.hard_block_slide_indices) {
+      markSlideExcludedUnsafe(slideResults, slideIndex);
+    }
     const excludedSlideIndices = new Set(promptInjectionScan.hard_block_slide_indices);
     const safeSlides = extraction.extracted_slides.filter(
       (slide) => !excludedSlideIndices.has(slide.slide_index)
@@ -209,18 +230,29 @@ export async function runJobPipeline(
     });
     await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
 
-    const authorityResult = await runProviderCallWithRetry("authority_batch_1", () =>
-      translateDeckAuthorityWithVertexGemini(config, {
-        model: route.model,
-        source_language: "auto",
-        target_language: targetLangCode,
-        deck_title: extractionWithLayoutHints.title,
-        deck_plaintext_context: deckPlaintextContext,
-        glossary_candidates: glossaryCandidates,
-        nodes: projectNodesToAuthoritySourceNodes(extractionWithLayoutHints.all_nodes),
-        storyboard,
-      })
-    );
+    let authorityResult: AuthorityTranslationResponse;
+    try {
+      authorityResult = await runProviderCallWithRetry("authority_batch_1", () =>
+        translateDeckAuthorityWithVertexGemini(config, {
+          model: route.model,
+          source_language: "auto",
+          target_language: targetLangCode,
+          deck_title: extractionWithLayoutHints.title,
+          deck_plaintext_context: deckPlaintextContext,
+          glossary_candidates: glossaryCandidates,
+          nodes: projectNodesToAuthoritySourceNodes(extractionWithLayoutHints.all_nodes),
+          storyboard,
+        })
+      );
+    } catch (error) {
+      markSlideFailures(
+        slideResults,
+        extractionWithLayoutHints.extracted_slides.map((slide) => slide.slide_index),
+        "authority",
+        toSlideFailureReasonCode(error)
+      );
+      throw error;
+    }
     providerRequestIds.push(authorityResult.provider_request_id);
 
     let authorityNodes = authorityResult.nodes;
@@ -246,28 +278,40 @@ export async function runJobPipeline(
       for (const [slideIndex, missingNodes] of missingNodesBySlide) {
         const slide = slideByIndex.get(slideIndex);
         if (!slide) {
+          markSlideFailure(slideResults, slideIndex, "authority", "JOB_INTERNAL_ERROR");
           throw new PipelineError(
             "JOB_INTERNAL_ERROR",
             `Missing extracted slide context for slide ${slideIndex}`
           );
         }
 
-        const gapFillResult = await runProviderCallWithRetry(
-          `gap_fill_slide_${slideIndex + 1}`,
-          () =>
-            fillMissingAuthorityWithVertexGemini(config, {
-              model: route.model,
-              source_language: "auto",
-              target_language: targetLangCode,
-              deck_title: extractionWithLayoutHints.title,
-              slide_index: slideIndex,
-              slide_plaintext_context: buildSlidePlaintextContext(slide),
-              glossary_candidates: glossaryCandidates,
-              existing_authority_nodes: authorityNodes,
-              missing_nodes: projectNodesToAuthoritySourceNodes(missingNodes),
-              storyboard_frame: frameBySlideIndex.get(slideIndex),
-            })
-        );
+        let gapFillResult: AuthorityTranslationResponse;
+        try {
+          gapFillResult = await runProviderCallWithRetry(
+            `gap_fill_slide_${slideIndex + 1}`,
+            () =>
+              fillMissingAuthorityWithVertexGemini(config, {
+                model: route.model,
+                source_language: "auto",
+                target_language: targetLangCode,
+                deck_title: extractionWithLayoutHints.title,
+                slide_index: slideIndex,
+                slide_plaintext_context: buildSlidePlaintextContext(slide),
+                glossary_candidates: glossaryCandidates,
+                existing_authority_nodes: authorityNodes,
+                missing_nodes: projectNodesToAuthoritySourceNodes(missingNodes),
+                storyboard_frame: frameBySlideIndex.get(slideIndex),
+              })
+          );
+        } catch (error) {
+          markSlideFailure(
+            slideResults,
+            slideIndex,
+            "authority",
+            toSlideFailureReasonCode(error)
+          );
+          throw error;
+        }
         providerRequestIds.push(gapFillResult.provider_request_id);
         gapFilledNodes.push(...gapFillResult.nodes);
         await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
@@ -278,6 +322,12 @@ export async function runJobPipeline(
     }
 
     if (authorityAudit.missing_nodes.length > 0) {
+      markSlideFailures(
+        slideResults,
+        uniqueSlideIndices(authorityAudit.missing_nodes),
+        "authority",
+        "LLM_PROVIDER_ERROR"
+      );
       throw new PipelineError(
         "LLM_PROVIDER_ERROR",
         `Authority translation missed ${authorityAudit.missing_nodes.length} node(s)`
@@ -296,6 +346,9 @@ export async function runJobPipeline(
       authorityAudit.authority_nodes.map((node) => [node.node_id, node])
     );
     const materializationQueue = [...materializationGroups];
+    const pendingNodeIdsBySlide = buildPendingNodeIdsBySlide(
+      extractionWithLayoutHints.all_nodes
+    );
 
     for (let groupIndex = 0; groupIndex < materializationQueue.length; groupIndex += 1) {
       const group = materializationQueue[groupIndex];
@@ -314,7 +367,7 @@ export async function runJobPipeline(
         return authorityNode;
       });
 
-      let groupResult;
+      let groupResult: TranslationResponse;
       try {
         groupResult = await runProviderCallWithRetry(
           `materialization_batch_${groupIndex + 1}`,
@@ -343,16 +396,41 @@ export async function runJobPipeline(
           groupIndex -= 1;
           continue;
         }
+        markSlideFailures(
+          slideResults,
+          uniqueSlideIndices(group.node_summaries),
+          "materialization",
+          toSlideFailureReasonCode(error)
+        );
         throw error;
       }
-      validateTranslatedGroup(group.node_summaries, groupResult.nodes);
+
+      try {
+        validateTranslatedGroup(group.node_summaries, groupResult.nodes);
+      } catch (error) {
+        markSlideFailures(
+          slideResults,
+          uniqueSlideIndices(group.node_summaries),
+          "materialization",
+          toSlideFailureReasonCode(error)
+        );
+        throw error;
+      }
       translatedNodes.push(...groupResult.nodes);
       providerRequestIds.push(groupResult.provider_request_id);
+
+      const newlyTranslatedSlideIndexes = registerTranslatedNodesBySlide(
+        pendingNodeIdsBySlide,
+        group.node_summaries
+      );
+      for (const slideIndex of newlyTranslatedSlideIndexes) {
+        markSlideTranslated(slideResults, slideIndex);
+      }
 
       const billedBefore = translatedUnitsBilled;
       translatedUnitsBilled = registerBilledSlides(
         billedSlideIndexes,
-        group.node_summaries.map((nodeSummary) => nodeSummary.slide_index)
+        newlyTranslatedSlideIndexes
       );
       if (translatedUnitsBilled !== billedBefore) {
         await updateJobStatus(pool, job_id, "translating", {
@@ -375,10 +453,21 @@ export async function runJobPipeline(
       await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
     }
 
-    const orderedTranslatedNodes = orderTranslatedNodes(
-      extractionWithLayoutHints.all_nodes,
-      translatedNodes
-    );
+    let orderedTranslatedNodes: TranslatedNode[];
+    try {
+      orderedTranslatedNodes = orderTranslatedNodes(
+        extractionWithLayoutHints.all_nodes,
+        translatedNodes
+      );
+    } catch (error) {
+      markSlideFailures(
+        slideResults,
+        findSlidesMissingTranslatedNodes(extractionWithLayoutHints.all_nodes, translatedNodes),
+        "materialization",
+        toSlideFailureReasonCode(error)
+      );
+      throw error;
+    }
 
     const translationResult = {
       provider_request_id: JSON.stringify(providerRequestIds),
@@ -414,9 +503,18 @@ export async function runJobPipeline(
       details: `Writing translated content back to ${job.output_mode === "create_new_file" ? "new file" : "presentation"}`,
     });
     await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
+    writeCommitOrder = buildWriteCommitOrder(
+      job.output_mode,
+      extractionWithLayoutHints.extracted_slides
+    );
 
     const onCommitted = async (result: WriteBackResult) => {
       writeResult = result;
+      markCommittedSlidesThroughCount(
+        slideResults,
+        writeCommitOrder,
+        result.committedUnits
+      );
       await updateJobStatus(pool, job_id, "writing", {
         totalUnitsBilled: translatedUnitsBilled,
         outputDocumentUrl: result.outputUrl,
@@ -424,31 +522,54 @@ export async function runJobPipeline(
       await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
     };
 
-    if (job.output_mode === "create_new_file") {
-      if (!job.target_doc_id) {
-        throw new PipelineError(
-          "HOST_ADAPTER_ERROR",
-          "Target presentation ID is required for create_new_file"
+    try {
+      if (job.output_mode === "create_new_file") {
+        if (!job.target_doc_id) {
+          throw new PipelineError(
+            "HOST_ADAPTER_ERROR",
+            "Target presentation ID is required for create_new_file"
+          );
+        }
+
+        writeResult = await writeBackNewFile(
+          job.target_doc_id,
+          extractionWithLayoutHints.extracted_slides,
+          translationResult.nodes,
+          onCommitted
+        );
+      } else {
+        writeResult = await writeBackAppend(
+          job.source_doc_id,
+          extractionWithLayoutHints.extracted_slides,
+          translationResult.nodes,
+          onCommitted
         );
       }
-
-      writeResult = await writeBackNewFile(
-        job.target_doc_id,
-        extractionWithLayoutHints.extracted_slides,
-        translationResult.nodes,
-        onCommitted
+    } catch (error) {
+      const failedWriteSlideIndex = getNextUncommittedWriteSlideIndex(
+        slideResults,
+        writeCommitOrder
       );
-    } else {
-      writeResult = await writeBackAppend(
-        job.source_doc_id,
-        extractionWithLayoutHints.extracted_slides,
-        translationResult.nodes,
-        onCommitted
-      );
+      if (failedWriteSlideIndex !== null) {
+        markSlideFailure(
+          slideResults,
+          failedWriteSlideIndex,
+          "write",
+          toSlideFailureReasonCode(error)
+        );
+      }
+      throw error;
     }
     console.log(`Job ${job_id} write-back completed`);
 
     if (writeResult.committedUnits !== totalSlides) {
+      const failedWriteSlideIndex = getNextUncommittedWriteSlideIndex(
+        slideResults,
+        writeCommitOrder
+      );
+      if (failedWriteSlideIndex !== null) {
+        markSlideFailure(slideResults, failedWriteSlideIndex, "write", "JOB_INTERNAL_ERROR");
+      }
       throw new PipelineError(
         "JOB_INTERNAL_ERROR",
         `Committed ${writeResult.committedUnits} slides, expected ${totalSlides}`
@@ -465,9 +586,19 @@ export async function runJobPipeline(
       pipelineWarnings,
       translatedUnitsBilled
     );
+    console.log(`Job ${job_id} slide results:`, JSON.stringify(listJobSlideResults(slideResults)));
     console.log(`Job ${job_id} completed successfully: ${writeResult.outputUrl}`);
   } catch (err) {
     if (err instanceof CancellationRequestedError) {
+      for (const slideResult of listJobSlideResults(slideResults)) {
+        if (slideResult.status === "translated" && !slideResult.output_visible) {
+          markSlideCanceledAfterTranslation(slideResults, slideResult.slide_index);
+        }
+      }
+      console.log(
+        `Job ${job_id} slide results on cancel:`,
+        JSON.stringify(listJobSlideResults(slideResults))
+      );
       console.log(
         `Job ${job_id} canceled after ${err.writeResult.committedUnits} committed slides`
       );
@@ -483,6 +614,7 @@ export async function runJobPipeline(
       `Job ${job_id} internal failure metadata:`,
       JSON.stringify({
         pipeline_error_code: errorCode,
+        slide_results: listJobSlideResults(slideResults),
         ...getErrorMetadata(error),
       })
     );
@@ -739,6 +871,17 @@ async function finalizeFailedJob(
   ]);
 }
 
+function markSlideFailures(
+  slideResults: ReturnType<typeof initializeJobSlideResults>,
+  slideIndices: readonly number[],
+  failureStage: "authority" | "materialization" | "write" | "extract",
+  failureReasonCode: string
+): void {
+  for (const slideIndex of slideIndices) {
+    markSlideFailure(slideResults, slideIndex, failureStage, failureReasonCode);
+  }
+}
+
 function buildCanceledDetail(billedUnits: number): string {
   if (billedUnits > 0) {
     return `Canceled after ${billedUnits} slide(s) were successfully translated. Those slides were counted toward quota even though the job did not finish.`;
@@ -794,6 +937,71 @@ function registerBilledSlides(
     billedSlideIndexes.add(slideIndex);
   }
   return billedSlideIndexes.size;
+}
+
+function toSlideFailureReasonCode(error: unknown): string {
+  return error instanceof PipelineError ? error.code : "JOB_INTERNAL_ERROR";
+}
+
+function uniqueSlideIndices(
+  items: readonly { readonly slide_index: number }[]
+): number[] {
+  return [...new Set(items.map((item) => item.slide_index))].sort((left, right) => left - right);
+}
+
+function buildPendingNodeIdsBySlide(
+  nodes: readonly { readonly slide_index: number; readonly node_id: string }[]
+): Map<number, Set<string>> {
+  const pendingNodeIdsBySlide = new Map<number, Set<string>>();
+
+  for (const node of nodes) {
+    const current = pendingNodeIdsBySlide.get(node.slide_index);
+    if (current) {
+      current.add(node.node_id);
+      continue;
+    }
+
+    pendingNodeIdsBySlide.set(node.slide_index, new Set([node.node_id]));
+  }
+
+  return pendingNodeIdsBySlide;
+}
+
+function registerTranslatedNodesBySlide(
+  pendingNodeIdsBySlide: Map<number, Set<string>>,
+  nodes: readonly { readonly slide_index: number; readonly node_id: string }[]
+): number[] {
+  const newlyTranslatedSlideIndexes = new Set<number>();
+
+  for (const node of nodes) {
+    const pendingNodeIds = pendingNodeIdsBySlide.get(node.slide_index);
+    if (!pendingNodeIds) {
+      continue;
+    }
+
+    pendingNodeIds.delete(node.node_id);
+    if (pendingNodeIds.size === 0) {
+      newlyTranslatedSlideIndexes.add(node.slide_index);
+    }
+  }
+
+  return [...newlyTranslatedSlideIndexes].sort((left, right) => left - right);
+}
+
+function findSlidesMissingTranslatedNodes(
+  sourceNodes: readonly { readonly node_id: string; readonly slide_index: number }[],
+  translatedNodes: readonly TranslatedNode[]
+): number[] {
+  const translatedNodeIds = new Set(translatedNodes.map((node) => node.node_id));
+  const missingSlideIndices = new Set<number>();
+
+  for (const sourceNode of sourceNodes) {
+    if (!translatedNodeIds.has(sourceNode.node_id)) {
+      missingSlideIndices.add(sourceNode.slide_index);
+    }
+  }
+
+  return [...missingSlideIndices].sort((left, right) => left - right);
 }
 
 function delay(ms: number): Promise<void> {
