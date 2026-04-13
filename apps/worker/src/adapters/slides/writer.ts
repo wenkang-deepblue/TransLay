@@ -749,6 +749,14 @@ function getFallbackFontSizeForRun(
     }
   }
 
+  if (
+    maxFontSize === undefined &&
+    typeof sourceNode.visible_style?.max_font_size_pt === "number" &&
+    sourceNode.visible_style.max_font_size_pt > 0
+  ) {
+    return sourceNode.visible_style.max_font_size_pt;
+  }
+
   return maxFontSize;
 }
 

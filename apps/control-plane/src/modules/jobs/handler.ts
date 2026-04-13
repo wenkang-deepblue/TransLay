@@ -79,13 +79,43 @@ function buildCanceledMessage(job: {
   return "Translation canceled before any slide translation succeeded. No quota was charged.";
 }
 
-function buildCompletedMessage(reviewContainerCount: number): string {
+function formatExcludedSlidesMessage(excludedSlides: readonly number[]): string {
+  const slideNoun = excludedSlides.length === 1 ? "Slide" : "Slides";
+  const skipVerb = excludedSlides.length === 1 ? "was" : "were";
+  const contentPronoun = excludedSlides.length === 1 ? "its" : "their";
+  return `${slideNoun} ${excludedSlides.join(", ")} ${skipVerb} skipped because ${contentPronoun} content looked unsafe for model input.`;
+}
+
+function buildCompletedMessage(warnings: readonly JobWarning[]): string {
+  const excludedSlides = listExcludedSlides(warnings);
+  const reviewContainerCount = countUniqueWarningNodes(
+    warnings.filter((warning) => warning.risk_reason !== "unsafe_slide_excluded")
+  );
+
+  if (excludedSlides.length > 0 && reviewContainerCount > 0) {
+    const noun = reviewContainerCount === 1 ? "container" : "containers";
+    return `Translation completed with ${reviewContainerCount} ${noun} requiring review. ${formatExcludedSlidesMessage(excludedSlides)}`;
+  }
+
+  if (excludedSlides.length > 0) {
+    return `Translation completed with warnings. ${formatExcludedSlidesMessage(excludedSlides)}`;
+  }
+
   if (reviewContainerCount > 0) {
     const noun = reviewContainerCount === 1 ? "container" : "containers";
     return `Translation completed with ${reviewContainerCount} ${noun} requiring review. Review the highlighted Slides containers for layout fidelity.`;
   }
 
   return "Translation completed successfully.";
+}
+
+function buildFailedMessage(baseMessage: string, warnings: readonly JobWarning[]): string {
+  const excludedSlides = listExcludedSlides(warnings);
+  if (excludedSlides.length === 0) {
+    return baseMessage;
+  }
+
+  return `${baseMessage} ${formatExcludedSlidesMessage(excludedSlides)}`;
 }
 
 function normalizeWarnings(warnings: JobRow["warnings"] | null | undefined): JobRow["warnings"] {
@@ -96,30 +126,39 @@ function countUniqueWarningNodes(warnings: readonly JobWarning[]): number {
   return new Set(warnings.map((warning) => warning.node_id)).size;
 }
 
+function listExcludedSlides(warnings: readonly JobWarning[]): number[] {
+  return [...new Set(
+    warnings
+      .filter((warning) => warning.risk_reason === "unsafe_slide_excluded")
+      .map((warning) => warning.slide_index + 1)
+  )].sort((left, right) => left - right);
+}
+
 function buildJobStatusResponse(
   job: JobRow,
   progress?: Record<string, string>
 ): JobStatusResponse {
   if (job.status === "completed" || job.status === "completed_with_warnings") {
     const normalizedWarnings = normalizeWarnings(job.warnings);
-    const reviewContainerCount = countUniqueWarningNodes(normalizedWarnings);
     const response: JobCompletedResponse = {
       job_id: job.id,
       status: job.status,
       progress_percent: 100,
       output_document_url: job.output_document_url ?? "",
-      message: buildCompletedMessage(reviewContainerCount),
+      message: buildCompletedMessage(normalizedWarnings),
       ...(normalizedWarnings.length > 0 ? { warnings: normalizedWarnings } : {}),
     };
     return response;
   }
 
   if (job.status === "failed") {
+    const normalizedWarnings = normalizeWarnings(job.warnings);
     const response: JobFailedResponse = {
       job_id: job.id,
       status: "failed",
       error: job.error_code ?? "JOB_INTERNAL_ERROR",
-      message: job.error_message ?? "Translation failed.",
+      message: buildFailedMessage(job.error_message ?? "Translation failed.", normalizedWarnings),
+      ...(normalizedWarnings.length > 0 ? { warnings: normalizedWarnings } : {}),
     };
     return response;
   }

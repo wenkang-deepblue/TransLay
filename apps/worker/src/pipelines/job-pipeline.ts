@@ -3,6 +3,7 @@ import type Redis from "ioredis";
 import type { WorkerConfig } from "@translay/shared-config";
 import type {
   AuthorityTranslationNode,
+  JobWarning,
   TaskPayload,
   TranslatedNode,
 } from "@translay/shared-contracts";
@@ -15,7 +16,7 @@ import {
 import { getJobById, isCancelRequested, updateJobStatus } from "../repositories/job-repo";
 import { insertUsageLedger } from "../repositories/usage-repo";
 import { setJobProgress } from "../cache/job-progress";
-import { extractSlides } from "../adapters/slides";
+import { extractSlides, type SlideTextNode } from "../adapters/slides";
 import { annotateSlidesWithLayoutSemanticsBestEffort } from "../adapters/slides/layout-semantics";
 import { buildDeckStoryboard } from "../adapters/slides/storyboard";
 import { writeBackAppend, writeBackNewFile, type WriteBackResult } from "../adapters/slides";
@@ -33,6 +34,7 @@ import {
 import {
   auditAuthorityCoverage,
   buildMaterializationGroups,
+  explodeMaterializationGroup,
   mergeAuthorityNodes,
   projectNodesToAuthoritySourceNodes,
 } from "./authority";
@@ -69,6 +71,7 @@ export async function runJobPipeline(
   const route = selectRoute(config, job.user_id as string);
   console.log(`Job ${job_id} route selected: ${route.provider}/${route.model}`);
   let writeResult: WriteBackResult = { outputUrl: "", committedUnits: 0, warnings: [] };
+  const pipelineWarnings: JobWarning[] = [];
   const billedSlideIndexes = new Set<number>();
   let translatedUnitsBilled = 0;
 
@@ -127,6 +130,9 @@ export async function runJobPipeline(
     const excludedSlideIndices = new Set(promptInjectionScan.hard_block_slide_indices);
     const safeSlides = extraction.extracted_slides.filter(
       (slide) => !excludedSlideIndices.has(slide.slide_index)
+    );
+    pipelineWarnings.push(
+      ...buildUnsafeSlideExcludedWarnings(extraction.extracted_slides, promptInjectionScan.hard_block_slide_indices)
     );
     if (safeSlides.length === 0) {
       const slideLabels = promptInjectionScan.hard_block_slide_indices.map((slideIndex) => slideIndex + 1);
@@ -278,17 +284,21 @@ export async function runJobPipeline(
       );
     }
 
-    const materializationGroups = buildMaterializationGroups(extractionWithLayoutHints.extracted_slides, {
-      maxNodesPerGroup: 10,
-      maxCharsPerGroup: 2_000,
-    });
+    const materializationGroups = buildMaterializationGroups(
+      extractionWithLayoutHints.extracted_slides,
+      {
+        maxNodesPerGroup: 10,
+        maxCharsPerGroup: 2_000,
+      }
+    );
     const translatedNodes: TranslatedNode[] = [];
     const authorityById = new Map(
       authorityAudit.authority_nodes.map((node) => [node.node_id, node])
     );
+    const materializationQueue = [...materializationGroups];
 
-    for (let groupIndex = 0; groupIndex < materializationGroups.length; groupIndex += 1) {
-      const group = materializationGroups[groupIndex];
+    for (let groupIndex = 0; groupIndex < materializationQueue.length; groupIndex += 1) {
+      const group = materializationQueue[groupIndex];
       if (!group) {
         continue;
       }
@@ -304,19 +314,37 @@ export async function runJobPipeline(
         return authorityNode;
       });
 
-      const groupResult = await runProviderCallWithRetry(
-        `materialization_batch_${groupIndex + 1}`,
-        () =>
-          materializeTranslatedNodesWithVertexGemini(config, {
-            model: route.model,
-            source_language: "auto",
-            target_language: targetLangCode,
-            deck_title: extractionWithLayoutHints.title,
-            glossary_candidates: glossaryCandidates,
-            node_summaries: group.node_summaries,
-            authority_nodes: authoritySubset,
-          })
-      );
+      let groupResult;
+      try {
+        groupResult = await runProviderCallWithRetry(
+          `materialization_batch_${groupIndex + 1}`,
+          () =>
+            materializeTranslatedNodesWithVertexGemini(config, {
+              model: route.model,
+              source_language: "auto",
+              target_language: targetLangCode,
+              deck_title: extractionWithLayoutHints.title,
+              glossary_candidates: glossaryCandidates,
+              node_summaries: group.node_summaries,
+              authority_nodes: authoritySubset,
+            })
+        );
+      } catch (error) {
+        if (shouldExplodeMaterializationGroup(group, error)) {
+          const explodedGroups = explodeMaterializationGroup(group);
+          console.warn(
+            `Materialization batch ${groupIndex + 1} falling back to ${
+              explodedGroups.length
+            } single-node request(s): ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+          materializationQueue.splice(groupIndex, 1, ...explodedGroups);
+          groupIndex -= 1;
+          continue;
+        }
+        throw error;
+      }
       validateTranslatedGroup(group.node_summaries, groupResult.nodes);
       translatedNodes.push(...groupResult.nodes);
       providerRequestIds.push(groupResult.provider_request_id);
@@ -333,13 +361,15 @@ export async function runJobPipeline(
       }
 
       const translatedGroupCount = groupIndex + 1;
-      const progressPercent = 50 + Math.round((translatedGroupCount / materializationGroups.length) * 20);
+      const progressPercent =
+        50 +
+        Math.round((translatedGroupCount / materializationQueue.length) * 20);
       await setJobProgress(redis, job_id, {
         status: "translating",
         progress_percent: progressPercent,
         current_step: "materialization_pass",
         details:
-          `Materialized batch ${translatedGroupCount} of ${materializationGroups.length}. ` +
+          `Materialized batch ${translatedGroupCount} of ${materializationQueue.length}. ` +
           `${translatedUnitsBilled} slide(s) already count toward quota.`,
       });
       await assertNotCanceled(pool, redis, job, writeResult, translatedUnitsBilled);
@@ -432,6 +462,7 @@ export async function runJobPipeline(
       job_id,
       targetLangCode,
       writeResult,
+      pipelineWarnings,
       translatedUnitsBilled
     );
     console.log(`Job ${job_id} completed successfully: ${writeResult.outputUrl}`);
@@ -465,6 +496,7 @@ export async function runJobPipeline(
         job,
         job_id,
         writeResult,
+        pipelineWarnings,
         translatedUnitsBilled,
         errorCode,
         safeMessage
@@ -516,14 +548,16 @@ async function finalizeSuccessfulJob(
   jobId: string,
   targetLangCode: string,
   writeResult: WriteBackResult,
+  pipelineWarnings: readonly JobWarning[],
   billedUnits: number
 ): Promise<void> {
   const client = await pool.connect();
-  const completedStatus = writeResult.warnings.length > 0
+  const finalWarnings = [...pipelineWarnings, ...writeResult.warnings];
+  const completedStatus = finalWarnings.length > 0
     ? "completed_with_warnings"
     : "completed";
-  const completionDetail = writeResult.warnings.length > 0
-    ? `Translation completed with ${writeResult.warnings.length} warning(s). Review the translated Slides for minor layout issues.`
+  const completionDetail = finalWarnings.length > 0
+    ? `Translation completed with ${finalWarnings.length} warning(s). Review the translated Slides for excluded pages or minor layout issues.`
     : "Translation completed successfully.";
   try {
     await client.query("BEGIN");
@@ -532,7 +566,7 @@ async function finalizeSuccessfulJob(
       outputDocumentUrl: writeResult.outputUrl,
       totalUnitsBilled: billedUnits,
       targetLangCode,
-      warnings: writeResult.warnings,
+      warnings: finalWarnings,
     });
 
     if (billedUnits > 0) {
@@ -566,6 +600,34 @@ async function finalizeSuccessfulJob(
     }),
     redis.del(buildJobCancelKey(jobId)),
   ]);
+}
+
+function buildUnsafeSlideExcludedWarnings(
+  slides: readonly { readonly slide_index: number; readonly nodes: readonly SlideTextNode[] }[],
+  excludedSlideIndices: readonly number[]
+): JobWarning[] {
+  if (excludedSlideIndices.length === 0) {
+    return [];
+  }
+
+  const slidesByIndex = new Map(slides.map((slide) => [slide.slide_index, slide]));
+
+  return excludedSlideIndices.map((slideIndex) => {
+    const slide = slidesByIndex.get(slideIndex);
+    if (!slide) {
+      console.error(
+        `Prompt-injection scan reported excluded slide ${slideIndex + 1}, but no matching extracted slide metadata was found`
+      );
+    }
+    const primaryNode = slide?.nodes[0];
+    return {
+      node_id: primaryNode?.node_id ?? `unsafe_slide_${slideIndex + 1}`,
+      slide_index: slideIndex,
+      archetype: primaryNode?.archetype ?? "plain_text",
+      risk_level: "high",
+      risk_reason: "unsafe_slide_excluded",
+    };
+  });
 }
 
 async function finalizeCanceledJob(
@@ -626,11 +688,13 @@ async function finalizeFailedJob(
   job: NonNullable<Awaited<ReturnType<typeof getJobById>>>,
   jobId: string,
   writeResult: WriteBackResult,
+  pipelineWarnings: readonly JobWarning[],
   billedUnits: number,
   errorCode: string,
   safeMessage: string
 ): Promise<void> {
   const client = await pool.connect();
+  const finalWarnings = [...pipelineWarnings, ...writeResult.warnings];
   try {
     await client.query("BEGIN");
 
@@ -639,6 +703,7 @@ async function finalizeFailedJob(
       errorMessage: safeMessage,
       outputDocumentUrl: writeResult.outputUrl || undefined,
       totalUnitsBilled: billedUnits,
+      warnings: finalWarnings,
     });
 
     if (billedUnits > 0) {
@@ -706,6 +771,19 @@ async function runProviderCallWithRetry<T>(
   throw lastError instanceof Error
     ? lastError
     : new Error(`Provider call ${label} failed`);
+}
+
+function shouldExplodeMaterializationGroup(
+  group: { readonly node_summaries: readonly { readonly node_id: string }[] },
+  error: unknown
+): boolean {
+  return (
+    group.node_summaries.length > 1 &&
+    error instanceof Error &&
+    /paragraph count does not match source structure|bullet_list paragraph count mismatch|paragraph_id mismatch/i.test(
+      error.message
+    )
+  );
 }
 
 function registerBilledSlides(

@@ -606,7 +606,256 @@ test("materializeTranslatedNodesWithVertexGemini accepts empty structural segmen
   }
 });
 
-test("translateDeckAuthorityWithVertexGemini includes layout hints and visible style summaries in source node context", async () => {
+test("materializeTranslatedNodesWithVertexGemini repairs collapsed paragraph output for default-only multi-paragraph nodes", async () => {
+  __resetAccessTokenCacheForTests();
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+
+    if (url.includes("metadata.google.internal")) {
+      return new Response(JSON.stringify({ access_token: "test-token" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify([
+                    {
+                      node_id: "plain-multi",
+                      translated_full_text: "Datenplattform fur KI und Analytik",
+                      paragraphs: [
+                        {
+                          paragraph_id: "p0",
+                          translated_text: "Datenplattform fur KI und Analytik",
+                          bullet_behavior: "none",
+                        },
+                      ],
+                      segments: [
+                        {
+                          segment_id: "r0",
+                          translated_text: "Datenplattform fur KI und Analytik",
+                          style_role: "default",
+                        },
+                        {
+                          segment_id: "r1",
+                          translated_text: "",
+                          style_role: "default",
+                        },
+                      ],
+                    },
+                  ]),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const result = await materializeTranslatedNodesWithVertexGemini(createConfig(), {
+      model: "gemini-3.1-flash-lite-preview",
+      source_language: "English",
+      target_language: "German",
+      deck_title: "OCI Pitch Deck",
+      glossary_candidates: [],
+      node_summaries: [
+        {
+          node_id: "plain-multi",
+          archetype: "plain_text",
+          slide_index: 5,
+          full_text: "Data platform\nfor AI and analytics",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "Data platform",
+              style_roles: ["default"],
+              segments: [
+                {
+                  segment_id: "r0",
+                  text: "Data platform",
+                  style_role: "default",
+                },
+              ],
+            },
+            {
+              paragraph_id: "p1",
+              text: "for AI and analytics",
+              style_roles: ["default"],
+              segments: [
+                {
+                  segment_id: "r1",
+                  text: "for AI and analytics",
+                  style_role: "default",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      authority_nodes: [
+        {
+          node_id: "plain-multi",
+          slide_index: 5,
+          translated_full_text: "Datenplattform fur KI und Analytik",
+        },
+      ],
+    });
+
+    assert.equal(result.nodes[0]?.paragraphs.length, 2);
+    assert.equal(result.nodes[0]?.paragraphs[0]?.paragraph_id, "p0");
+    assert.equal(result.nodes[0]?.paragraphs[1]?.paragraph_id, "p1");
+    assert.equal(
+      result.nodes[0]?.translated_full_text,
+      result.nodes[0]?.paragraphs.map((paragraph) => paragraph.translated_text).join("\n")
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("materializeTranslatedNodesWithVertexGemini prompt requires exact paragraph preservation for every node", async () => {
+  __resetAccessTokenCacheForTests();
+  const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    fetchCalls.push({ url, init });
+
+    if (url.includes("metadata.google.internal")) {
+      return new Response(JSON.stringify({ access_token: "test-token" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify([
+                    {
+                      node_id: "n1",
+                      translated_full_text: "演示\n概览",
+                      paragraphs: [
+                        {
+                          paragraph_id: "p0",
+                          translated_text: "演示",
+                          bullet_behavior: "none",
+                        },
+                        {
+                          paragraph_id: "p1",
+                          translated_text: "概览",
+                          bullet_behavior: "none",
+                        },
+                      ],
+                      segments: [
+                        {
+                          segment_id: "r0",
+                          translated_text: "演示",
+                          style_role: "default",
+                        },
+                        {
+                          segment_id: "r1",
+                          translated_text: "概览",
+                          style_role: "default",
+                        },
+                      ],
+                    },
+                  ]),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    await materializeTranslatedNodesWithVertexGemini(createConfig(), {
+      model: "gemini-3.1-flash-lite-preview",
+      source_language: "English",
+      target_language: "Chinese",
+      deck_title: "Q3 Product Presentation",
+      glossary_candidates: [],
+      node_summaries: [
+        {
+          node_id: "n1",
+          archetype: "plain_text",
+          slide_index: 1,
+          full_text: "Presentation overview",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "Presentation",
+              style_roles: ["default"],
+              segments: [
+                {
+                  segment_id: "r0",
+                  text: "Presentation",
+                  style_role: "default",
+                },
+              ],
+            },
+            {
+              paragraph_id: "p1",
+              text: "overview",
+              style_roles: ["default"],
+              segments: [
+                {
+                  segment_id: "r1",
+                  text: "overview",
+                  style_role: "default",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      authority_nodes: [
+        {
+          node_id: "n1",
+          slide_index: 1,
+          translated_full_text: "演示\n概览",
+        },
+      ],
+    });
+
+    const body = JSON.parse(String(fetchCalls[1]?.init?.body ?? "{}"));
+    const systemInstruction = String(body.systemInstruction?.parts?.[0]?.text ?? "");
+    const prompt = String(body.contents?.[0]?.parts?.[0]?.text ?? "");
+
+    assert.match(systemInstruction, /Preserve the exact paragraph count/i);
+    assert.match(prompt, /preserve the exact paragraph count for every node/i);
+    assert.match(prompt, /Never merge, split, drop, or reorder paragraphs/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("translateDeckAuthorityWithVertexGemini keeps layout-only metadata out of source node context", async () => {
   __resetAccessTokenCacheForTests();
   const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
   const originalFetch = globalThis.fetch;
@@ -665,22 +914,6 @@ test("translateDeckAuthorityWithVertexGemini includes layout hints and visible s
           element_type: "shape",
           archetype: "plain_text",
           full_text: "Revenue growth",
-          visible_style: {
-            alignment: "CENTER",
-            font_family: "Inter",
-            min_font_size_pt: 22,
-            max_font_size_pt: 30,
-            fill_color_hex: "#112233",
-            outline_color_hex: "#445566",
-          },
-          layout_hint: {
-            node_id: "title-like",
-            visual_role: "title",
-            cluster_id: "hero-title",
-            line_policy: "prefer_single_line",
-            scale_sync: "sync_with_group",
-            confidence: 0.96,
-          },
         },
       ],
       storyboard: {
@@ -701,18 +934,18 @@ test("translateDeckAuthorityWithVertexGemini includes layout hints and visible s
     );
     const prompt = String(body.contents?.[0]?.parts?.[0]?.text ?? "");
 
-    assert.match(systemInstruction, /layout hint/i);
-    assert.match(prompt, /"visual_role":\s*"title"/);
-    assert.match(prompt, /"line_policy":\s*"prefer_single_line"/);
-    assert.match(prompt, /"scale_sync":\s*"sync_with_group"/);
-    assert.match(prompt, /"alignment":\s*"CENTER"/);
-    assert.match(prompt, /"max_font_size_pt":\s*30/);
+    assert.doesNotMatch(systemInstruction, /layout hint/i);
+    assert.doesNotMatch(prompt, /"visual_role":\s*"title"/);
+    assert.doesNotMatch(prompt, /"line_policy":\s*"prefer_single_line"/);
+    assert.doesNotMatch(prompt, /"scale_sync":\s*"sync_with_group"/);
+    assert.doesNotMatch(prompt, /"alignment":\s*"CENTER"/);
+    assert.doesNotMatch(prompt, /"max_font_size_pt":\s*30/);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test("materializeTranslatedNodesWithVertexGemini includes layout hints and visible style summaries in source structure", async () => {
+test("materializeTranslatedNodesWithVertexGemini keeps layout-only metadata out of source structure", async () => {
   __resetAccessTokenCacheForTests();
   const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
   const originalFetch = globalThis.fetch;
@@ -781,22 +1014,6 @@ test("materializeTranslatedNodesWithVertexGemini includes layout hints and visib
           archetype: "plain_text",
           slide_index: 1,
           full_text: "Revenue growth",
-          visible_style: {
-            alignment: "CENTER",
-            font_family: "Inter",
-            min_font_size_pt: 22,
-            max_font_size_pt: 30,
-            fill_color_hex: "#112233",
-            outline_color_hex: "#445566",
-          },
-          layout_hint: {
-            node_id: "title-like",
-            visual_role: "title",
-            cluster_id: "hero-title",
-            line_policy: "prefer_single_line",
-            scale_sync: "sync_with_group",
-            confidence: 0.96,
-          },
           paragraphs: [
             {
               paragraph_id: "p0",
@@ -828,11 +1045,11 @@ test("materializeTranslatedNodesWithVertexGemini includes layout hints and visib
     );
     const prompt = String(body.contents?.[0]?.parts?.[0]?.text ?? "");
 
-    assert.match(systemInstruction, /layout hint/i);
-    assert.match(prompt, /"visual_role":\s*"title"/);
-    assert.match(prompt, /"line_policy":\s*"prefer_single_line"/);
-    assert.match(prompt, /"alignment":\s*"CENTER"/);
-    assert.match(prompt, /"max_font_size_pt":\s*30/);
+    assert.doesNotMatch(systemInstruction, /layout hint/i);
+    assert.doesNotMatch(prompt, /"visual_role":\s*"title"/);
+    assert.doesNotMatch(prompt, /"line_policy":\s*"prefer_single_line"/);
+    assert.doesNotMatch(prompt, /"alignment":\s*"CENTER"/);
+    assert.doesNotMatch(prompt, /"max_font_size_pt":\s*30/);
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -153,6 +153,64 @@ test("extractVisibleStyleSummary captures text metrics and visible shape colors"
   });
 });
 
+test("buildRichTextNode infers visible font metrics for inherited theme-sized title text", () => {
+  const element = {
+    objectId: "shape_theme_title",
+    size: {
+      width: { magnitude: 240, unit: "PT" },
+      height: { magnitude: 36, unit: "PT" },
+    },
+    transform: {
+      scaleX: 1,
+      scaleY: 1,
+      shearX: 0,
+      shearY: 0,
+      translateX: 0,
+      translateY: 0,
+      unit: "PT",
+    },
+    shape: {
+      text: {
+        textElements: [
+          {
+            startIndex: 0,
+            paragraphMarker: {
+              style: { alignment: "CENTER" },
+            },
+          },
+          {
+            startIndex: 0,
+            endIndex: 15,
+            textRun: {
+              content: "Growth Strategy",
+              style: {
+                weightedFontFamily: { fontFamily: "Arial" },
+                bold: true,
+              },
+            },
+          },
+        ],
+      },
+    },
+  } as unknown as slides_v1.Schema$PageElement;
+
+  const node = buildRichTextNode({
+    nodeId: "theme-title-1",
+    objectId: "shape_theme_title",
+    slideIndex: 0,
+    elementType: "shape",
+    textContent: element.shape!.text!,
+    box: extractBoxGeometry(element),
+  });
+
+  assert.ok(node);
+  assert.equal(node.visible_style?.alignment, "CENTER");
+  assert.equal(node.visible_style?.font_family, "Arial");
+  assert.equal(typeof node.visible_style?.max_font_size_pt, "number");
+  assert.equal(typeof node.visible_style?.min_font_size_pt, "number");
+  assert.ok((node.visible_style?.max_font_size_pt ?? 0) >= 20);
+});
+
 test("extractTableCellVisibleStyleSummary captures table cell background fill", () => {
   const cell = {
     tableCellProperties: {

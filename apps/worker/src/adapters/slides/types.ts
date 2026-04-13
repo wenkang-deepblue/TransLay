@@ -100,6 +100,8 @@ export interface SlideLayoutSemanticHint {
   readonly confidence: number;
 }
 
+export type SlideLayoutHintSource = "model" | "fallback";
+
 /** Extracted text node from a Slides presentation. */
 export interface SlideTextNode {
   readonly node_id: string;
@@ -115,6 +117,7 @@ export interface SlideTextNode {
   readonly paragraphs: SlideParagraph[];
   readonly visible_style?: SlideVisibleStyleSummary;
   readonly layout_hint?: SlideLayoutSemanticHint;
+  readonly layout_hint_source?: SlideLayoutHintSource;
   /** For table cells: row and column indices. */
   readonly row_index?: number;
   readonly col_index?: number;

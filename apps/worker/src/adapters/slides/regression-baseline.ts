@@ -1,7 +1,9 @@
 import type { TranslatedNode } from "@translay/shared-contracts";
 import { __buildNodeWarningsForTests, __buildNodeWriteRequestsForTests } from "./writer";
-import { fitTranslatedNode } from "./fit-pass";
+import { fitTranslatedNode, resolveSlideNodeFits } from "./fit-pass";
 import type {
+  SlideLayoutHintSource,
+  SlideLayoutSemanticHint,
   SlideNodeArchetype,
   SlideParagraph,
   SlideRunStyleRole,
@@ -18,12 +20,21 @@ export const REQUIRED_REGRESSION_LANGUAGES = [
 export type RegressionTargetLanguage = (typeof REQUIRED_REGRESSION_LANGUAGES)[number];
 
 export const REQUIRED_REGRESSION_ARCHETYPES = [
+  "plain_text",
   "bullet_list",
   "metric_card",
   "mixed_emphasis",
   "speaker_notes",
   "table_cell",
 ] as const satisfies readonly SlideNodeArchetype[];
+
+export const REQUIRED_REGRESSION_SCENARIO_TAGS = [
+  "title_with_subtitle",
+  "agenda_cluster",
+  "messy_cluster_sync",
+  "step_cluster",
+] as const;
+export type RegressionScenarioTag = (typeof REQUIRED_REGRESSION_SCENARIO_TAGS)[number];
 
 interface SourceRunInput {
   readonly run_id: string;
@@ -46,7 +57,10 @@ interface SourceNodeInput {
   readonly object_id: string;
   readonly element_type: SlideTextNode["element_type"];
   readonly box: SlideTextNode["box"];
+  readonly visible_style?: SlideTextNode["visible_style"];
   readonly paragraphs: readonly SourceParagraphInput[];
+  readonly layout_hint?: SlideLayoutSemanticHint;
+  readonly layout_hint_source?: SlideLayoutHintSource;
   readonly row_index?: number;
   readonly col_index?: number;
 }
@@ -77,12 +91,26 @@ export interface SlidesFidelityRegressionSample {
   readonly target_language: RegressionTargetLanguage;
   readonly source_node: SlideTextNode;
   readonly translated_node: TranslatedNode;
+  readonly acceptance_scope?: "core_layout" | "style_only";
+  readonly scenario_tags?: readonly RegressionScenarioTag[];
   readonly style_expectation?: RegressionStyleExpectation;
   readonly term_expectations?: readonly RegressionTermExpectation[];
 }
 
+export interface SlidesFidelityRegressionGroupScenario {
+  readonly scenario_id: string;
+  readonly target_language: RegressionTargetLanguage;
+  readonly tags: readonly RegressionScenarioTag[];
+  readonly nodes: readonly {
+    readonly sample_id: string;
+    readonly source_node: SlideTextNode;
+    readonly translated_node: TranslatedNode;
+  }[];
+}
+
 export interface RegressionBaselineMetrics {
   readonly sample_count: number;
+  readonly layout_case_count: number;
   readonly bullet_case_count: number;
   readonly style_case_count: number;
   readonly term_expectation_count: number;
@@ -93,6 +121,14 @@ export interface RegressionBaselineMetrics {
   readonly style_hierarchy_retention_rate: number;
   readonly major_manual_reflow_rate: number;
   readonly term_consistency_rate: number;
+}
+
+export interface RegressionGroupMetrics {
+  readonly scenario_count: number;
+  readonly single_line_case_count: number;
+  readonly cluster_sync_case_count: number;
+  readonly single_line_degradation_rate: number;
+  readonly cluster_scale_mismatch_rate: number;
 }
 
 export const SLIDES_FIDELITY_REGRESSION_SAMPLES: readonly SlidesFidelityRegressionSample[] = [
@@ -230,6 +266,7 @@ export const SLIDES_FIDELITY_REGRESSION_SAMPLES: readonly SlidesFidelityRegressi
   {
     sample_id: "de-metric-arr",
     target_language: "de",
+    acceptance_scope: "style_only",
     source_node: createSourceNode({
       node_id: "de-metric-arr",
       slide_index: 3,
@@ -538,11 +575,507 @@ export const SLIDES_FIDELITY_REGRESSION_SAMPLES: readonly SlidesFidelityRegressi
     }),
     term_expectations: [{ key: "arr", expected_translation: "年度經常性收入" }],
   },
+  {
+    sample_id: "de-title-hero",
+    target_language: "de",
+    scenario_tags: ["title_with_subtitle"],
+    source_node: createSourceNode({
+      node_id: "de-title-hero",
+      slide_index: 7,
+      archetype: "plain_text",
+      object_id: "shape_de_title_hero",
+      element_type: "shape",
+      box: createBox(260, 34),
+      layout_hint: {
+        node_id: "de-title-hero",
+        visual_role: "title",
+        cluster_id: "hero-title",
+        line_policy: "prefer_single_line",
+        scale_sync: "independent",
+        confidence: 0.93,
+      },
+      layout_hint_source: "model",
+      paragraphs: [
+        {
+          paragraph_id: "p0",
+          text: "Growth strategy 2026",
+          runs: [
+            {
+              run_id: "r0",
+              text: "Growth strategy 2026",
+              style_role: "default",
+              text_style: { fontSize: { magnitude: 24, unit: "PT" }, bold: true },
+            },
+          ],
+        },
+      ],
+    }),
+    translated_node: createTranslatedNode({
+      node_id: "de-title-hero",
+      paragraphs: [
+        {
+          paragraph_id: "p0",
+          translated_text: "Wachstumsstrategie 2026",
+          bullet_behavior: "none",
+        },
+      ],
+      segments: [
+        {
+          segment_id: "r0",
+          translated_text: "Wachstumsstrategie 2026",
+          style_role: "default",
+        },
+      ],
+    }),
+  },
+  {
+    sample_id: "de-subtitle-hero",
+    target_language: "de",
+    scenario_tags: ["title_with_subtitle"],
+    source_node: createSourceNode({
+      node_id: "de-subtitle-hero",
+      slide_index: 7,
+      archetype: "plain_text",
+      object_id: "shape_de_subtitle_hero",
+      element_type: "shape",
+      box: createBox(320, 54),
+      layout_hint: {
+        node_id: "de-subtitle-hero",
+        visual_role: "subtitle",
+        cluster_id: "hero-subtitle",
+        line_policy: "allow_wrap",
+        scale_sync: "independent",
+        confidence: 0.9,
+      },
+      layout_hint_source: "model",
+      paragraphs: [
+        {
+          paragraph_id: "p0",
+          text: "Create a repeatable operating model for enterprise growth",
+          runs: [
+            {
+              run_id: "r0",
+              text: "Create a repeatable operating model for enterprise growth",
+              style_role: "default",
+              text_style: { fontSize: { magnitude: 16, unit: "PT" } },
+            },
+          ],
+        },
+      ],
+    }),
+    translated_node: createTranslatedNode({
+      node_id: "de-subtitle-hero",
+      paragraphs: [
+        {
+          paragraph_id: "p0",
+          translated_text: "Ein wiederholbares Betriebsmodell fur nachhaltiges Enterprise-Wachstum aufbauen",
+          bullet_behavior: "none",
+        },
+      ],
+      segments: [
+        {
+          segment_id: "r0",
+          translated_text: "Ein wiederholbares Betriebsmodell fur nachhaltiges Enterprise-Wachstum aufbauen",
+          style_role: "default",
+        },
+      ],
+    }),
+  },
+  {
+    sample_id: "de-agenda-item",
+    target_language: "de",
+    scenario_tags: ["agenda_cluster"],
+    source_node: createSourceNode({
+      node_id: "de-agenda-item",
+      slide_index: 8,
+      archetype: "plain_text",
+      object_id: "shape_de_agenda_item",
+      element_type: "shape",
+      box: createBox(180, 28),
+      layout_hint: {
+        node_id: "de-agenda-item",
+        visual_role: "agenda_item",
+        cluster_id: "agenda-list",
+        line_policy: "prefer_single_line",
+        scale_sync: "sync_with_group",
+        confidence: 0.88,
+      },
+      layout_hint_source: "model",
+      paragraphs: [
+        {
+          paragraph_id: "p0",
+          text: "Customer adoption",
+          runs: [
+            {
+              run_id: "r0",
+              text: "Customer adoption",
+              style_role: "default",
+              text_style: { fontSize: { magnitude: 18, unit: "PT" } },
+            },
+          ],
+        },
+      ],
+    }),
+    translated_node: createTranslatedNode({
+      node_id: "de-agenda-item",
+      paragraphs: [
+        {
+          paragraph_id: "p0",
+          translated_text: "Kundenakzeptanz",
+          bullet_behavior: "none",
+        },
+      ],
+      segments: [
+        {
+          segment_id: "r0",
+          translated_text: "Kundenakzeptanz",
+          style_role: "default",
+        },
+      ],
+    }),
+  },
+  {
+    sample_id: "de-step-label",
+    target_language: "de",
+    scenario_tags: ["step_cluster"],
+    source_node: createSourceNode({
+      node_id: "de-step-label",
+      slide_index: 9,
+      archetype: "plain_text",
+      object_id: "shape_de_step_label",
+      element_type: "shape",
+      box: createBox(140, 26),
+      layout_hint: {
+        node_id: "de-step-label",
+        visual_role: "step_label",
+        cluster_id: "next-steps",
+        line_policy: "prefer_single_line",
+        scale_sync: "sync_with_group",
+        confidence: 0.89,
+      },
+      layout_hint_source: "model",
+      paragraphs: [
+        {
+          paragraph_id: "p0",
+          text: "Step 1",
+          runs: [
+            {
+              run_id: "r0",
+              text: "Step 1",
+              style_role: "default",
+              text_style: { fontSize: { magnitude: 18, unit: "PT" } },
+            },
+          ],
+        },
+      ],
+    }),
+    translated_node: createTranslatedNode({
+      node_id: "de-step-label",
+      paragraphs: [
+        {
+          paragraph_id: "p0",
+          translated_text: "Schritt 1",
+          bullet_behavior: "none",
+        },
+      ],
+      segments: [
+        {
+          segment_id: "r0",
+          translated_text: "Schritt 1",
+          style_role: "default",
+        },
+      ],
+    }),
+  },
+  {
+    sample_id: "de-theme-title-oracle",
+    target_language: "de",
+    scenario_tags: ["title_with_subtitle"],
+    source_node: createSourceNode({
+      node_id: "de-theme-title-oracle",
+      slide_index: 12,
+      archetype: "plain_text",
+      object_id: "shape_de_theme_title",
+      element_type: "shape",
+      box: createBox(420, 42),
+      visible_style: {
+        alignment: "START",
+        font_family: "Arial",
+        min_font_size_pt: 28,
+        max_font_size_pt: 28,
+      },
+      layout_hint: {
+        node_id: "de-theme-title-oracle",
+        visual_role: "title",
+        cluster_id: "de-theme-title-oracle",
+        line_policy: "prefer_single_line",
+        scale_sync: "independent",
+        confidence: 0.93,
+      },
+      layout_hint_source: "model",
+      paragraphs: [
+        {
+          paragraph_id: "p0",
+          text: "The Enterprise Data Challenges in AI Era",
+          runs: [
+            {
+              run_id: "r0",
+              text: "The Enterprise Data Challenges in AI Era",
+              style_role: "default",
+              text_style: {
+                weightedFontFamily: { fontFamily: "Arial" },
+                bold: true,
+              },
+            },
+          ],
+        },
+      ],
+    }),
+    translated_node: createTranslatedNode({
+      node_id: "de-theme-title-oracle",
+      paragraphs: [
+        {
+          paragraph_id: "p0",
+          translated_text: "Die Herausforderungen von Unternehmensdaten im KI-Zeitalter",
+          bullet_behavior: "none",
+        },
+      ],
+      segments: [
+        {
+          segment_id: "r0",
+          translated_text: "Die Herausforderungen von Unternehmensdaten im KI-Zeitalter",
+          style_role: "default",
+        },
+      ],
+    }),
+  },
+] as const;
+
+export const SLIDES_FIDELITY_REGRESSION_GROUP_SCENARIOS: readonly SlidesFidelityRegressionGroupScenario[] = [
+  {
+    scenario_id: "de-agenda-messy-cluster",
+    target_language: "de",
+    tags: ["agenda_cluster", "messy_cluster_sync"],
+    nodes: [
+      {
+        sample_id: "de-agenda-cluster-1",
+        source_node: createSourceNode({
+          node_id: "de-agenda-cluster-1",
+          slide_index: 10,
+          archetype: "plain_text",
+          object_id: "shape_de_agenda_cluster_1",
+          element_type: "shape",
+          box: createBox(168, 28),
+          layout_hint: {
+            node_id: "de-agenda-cluster-1",
+            visual_role: "agenda_item",
+            cluster_id: "agenda_messy",
+            line_policy: "prefer_single_line",
+            scale_sync: "sync_with_group",
+            confidence: 0.91,
+          },
+          layout_hint_source: "model",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "Sales pipeline",
+              runs: [
+                {
+                  run_id: "r0",
+                  text: "Sales pipeline",
+                  style_role: "default",
+                  text_style: { fontSize: { magnitude: 18, unit: "PT" } },
+                },
+              ],
+            },
+          ],
+        }),
+        translated_node: createTranslatedNode({
+          node_id: "de-agenda-cluster-1",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              translated_text: "Vertriebspipeline",
+              bullet_behavior: "none",
+            },
+          ],
+          segments: [
+            {
+              segment_id: "r0",
+              translated_text: "Vertriebspipeline",
+              style_role: "default",
+            },
+          ],
+        }),
+      },
+      {
+        sample_id: "de-agenda-cluster-2",
+        source_node: createSourceNode({
+          node_id: "de-agenda-cluster-2",
+          slide_index: 10,
+          archetype: "plain_text",
+          object_id: "shape_de_agenda_cluster_2",
+          element_type: "shape",
+          box: createBox(182, 30),
+          layout_hint: {
+            node_id: "de-agenda-cluster-2",
+            visual_role: "agenda_item",
+            cluster_id: "agenda_messy",
+            line_policy: "prefer_single_line",
+            scale_sync: "sync_with_group",
+            confidence: 0.9,
+          },
+          layout_hint_source: "model",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "Pricing updates",
+              runs: [
+                {
+                  run_id: "r0",
+                  text: "Pricing updates",
+                  style_role: "default",
+                  text_style: { fontSize: { magnitude: 18, unit: "PT" } },
+                },
+              ],
+            },
+          ],
+        }),
+        translated_node: createTranslatedNode({
+          node_id: "de-agenda-cluster-2",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              translated_text: "Preisaktualisierungen",
+              bullet_behavior: "none",
+            },
+          ],
+          segments: [
+            {
+              segment_id: "r0",
+              translated_text: "Preisaktualisierungen",
+              style_role: "default",
+            },
+          ],
+        }),
+      },
+    ],
+  },
+  {
+    scenario_id: "de-next-steps-cluster",
+    target_language: "de",
+    tags: ["step_cluster"],
+    nodes: [
+      {
+        sample_id: "de-step-cluster-1",
+        source_node: createSourceNode({
+          node_id: "de-step-cluster-1",
+          slide_index: 11,
+          archetype: "plain_text",
+          object_id: "shape_de_step_cluster_1",
+          element_type: "shape",
+          box: createBox(128, 26),
+          layout_hint: {
+            node_id: "de-step-cluster-1",
+            visual_role: "step_label",
+            cluster_id: "steps_cluster",
+            line_policy: "prefer_single_line",
+            scale_sync: "sync_with_group",
+            confidence: 0.9,
+          },
+          layout_hint_source: "model",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "Step 1",
+              runs: [
+                {
+                  run_id: "r0",
+                  text: "Step 1",
+                  style_role: "default",
+                  text_style: { fontSize: { magnitude: 18, unit: "PT" } },
+                },
+              ],
+            },
+          ],
+        }),
+        translated_node: createTranslatedNode({
+          node_id: "de-step-cluster-1",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              translated_text: "Schritt 1",
+              bullet_behavior: "none",
+            },
+          ],
+          segments: [
+            {
+              segment_id: "r0",
+              translated_text: "Schritt 1",
+              style_role: "default",
+            },
+          ],
+        }),
+      },
+      {
+        sample_id: "de-step-cluster-2",
+        source_node: createSourceNode({
+          node_id: "de-step-cluster-2",
+          slide_index: 11,
+          archetype: "plain_text",
+          object_id: "shape_de_step_cluster_2",
+          element_type: "shape",
+          box: createBox(132, 26),
+          layout_hint: {
+            node_id: "de-step-cluster-2",
+            visual_role: "step_label",
+            cluster_id: "steps_cluster",
+            line_policy: "prefer_single_line",
+            scale_sync: "sync_with_group",
+            confidence: 0.9,
+          },
+          layout_hint_source: "model",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "Step 2",
+              runs: [
+                {
+                  run_id: "r0",
+                  text: "Step 2",
+                  style_role: "default",
+                  text_style: { fontSize: { magnitude: 18, unit: "PT" } },
+                },
+              ],
+            },
+          ],
+        }),
+        translated_node: createTranslatedNode({
+          node_id: "de-step-cluster-2",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              translated_text: "Schritt 2",
+              bullet_behavior: "none",
+            },
+          ],
+          segments: [
+            {
+              segment_id: "r0",
+              translated_text: "Schritt 2",
+              style_role: "default",
+            },
+          ],
+        }),
+      },
+    ],
+  },
 ] as const;
 
 export function evaluateRegressionBaseline(
   samples: readonly SlidesFidelityRegressionSample[]
 ): RegressionBaselineMetrics {
+  let layoutCaseCount = 0;
   let bulletCaseCount = 0;
   let styleCaseCount = 0;
   let termExpectationCount = 0;
@@ -568,6 +1101,11 @@ export function evaluateRegressionBaseline(
     const insertedText = requests.find((request) => request.insertText)?.insertText?.text ?? "";
     const insertedParagraphCount = countInsertedParagraphs(insertedText);
     const fit = fitTranslatedNode(sample.source_node, sample.translated_node);
+    const acceptanceScope = sample.acceptance_scope ?? "core_layout";
+
+    if (acceptanceScope === "core_layout") {
+      layoutCaseCount += 1;
+    }
 
     if (insertedParagraphCount !== sample.translated_node.paragraphs.length) {
       paragraphCountErrors += 1;
@@ -591,11 +1129,14 @@ export function evaluateRegressionBaseline(
       }
     }
 
-    if (warnings.some((warning) => warning.risk_reason === "possible_overflow")) {
+    if (
+      acceptanceScope === "core_layout" &&
+      warnings.some((warning) => warning.risk_reason === "possible_overflow")
+    ) {
       obviousOverflowCases += 1;
     }
 
-    if (fit.risk === "high") {
+    if (acceptanceScope === "core_layout" && fit.risk === "high") {
       majorManualReflowCases += 1;
     }
 
@@ -621,17 +1162,74 @@ export function evaluateRegressionBaseline(
 
   return {
     sample_count: samples.length,
+    layout_case_count: layoutCaseCount,
     bullet_case_count: bulletCaseCount,
     style_case_count: styleCaseCount,
     term_expectation_count: termExpectationCount,
     empty_bullet_generation_rate: rate(emptyBulletCases, bulletCaseCount),
     bullet_count_error_rate: rate(bulletCountErrors, bulletCaseCount),
     paragraph_count_error_rate: rate(paragraphCountErrors, samples.length),
-    obvious_overflow_rate: rate(obviousOverflowCases, samples.length),
+    obvious_overflow_rate: rate(obviousOverflowCases, layoutCaseCount),
     style_hierarchy_retention_rate:
       styleCaseCount === 0 ? 1 : 1 - styleRetentionFailures / styleCaseCount,
-    major_manual_reflow_rate: rate(majorManualReflowCases, samples.length),
+    major_manual_reflow_rate: rate(majorManualReflowCases, layoutCaseCount),
     term_consistency_rate: termExpectationCount === 0 ? 1 : consistentTermMatches / termExpectationCount,
+  };
+}
+
+export function evaluateRegressionGroupBaseline(
+  scenarios: readonly SlidesFidelityRegressionGroupScenario[]
+): RegressionGroupMetrics {
+  let singleLineCaseCount = 0;
+  let clusterSyncCaseCount = 0;
+  let singleLineDegradations = 0;
+  let clusterScaleMismatches = 0;
+
+  for (const scenario of scenarios) {
+    const sourceNodes = scenario.nodes.map((node) => node.source_node);
+    const translatedNodes = scenario.nodes.map((node) => node.translated_node);
+    const fits = resolveSlideNodeFits(sourceNodes, translatedNodes);
+    const clusterGroups = new Map<string, number[]>();
+
+    for (const sourceNode of sourceNodes) {
+      const fit = fits.get(sourceNode.node_id);
+      const layoutHint = sourceNode.layout_hint;
+      if (!fit || !layoutHint) {
+        continue;
+      }
+
+      if (layoutHint.line_policy === "prefer_single_line") {
+        singleLineCaseCount += 1;
+        if (fit.degradedSingleLine) {
+          singleLineDegradations += 1;
+        }
+      }
+
+      if (layoutHint.scale_sync === "sync_with_group") {
+        const scales = clusterGroups.get(layoutHint.cluster_id) ?? [];
+        scales.push(fit.scale);
+        clusterGroups.set(layoutHint.cluster_id, scales);
+      }
+    }
+
+    for (const scales of clusterGroups.values()) {
+      if (scales.length < 2) {
+        continue;
+      }
+      clusterSyncCaseCount += 1;
+      const [firstScale, ...restScales] = scales;
+      if (restScales.some((scale) => Math.abs(scale - firstScale) > 0.001)) {
+        clusterScaleMismatches += 1;
+      }
+    }
+  }
+
+  return {
+    scenario_count: scenarios.length,
+    single_line_case_count: singleLineCaseCount,
+    cluster_sync_case_count: clusterSyncCaseCount,
+    single_line_degradation_rate: rate(singleLineDegradations, singleLineCaseCount),
+    cluster_scale_mismatch_rate: rate(clusterScaleMismatches, clusterSyncCaseCount),
   };
 }
 
@@ -917,7 +1515,10 @@ function createSourceNode(input: SourceNodeInput): SlideTextNode {
     archetype: input.archetype,
     object_id: input.object_id,
     box: input.box,
+    visible_style: structuredClone(input.visible_style),
     paragraphs,
+    layout_hint: input.layout_hint,
+    layout_hint_source: input.layout_hint_source,
     row_index: input.row_index,
     col_index: input.col_index,
   };

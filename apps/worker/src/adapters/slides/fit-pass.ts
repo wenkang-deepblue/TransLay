@@ -381,6 +381,13 @@ export function applyFitToParagraphStyle(
 }
 
 function getMaxSourceFontSize(sourceNode: SlideTextNode): number {
+  if (
+    typeof sourceNode.visible_style?.max_font_size_pt === "number" &&
+    sourceNode.visible_style.max_font_size_pt > 0
+  ) {
+    return sourceNode.visible_style.max_font_size_pt;
+  }
+
   // Fallback to 16pt when all runs inherit theme sizing and expose no explicit fontSize.
   // This keeps overflow estimation anchored near common Slides body defaults (roughly 14-18pt)
   // while avoiding a zero/undefined baseline that would make fit pass unusable.
@@ -628,7 +635,7 @@ function resolveEffectiveLayoutHint(sourceNode: SlideTextNode): {
 }
 
 function usesFallbackLayoutHint(sourceNode: SlideTextNode): boolean {
-  return !sourceNode.layout_hint;
+  return sourceNode.layout_hint_source === "fallback" || !sourceNode.layout_hint;
 }
 
 function roundScale(value: number): number {

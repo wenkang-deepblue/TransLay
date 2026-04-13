@@ -5,6 +5,7 @@ import type { SlideExtractionResult, SlideTextNode } from "../adapters/slides";
 import {
   auditAuthorityCoverage,
   buildMaterializationGroups,
+  explodeMaterializationGroup,
   mergeAuthorityNodes,
   projectNodesToAuthoritySourceNodes,
 } from "./authority";
@@ -195,7 +196,47 @@ test("buildMaterializationGroups groups nodes per slide and respects small limit
   );
 });
 
-test("projectNodesToAuthoritySourceNodes carries layout semantics and visible style summaries", () => {
+test("explodeMaterializationGroup isolates each node while preserving original order", () => {
+  const slide: SlideExtractionResult = {
+    slide_index: 5,
+    slide_object_id: "slide_5",
+    nodes: [
+      createNode({
+        node_id: "s5-n1",
+        text: "Alpha",
+        full_text: "Alpha",
+        slide_index: 5,
+        element_type: "shape",
+        archetype: "plain_text",
+        object_id: "shape_1",
+      }),
+      createNode({
+        node_id: "s5-n2",
+        text: "Beta",
+        full_text: "Beta",
+        slide_index: 5,
+        element_type: "shape",
+        archetype: "plain_text",
+        object_id: "shape_2",
+      }),
+    ],
+  };
+
+  const [group] = buildMaterializationGroups([slide], {
+    maxNodesPerGroup: 10,
+    maxCharsPerGroup: 1000,
+  });
+  assert.ok(group);
+
+  const exploded = explodeMaterializationGroup(group);
+
+  assert.deepEqual(
+    exploded.map((item) => item.node_summaries.map((node) => node.node_id)),
+    [["s5-n1"], ["s5-n2"]]
+  );
+});
+
+test("projectNodesToAuthoritySourceNodes keeps only authority source fields", () => {
   const nodes = projectNodesToAuthoritySourceNodes([
     createNode({
       node_id: "title-node",
@@ -205,22 +246,6 @@ test("projectNodesToAuthoritySourceNodes carries layout semantics and visible st
       element_type: "shape",
       archetype: "plain_text",
       object_id: "shape_title",
-      visible_style: {
-        alignment: "CENTER",
-        font_family: "Inter",
-        min_font_size_pt: 20,
-        max_font_size_pt: 28,
-        fill_color_hex: "#123456",
-        outline_color_hex: "#abcdef",
-      },
-      layout_hint: {
-        node_id: "title-node",
-        visual_role: "title",
-        cluster_id: "cluster-title",
-        line_policy: "prefer_single_line",
-        scale_sync: "sync_with_group",
-        confidence: 0.95,
-      },
     }),
   ]);
 
@@ -231,38 +256,5 @@ test("projectNodesToAuthoritySourceNodes carries layout semantics and visible st
     element_type: "shape",
     archetype: "plain_text",
     full_text: "Revenue headline",
-    visible_style: {
-      alignment: "CENTER",
-      font_family: "Inter",
-      min_font_size_pt: 20,
-      max_font_size_pt: 28,
-      fill_color_hex: "#123456",
-      outline_color_hex: "#abcdef",
-    },
-    layout_hint: {
-      node_id: "title-node",
-      visual_role: "title",
-      cluster_id: "cluster-title",
-      line_policy: "prefer_single_line",
-      scale_sync: "sync_with_group",
-      confidence: 0.95,
-    },
   });
-});
-
-test("projectNodesToAuthoritySourceNodes keeps layout metadata undefined when absent", () => {
-  const nodes = projectNodesToAuthoritySourceNodes([
-    createNode({
-      node_id: "body-node",
-      text: "Revenue detail",
-      full_text: "Revenue detail",
-      slide_index: 5,
-      element_type: "shape",
-      archetype: "plain_text",
-      object_id: "shape_body",
-    }),
-  ]);
-
-  assert.equal(nodes[0]?.visible_style, undefined);
-  assert.equal(nodes[0]?.layout_hint, undefined);
 });

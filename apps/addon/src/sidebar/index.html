@@ -227,6 +227,14 @@
     .result-area.visible { display: block; }
     .result-area.success { background: #e6f4ea; color: #137333; }
     .result-area.error { background: #fce8e6; color: #c5221f; }
+    .result-warnings {
+      display: none;
+      margin-top: 10px;
+      padding-left: 18px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .result-warnings.visible { display: block; }
     .result-link {
       display: inline-block;
       margin-top: 8px;
@@ -473,6 +481,7 @@
     <!-- Result area -->
     <div class="result-area" id="resultArea">
       <div id="resultMessage"></div>
+      <ul id="resultWarnings" class="result-warnings"></ul>
       <a id="resultLink" class="result-link" href="#" target="_blank" style="display:none;">Open translated document</a>
     </div>
 
@@ -480,11 +489,11 @@
 
   <div id="confirmDialog" class="dialog-overlay">
     <div class="dialog-card">
-      <div class="dialog-title" id="confirmDialogTitle">友情提示</div>
+      <div class="dialog-title" id="confirmDialogTitle">Confirmation</div>
       <div class="dialog-body" id="confirmDialogBody"></div>
       <div class="dialog-actions">
-        <button class="btn btn-secondary" id="confirmDialogCancelBtn" type="button">取消</button>
-        <button class="btn btn-primary" id="confirmDialogConfirmBtn" type="button">确认</button>
+        <button class="btn btn-secondary" id="confirmDialogCancelBtn" type="button">Cancel</button>
+        <button class="btn btn-primary" id="confirmDialogConfirmBtn" type="button">Confirm</button>
       </div>
     </div>
   </div>
@@ -741,19 +750,19 @@
       }
 
       showConfirmationDialog(
-        '友情提示',
+        'Confirmation',
         [
-          '当前翻译任务：',
-          '源语言：自动识别',
-          '目标语言：' + targetLang,
-          '翻译范围：' + describeRange(rangeMode, rangeExpression),
-          '输出形式：' + describeOutputMode(outputMode),
-          '将消耗额度：' + translatedPageCount,
+          'Translation task:',
+          'Source language: Auto-detect',
+          'Target language: ' + targetLang,
+          'Translation range: ' + describeRange(rangeMode, rangeExpression),
+          'Output mode: ' + describeOutputMode(outputMode),
+          'Usage to consume: ' + translatedPageCount,
           '',
-          '是否开始任务？'
+          'Start this task?'
         ].join('\n'),
-        '确认',
-        '取消',
+        'Confirm',
+        'Cancel',
         function() {
           executeTranslateSubmission(jobRequest, targetLang, outputMode, rangeExpression, submissionNonce);
         }
@@ -918,7 +927,7 @@
           stopPolling();
           setTranslating(false);
           hideProgress();
-          showResult(false, 'Translation timed out. Please check your document or try again.', null);
+          showResult(false, 'Translation timed out. Please check your document or try again.', null, []);
           return;
         }
         pollJob(jobId);
@@ -952,7 +961,8 @@
             showResult(
               true,
               resp.message || 'Translation completed successfully.',
-              resolveOutputDocumentUrl(resp)
+              resolveOutputDocumentUrl(resp),
+              resp.warnings || []
             );
             // Refresh entitlement after job completion (usage changed)
             refreshEntitlement(true);
@@ -966,7 +976,7 @@
             stopPolling();
             setTranslating(false);
             hideProgress();
-            showResult(false, resp.message || 'Translation failed.', null);
+            showResult(false, resp.message || 'Translation failed.', null, resp.warnings || []);
           } else {
             // In progress
             state.translatedUnitsBilled = resp.translated_units_billed || 0;
@@ -1006,15 +1016,15 @@
 
       if (state.translatedUnitsBilled > 0) {
         showConfirmationDialog(
-          '取消任务提醒',
+          'Cancel Translation',
           [
-            '当前已经翻译完成' + state.translatedUnitsBilled + '页。',
-            '如果现在取消，已经成功翻译过的页面仍会计入本月额度。',
+            state.translatedUnitsBilled + ' slide(s) have already been translated.',
+            'If you cancel now, successfully translated slides will still count toward your quota.',
             '',
-            '是否取消任务？'
+            'Cancel this task?'
           ].join('\n'),
-          '取消任务',
-          '继续任务',
+          'Cancel Task',
+          'Continue',
           function() {
             requestJobCancellation(
               state.currentJobId,
@@ -1137,10 +1147,10 @@
       var cancelBtn = document.getElementById('confirmDialogCancelBtn');
       var confirmBtn = document.getElementById('confirmDialogConfirmBtn');
 
-      titleEl.textContent = title || '友情提示';
+      titleEl.textContent = title || 'Confirmation';
       bodyEl.textContent = body || '';
-      cancelBtn.textContent = cancelText || '取消';
-      confirmBtn.textContent = confirmText || '确认';
+      cancelBtn.textContent = cancelText || 'Cancel';
+      confirmBtn.textContent = confirmText || 'Confirm';
 
       cancelBtn.onclick = function() {
         hideConfirmationDialog();
@@ -1258,10 +1268,11 @@
       updateCancelButton();
     }
 
-    function showResult(success, message, url) {
+    function showResult(success, message, url, warnings) {
       var area = document.getElementById('resultArea');
       area.className = 'result-area visible ' + (success ? 'success' : 'error');
       document.getElementById('resultMessage').textContent = message;
+      renderResultWarnings(Array.isArray(warnings) ? warnings : []);
       var link = document.getElementById('resultLink');
       if (url) {
         link.href = url;
@@ -1281,12 +1292,59 @@
       ) {
         message += ' The generated file was kept, and the generated slides were counted toward your quota.';
       }
-      showResult(false, message, resolveOutputDocumentUrl(resp));
+      showResult(false, message, resolveOutputDocumentUrl(resp), []);
     }
 
     function hideResult() {
       document.getElementById('resultArea').classList.remove('visible');
       document.getElementById('resultArea').className = 'result-area';
+      renderResultWarnings([]);
+    }
+
+    function renderResultWarnings(warnings) {
+      var list = document.getElementById('resultWarnings');
+      list.innerHTML = '';
+      if (!warnings || warnings.length === 0) {
+        list.classList.remove('visible');
+        return;
+      }
+
+      var excludedSlides = [];
+      var layoutReviewSlides = [];
+
+      warnings.forEach(function(warning) {
+        if (!warning || typeof warning.slide_index !== 'number') {
+          return;
+        }
+        var pageNumber = warning.slide_index + 1;
+        if (warning.risk_reason === 'unsafe_slide_excluded') {
+          if (excludedSlides.indexOf(pageNumber) === -1) excludedSlides.push(pageNumber);
+          return;
+        }
+        if (layoutReviewSlides.indexOf(pageNumber) === -1) layoutReviewSlides.push(pageNumber);
+      });
+
+      excludedSlides.sort(function(a, b) { return a - b; });
+      layoutReviewSlides.sort(function(a, b) { return a - b; });
+
+      if (excludedSlides.length > 0) {
+        appendResultWarning(list, 'Skipped for safety review: slide ' + excludedSlides.join(', ') + '.');
+      }
+      if (layoutReviewSlides.length > 0) {
+        appendResultWarning(list, 'Minor manual layout review recommended: slide ' + layoutReviewSlides.join(', ') + '.');
+      }
+
+      if (list.children.length > 0) {
+        list.classList.add('visible');
+      } else {
+        list.classList.remove('visible');
+      }
+    }
+
+    function appendResultWarning(list, text) {
+      var item = document.createElement('li');
+      item.textContent = text;
+      list.appendChild(item);
     }
 
     function resolveOutputDocumentUrl(resp) {

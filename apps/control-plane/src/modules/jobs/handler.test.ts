@@ -65,6 +65,112 @@ test("job handler returns completed_with_warnings payload with structured warnin
   });
 });
 
+test("job handler surfaces skipped unsafe slides in completed-with-warnings message", () => {
+  const warnings: JobWarning[] = [
+    {
+      node_id: "node_1",
+      slide_index: 1,
+      archetype: "plain_text",
+      risk_level: "medium",
+      risk_reason: "possible_overflow",
+    },
+    {
+      node_id: "unsafe_slide_4",
+      slide_index: 3,
+      archetype: "plain_text",
+      risk_level: "high",
+      risk_reason: "unsafe_slide_excluded",
+    },
+    {
+      node_id: "unsafe_slide_7",
+      slide_index: 6,
+      archetype: "plain_text",
+      risk_level: "high",
+      risk_reason: "unsafe_slide_excluded",
+    },
+  ];
+
+  const response = __buildJobStatusResponseForTests({
+    ...createBaseJob(),
+    status: "completed_with_warnings",
+    warnings,
+  });
+
+  assert.deepEqual(response, {
+    job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+    status: "completed_with_warnings",
+    progress_percent: 100,
+    output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
+    message:
+      "Translation completed with 1 container requiring review. Slides 4, 7 were skipped because their content looked unsafe for model input.",
+    warnings,
+  });
+});
+
+test("job handler surfaces skipped unsafe slides in the completed message", () => {
+  const warnings: JobWarning[] = [
+    {
+      node_id: "unsafe_slide_2",
+      slide_index: 1,
+      archetype: "plain_text",
+      risk_level: "high",
+      risk_reason: "unsafe_slide_excluded",
+    },
+    {
+      node_id: "node_4",
+      slide_index: 3,
+      archetype: "plain_text",
+      risk_level: "medium",
+      risk_reason: "layout_semantics_fallback_applied",
+    },
+  ];
+
+  const response = __buildJobStatusResponseForTests({
+    ...createBaseJob(),
+    status: "completed_with_warnings",
+    warnings,
+  });
+
+  assert.deepEqual(response, {
+    job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+    status: "completed_with_warnings",
+    progress_percent: 100,
+    output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
+    message:
+      "Translation completed with 1 container requiring review. Slide 2 was skipped because its content looked unsafe for model input.",
+    warnings,
+  });
+});
+
+test("job handler returns failed payload with persisted unsafe-slide warnings", () => {
+  const warnings: JobWarning[] = [
+    {
+      node_id: "unsafe_slide_2",
+      slide_index: 1,
+      archetype: "plain_text",
+      risk_level: "high",
+      risk_reason: "unsafe_slide_excluded",
+    },
+  ];
+
+  const response = __buildJobStatusResponseForTests({
+    ...createBaseJob(),
+    status: "failed",
+    error_code: "JOB_INTERNAL_ERROR",
+    error_message: "Translation failed.",
+    warnings,
+  });
+
+  assert.deepEqual(response, {
+    job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+    status: "failed",
+    error: "JOB_INTERNAL_ERROR",
+    message:
+      "Translation failed. Slide 2 was skipped because its content looked unsafe for model input.",
+    warnings,
+  });
+});
+
 test("job handler returns plain completed payload without warnings when none exist", () => {
   const response = __buildJobStatusResponseForTests(createBaseJob());
 

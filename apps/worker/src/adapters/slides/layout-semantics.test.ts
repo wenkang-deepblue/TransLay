@@ -125,7 +125,7 @@ test("buildLayoutSemanticInputs projects visible slide nodes and skips speaker n
   assert.equal(inputs[0]?.thumbnail.slide_index, 1);
 });
 
-test("validateSlideLayoutHints keeps valid node ids and normalizes invalid fields to fallback defaults", () => {
+test("validateSlideLayoutHints keeps valid node ids and drops low-confidence hints", () => {
   const slide: SlideExtractionResult = {
     slide_index: 1,
     slide_object_id: "slide_1",
@@ -189,14 +189,6 @@ test("validateSlideLayoutHints keeps valid node ids and normalizes invalid field
       line_policy: "prefer_single_line",
       scale_sync: "sync_with_group",
       confidence: 0.94,
-    },
-    {
-      node_id: "shape_2",
-      visual_role: "unknown",
-      cluster_id: "shape_2",
-      line_policy: "allow_wrap",
-      scale_sync: "independent",
-      confidence: 0,
     },
   ]);
 });
@@ -271,5 +263,191 @@ test("annotateSlidesWithLayoutSemanticsBestEffort applies per-node fallback hint
   assert.equal(
     annotated[0]?.nodes.find((node) => node.element_type === "speaker_notes")?.layout_hint,
     undefined
+  );
+  assert.deepEqual(
+    visibleNodes?.map((node) => node.layout_hint_source),
+    ["fallback", "fallback"]
+  );
+});
+
+test("annotateSlidesWithLayoutSemanticsBestEffort falls back when model returns low-confidence hints", async () => {
+  const slides: SlideExtractionResult[] = [
+    {
+      slide_index: 2,
+      slide_object_id: "slide_2",
+      nodes: [
+        createNode({
+          node_id: "shape_3",
+          text: "Highlights",
+          full_text: "Highlights",
+          slide_index: 2,
+          element_type: "shape",
+          archetype: "plain_text",
+          object_id: "shape_3",
+        }),
+      ],
+    },
+  ];
+
+  const annotated = await annotateSlidesWithLayoutSemanticsBestEffort(
+    slides,
+    createStoryboard(),
+    async () => [
+      {
+        node_id: "shape_3",
+        visual_role: "title",
+        cluster_id: "hero",
+        line_policy: "prefer_single_line",
+        scale_sync: "sync_with_group",
+        confidence: 0.42,
+      },
+    ]
+  );
+
+  assert.deepEqual(annotated[0]?.nodes[0]?.layout_hint, {
+    node_id: "shape_3",
+    visual_role: "unknown",
+    cluster_id: "shape_3",
+    line_policy: "allow_wrap",
+    scale_sync: "independent",
+    confidence: 0,
+  });
+  assert.equal(annotated[0]?.nodes[0]?.layout_hint_source, "fallback");
+});
+
+test("annotateSlidesWithLayoutSemanticsBestEffort applies rule-based fallback for obvious title and body nodes", async () => {
+  const slides: SlideExtractionResult[] = [
+    {
+      slide_index: 3,
+      slide_object_id: "slide_3",
+      nodes: [
+        createNode({
+          node_id: "shape_title",
+          text: "The Enterprise Data Challenges in AI Era",
+          full_text: "The Enterprise Data Challenges in AI Era",
+          slide_index: 3,
+          element_type: "shape",
+          archetype: "plain_text",
+          object_id: "shape_title",
+          box: {
+            width_emu: 420 * 12700,
+            height_emu: 42 * 12700,
+            translate_x_emu: 24 * 12700,
+            translate_y_emu: 18 * 12700,
+            rotation_deg: 0,
+          },
+          visible_style: {
+            alignment: "START",
+            font_family: "Arial",
+            min_font_size_pt: 28,
+            max_font_size_pt: 28,
+          },
+        }),
+        createNode({
+          node_id: "shape_body",
+          text: "Enterprise data silos\nMulti-cloud lacks data freedom",
+          full_text: "Enterprise data silos\nMulti-cloud lacks data freedom",
+          slide_index: 3,
+          element_type: "shape",
+          archetype: "bullet_list",
+          object_id: "shape_body",
+          box: {
+            width_emu: 280 * 12700,
+            height_emu: 180 * 12700,
+            translate_x_emu: 36 * 12700,
+            translate_y_emu: 92 * 12700,
+            rotation_deg: 0,
+          },
+          visible_style: {
+            alignment: "START",
+            font_family: "Arial",
+            min_font_size_pt: 20,
+            max_font_size_pt: 20,
+          },
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "Enterprise data silos",
+              start_index: 0,
+              end_index: 22,
+              bullet: { nesting_level: 0 },
+              paragraph_style: { alignment: "START" },
+              runs: [
+                {
+                  run_id: "r0",
+                  text: "Enterprise data silos",
+                  start_index: 0,
+                  end_index: 22,
+                  style_role: "default",
+                  text_style: {
+                    fontSize: { magnitude: 20, unit: "PT" },
+                    weightedFontFamily: { fontFamily: "Arial" },
+                  },
+                },
+              ],
+            },
+            {
+              paragraph_id: "p1",
+              text: "Multi-cloud lacks data freedom",
+              start_index: 23,
+              end_index: 54,
+              bullet: { nesting_level: 0 },
+              paragraph_style: { alignment: "START" },
+              runs: [
+                {
+                  run_id: "r1",
+                  text: "Multi-cloud lacks data freedom",
+                  start_index: 23,
+                  end_index: 54,
+                  style_role: "default",
+                  text_style: {
+                    fontSize: { magnitude: 20, unit: "PT" },
+                    weightedFontFamily: { fontFamily: "Arial" },
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      ],
+    },
+  ];
+
+  const storyboard: DeckStoryboard = {
+    frames: [
+      {
+        slide_index: 3,
+        slide_object_id: "slide_3",
+        mime_type: "image/png",
+        base64_data: "ZmFrZQ==",
+      },
+    ],
+  };
+
+  const annotated = await annotateSlidesWithLayoutSemanticsBestEffort(
+    slides,
+    storyboard,
+    async () => []
+  );
+
+  assert.deepEqual(annotated[0]?.nodes[0]?.layout_hint, {
+    node_id: "shape_title",
+    visual_role: "title",
+    cluster_id: "shape_title",
+    line_policy: "prefer_single_line",
+    scale_sync: "independent",
+    confidence: 0,
+  });
+  assert.deepEqual(annotated[0]?.nodes[1]?.layout_hint, {
+    node_id: "shape_body",
+    visual_role: "body",
+    cluster_id: "shape_body",
+    line_policy: "allow_wrap",
+    scale_sync: "independent",
+    confidence: 0,
+  });
+  assert.deepEqual(
+    annotated[0]?.nodes.map((node) => node.layout_hint_source),
+    ["fallback", "fallback"]
   );
 });

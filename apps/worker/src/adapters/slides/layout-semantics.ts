@@ -17,6 +17,7 @@ const DEFAULT_VISUAL_ROLE: SlideLayoutVisualRole = "unknown";
 const DEFAULT_LINE_POLICY: SlideLayoutLinePolicy = "allow_wrap";
 const DEFAULT_SCALE_SYNC: SlideLayoutScaleSync = "independent";
 const MAX_TEXT_EXCERPT_LENGTH = 160;
+const MIN_LAYOUT_HINT_CONFIDENCE = 0.6;
 
 export interface SlideLayoutSemanticNodeInput {
   readonly node_id: string;
@@ -101,6 +102,10 @@ export function validateSlideLayoutHints(
       confidence: normalizeConfidence(candidate.confidence),
     };
 
+    if (normalized.confidence < MIN_LAYOUT_HINT_CONFIDENCE) {
+      continue;
+    }
+
     const existing = validatedByNodeId.get(nodeId);
     if (!existing || normalized.confidence >= existing.confidence) {
       validatedByNodeId.set(nodeId, normalized);
@@ -130,7 +135,16 @@ export async function annotateSlidesWithLayoutSemanticsBestEffort(
 
     try {
       const rawHints = await analyzeSlide(input);
-      hintsBySlideIndex.set(slide.slide_index, validateSlideLayoutHints(input, rawHints));
+      const validatedHints = validateSlideLayoutHints(input, rawHints);
+      const hintStats = summarizeHintValidation(
+        input,
+        Array.isArray(rawHints) ? rawHints : [],
+        validatedHints
+      );
+      console.log(
+        `Layout semantics slide ${slide.slide_index + 1}: accepted=${hintStats.accepted}, rejected_low_confidence=${hintStats.rejectedLowConfidence}, ignored_invalid=${hintStats.ignoredInvalid}`
+      );
+      hintsBySlideIndex.set(slide.slide_index, validatedHints);
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown error";
       console.warn(
@@ -144,6 +158,7 @@ export async function annotateSlidesWithLayoutSemanticsBestEffort(
     const slideHints = new Map(
       (hintsBySlideIndex.get(slide.slide_index) ?? []).map((hint) => [hint.node_id, hint])
     );
+    const fallbackHints = buildRuleBasedFallbackHints(slide.nodes);
 
     return {
       ...slide,
@@ -154,7 +169,11 @@ export async function annotateSlidesWithLayoutSemanticsBestEffort(
 
         return {
           ...node,
-          layout_hint: slideHints.get(node.node_id) ?? buildDefaultLayoutHint(node.node_id),
+          layout_hint:
+            slideHints.get(node.node_id) ??
+            fallbackHints.get(node.node_id) ??
+            buildDefaultLayoutHint(node.node_id),
+          layout_hint_source: slideHints.has(node.node_id) ? "model" : "fallback",
         };
       }),
     };
@@ -190,6 +209,144 @@ function buildDefaultLayoutHint(nodeId: string): SlideLayoutSemanticHint {
     line_policy: DEFAULT_LINE_POLICY,
     scale_sync: DEFAULT_SCALE_SYNC,
     confidence: 0,
+  };
+}
+
+function buildRuleBasedFallbackHints(
+  nodes: readonly SlideTextNode[]
+): Map<string, SlideLayoutSemanticHint> {
+  const visibleNodes = nodes.filter((node) => node.element_type !== "speaker_notes");
+  const hints = new Map<string, SlideLayoutSemanticHint>();
+  if (visibleNodes.length === 0) {
+    return hints;
+  }
+
+  const sortedByTop = [...visibleNodes].sort(
+    (left, right) =>
+      left.box.translate_y_emu - right.box.translate_y_emu ||
+      right.box.width_emu - left.box.width_emu
+  );
+  const maxFontSize = Math.max(
+    0,
+    ...visibleNodes.map((node) => node.visible_style?.max_font_size_pt ?? 0)
+  );
+  const titleCandidate = sortedByTop.find((node) =>
+    isObviousTitleNode(node, sortedByTop[0], maxFontSize)
+  );
+
+  for (const node of visibleNodes) {
+    if (titleCandidate && node.node_id === titleCandidate.node_id) {
+      hints.set(
+        node.node_id,
+        buildFallbackHint(node.node_id, "title", "prefer_single_line", "independent")
+      );
+      continue;
+    }
+
+    if (node.archetype === "bullet_list" || node.archetype === "table_cell") {
+      hints.set(
+        node.node_id,
+        buildFallbackHint(node.node_id, "body", "allow_wrap", "independent")
+      );
+      continue;
+    }
+
+    if (node.paragraphs.length > 1 || node.full_text.trim().length >= 80) {
+      hints.set(
+        node.node_id,
+        buildFallbackHint(node.node_id, "body", "allow_wrap", "independent")
+      );
+    }
+  }
+
+  return hints;
+}
+
+function buildFallbackHint(
+  nodeId: string,
+  visualRole: SlideLayoutVisualRole,
+  linePolicy: SlideLayoutLinePolicy,
+  scaleSync: SlideLayoutScaleSync
+): SlideLayoutSemanticHint {
+  return {
+    node_id: nodeId,
+    visual_role: visualRole,
+    cluster_id: nodeId,
+    line_policy: linePolicy,
+    scale_sync: scaleSync,
+    confidence: 0,
+  };
+}
+
+function isObviousTitleNode(
+  node: SlideTextNode,
+  topMostNode: SlideTextNode | undefined,
+  maxFontSize: number
+): boolean {
+  if (node.element_type !== "shape") {
+    return false;
+  }
+  if (node.archetype !== "plain_text" && node.archetype !== "mixed_emphasis") {
+    return false;
+  }
+  if (node.paragraphs.length !== 1) {
+    return false;
+  }
+
+  const fontSize = node.visible_style?.max_font_size_pt ?? 0;
+  const isTopMostNode = topMostNode?.node_id === node.node_id;
+  const isWide = node.box.width_emu >= 260 * 12700;
+  const isShort = node.box.height_emu <= 60 * 12700;
+  const hasLargeType = fontSize >= Math.max(26, maxFontSize * 0.9);
+  const hasLongHeadline = node.full_text.trim().length >= 18;
+
+  return isTopMostNode && isWide && isShort && hasLargeType && hasLongHeadline;
+}
+
+function summarizeHintValidation(
+  slideInput: SlideLayoutSemanticSlideInput,
+  candidates: readonly unknown[],
+  validatedHints: readonly SlideLayoutSemanticHint[]
+): {
+  readonly accepted: number;
+  readonly rejectedLowConfidence: number;
+  readonly ignoredInvalid: number;
+} {
+  const knownNodeIds = new Set(slideInput.nodes.map((node: SlideLayoutSemanticNodeInput) => node.node_id));
+  const acceptedNodeIds = new Set(validatedHints.map((hint) => hint.node_id));
+  let rejectedLowConfidence = 0;
+  let ignoredInvalid = 0;
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== "object") {
+      ignoredInvalid += 1;
+      continue;
+    }
+
+    const nodeId = typeof (candidate as { node_id?: unknown }).node_id === "string"
+      ? (candidate as { node_id: string }).node_id
+      : "";
+    if (!knownNodeIds.has(nodeId)) {
+      ignoredInvalid += 1;
+      continue;
+    }
+    if (acceptedNodeIds.has(nodeId)) {
+      continue;
+    }
+
+    const confidence = normalizeConfidence((candidate as { confidence?: unknown }).confidence);
+    if (confidence < MIN_LAYOUT_HINT_CONFIDENCE) {
+      rejectedLowConfidence += 1;
+      continue;
+    }
+
+    ignoredInvalid += 1;
+  }
+
+  return {
+    accepted: validatedHints.length,
+    rejectedLowConfidence,
+    ignoredInvalid,
   };
 }
 

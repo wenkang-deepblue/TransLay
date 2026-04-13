@@ -51,7 +51,10 @@ export function buildRichTextNode(
     extractedParagraphs
   );
   const paragraphs = assignStyleRoles(extractedParagraphs, archetype);
-  const visibleStyle = params.visibleStyle ?? summarizeVisibleStyleFromParagraphs(paragraphs);
+  const visibleStyle = mergeVisibleStyleSummary(
+    params.visibleStyle,
+    summarizeVisibleStyleFromParagraphs(paragraphs, params.box, archetype)
+  );
 
   return {
     node_id: params.nodeId,
@@ -349,12 +352,24 @@ function resolveMetricRunStyleRole(
 }
 
 function summarizeVisibleStyleFromParagraphs(
-  paragraphs: readonly SlideParagraph[]
+  paragraphs: readonly SlideParagraph[],
+  box?: SlideBoxGeometry,
+  archetype?: SlideNodeArchetype
 ): SlideVisibleStyleSummary | undefined {
-  const fontSizes = paragraphs
+  const explicitFontSizes = paragraphs
     .flatMap((paragraph) => paragraph.runs)
     .map((run) => run.text_style.fontSize?.magnitude)
     .filter((value): value is number => typeof value === "number" && value > 0);
+  const inferredFontSize =
+    explicitFontSizes.length === 0 && box && archetype
+      ? inferFontSizeFromGeometry(paragraphs, box, archetype)
+      : undefined;
+  const fontSizes =
+    explicitFontSizes.length > 0
+      ? explicitFontSizes
+      : typeof inferredFontSize === "number"
+        ? [inferredFontSize]
+        : [];
 
   const alignment = paragraphs.find((paragraph) => Boolean(paragraph.paragraph_style.alignment))
     ?.paragraph_style.alignment;
@@ -373,6 +388,136 @@ function summarizeVisibleStyleFromParagraphs(
     min_font_size_pt: fontSizes.length > 0 ? Math.min(...fontSizes) : undefined,
     max_font_size_pt: fontSizes.length > 0 ? Math.max(...fontSizes) : undefined,
   };
+}
+
+function mergeVisibleStyleSummary(
+  provided?: SlideVisibleStyleSummary,
+  inferred?: SlideVisibleStyleSummary
+): SlideVisibleStyleSummary | undefined {
+  if (!provided && !inferred) {
+    return undefined;
+  }
+
+  return {
+    alignment: provided?.alignment ?? inferred?.alignment,
+    font_family: provided?.font_family ?? inferred?.font_family,
+    min_font_size_pt: provided?.min_font_size_pt ?? inferred?.min_font_size_pt,
+    max_font_size_pt: provided?.max_font_size_pt ?? inferred?.max_font_size_pt,
+    fill_color_hex: provided?.fill_color_hex ?? inferred?.fill_color_hex,
+    outline_color_hex: provided?.outline_color_hex ?? inferred?.outline_color_hex,
+  };
+}
+
+function inferFontSizeFromGeometry(
+  paragraphs: readonly SlideParagraph[],
+  box: SlideBoxGeometry,
+  archetype: SlideNodeArchetype
+): number | undefined {
+  const widthPt = box.width_emu / PT_TO_EMU;
+  const heightPt = box.height_emu / PT_TO_EMU;
+  if (widthPt <= 0 || heightPt <= 0) {
+    return undefined;
+  }
+
+  const profile = getInferenceProfile(archetype);
+  const longestLineWeight = Math.max(
+    1,
+    ...paragraphs.map((paragraph) => estimateWrapFriendlyLineWeight(paragraph.text))
+  );
+  const paragraphCount = Math.max(1, paragraphs.length);
+  const widthLimitedFontSize = widthPt / (longestLineWeight * profile.widthFactor);
+  const heightLimitedFontSize = heightPt / (paragraphCount * profile.lineHeightFactor);
+  const inferred = Math.min(widthLimitedFontSize, heightLimitedFontSize);
+
+  if (!Number.isFinite(inferred) || inferred <= 0) {
+    return undefined;
+  }
+
+  return roundFontSize(Math.max(10, Math.min(44, inferred)));
+}
+
+function getInferenceProfile(archetype: SlideNodeArchetype): {
+  readonly widthFactor: number;
+  readonly lineHeightFactor: number;
+} {
+  switch (archetype) {
+    case "bullet_list":
+      return { widthFactor: 0.58, lineHeightFactor: 1.4 };
+    case "metric_card":
+      return { widthFactor: 0.78, lineHeightFactor: 1.12 };
+    case "mixed_emphasis":
+      return { widthFactor: 0.56, lineHeightFactor: 1.34 };
+    case "table_cell":
+      return { widthFactor: 0.62, lineHeightFactor: 1.28 };
+    case "speaker_notes":
+      return { widthFactor: 0.5, lineHeightFactor: 1.34 };
+    case "plain_text":
+    default:
+      return { widthFactor: 0.54, lineHeightFactor: 1.35 };
+  }
+}
+
+function estimateWrapFriendlyLineWeight(text: string): number {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return 0;
+  }
+
+  const totalWeight = measureTextWeight(normalized);
+  const tokens = normalized.split(" ");
+  if (tokens.length <= 1) {
+    return totalWeight;
+  }
+
+  const longestTokenWeight = Math.max(
+    ...tokens.map((token) => measureTextWeight(token))
+  );
+  const lineCountHint = Math.min(3, Math.max(2, Math.ceil(Math.sqrt(tokens.length))));
+
+  return Math.max(longestTokenWeight, totalWeight / lineCountHint);
+}
+
+function measureTextWeight(text: string): number {
+  let total = 0;
+
+  for (const character of text) {
+    if (character === "\n" || character === "\t") {
+      continue;
+    }
+
+    if (/\s/.test(character)) {
+      total += 0.35;
+      continue;
+    }
+
+    if (/[A-Z]/.test(character)) {
+      total += 1.08;
+      continue;
+    }
+
+    if (/[a-z]/.test(character)) {
+      total += 1;
+      continue;
+    }
+
+    if (/[0-9]/.test(character)) {
+      total += 0.92;
+      continue;
+    }
+
+    if (/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(character)) {
+      total += 1.15;
+      continue;
+    }
+
+    total += 0.65;
+  }
+
+  return total;
+}
+
+function roundFontSize(value: number): number {
+  return Math.round(value * 10) / 10;
 }
 
 function mostCommonStyleSignature(paragraphs: readonly SlideParagraph[]): string {

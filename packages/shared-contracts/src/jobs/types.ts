@@ -37,6 +37,7 @@ export const JOB_WARNING_REASONS = [
   "bullet_structure_rebuilt_with_compaction",
   "single_line_policy_degraded",
   "layout_semantics_fallback_applied",
+  "unsafe_slide_excluded",
   "manual_review_recommended",
 ] as const;
 export type JobWarningReason = (typeof JOB_WARNING_REASONS)[number];
@@ -122,6 +123,7 @@ export interface JobFailedResponse {
   readonly status: "failed";
   readonly error: string;
   readonly message: string;
+  readonly warnings?: readonly JobWarning[];
 }
 
 export type JobStatusResponse =

@@ -2,30 +2,40 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { TranslatedNode } from "@translay/shared-contracts";
 import type { SlideTextNode } from "./types";
+import { __buildNodeWriteRequestsForTests } from "./writer";
 import {
   REQUIRED_REGRESSION_ARCHETYPES,
   REQUIRED_REGRESSION_LANGUAGES,
+  REQUIRED_REGRESSION_SCENARIO_TAGS,
+  SLIDES_FIDELITY_REGRESSION_GROUP_SCENARIOS,
   SLIDES_FIDELITY_REGRESSION_SAMPLES,
   __containsNormalizedTextForTests,
   __countInsertedParagraphsForTests,
   __styleExpectationSatisfiedForTests,
+  evaluateRegressionGroupBaseline,
   evaluateRegressionBaseline,
 } from "./regression-baseline";
 
-test("slides fidelity regression sample set covers required languages and archetypes", () => {
+test("slides fidelity regression baseline covers required languages, archetypes, and scenario tags", () => {
   const languages = new Set(
     SLIDES_FIDELITY_REGRESSION_SAMPLES.map((sample) => sample.target_language)
   );
   const archetypes = new Set(
     SLIDES_FIDELITY_REGRESSION_SAMPLES.map((sample) => sample.source_node.archetype)
   );
+  const scenarioTags = new Set([
+    ...SLIDES_FIDELITY_REGRESSION_SAMPLES.flatMap((sample) => sample.scenario_tags ?? []),
+    ...SLIDES_FIDELITY_REGRESSION_GROUP_SCENARIOS.flatMap((scenario) => scenario.tags),
+  ]);
 
   assert.deepEqual([...languages].sort(), [...REQUIRED_REGRESSION_LANGUAGES].sort());
   assert.deepEqual([...archetypes].sort(), [...REQUIRED_REGRESSION_ARCHETYPES].sort());
+  assert.deepEqual([...scenarioTags].sort(), [...REQUIRED_REGRESSION_SCENARIO_TAGS].sort());
 });
 
 test("slides fidelity regression baseline meets phase 4A.7 thresholds", () => {
   const baseline = evaluateRegressionBaseline(SLIDES_FIDELITY_REGRESSION_SAMPLES);
+  const groupBaseline = evaluateRegressionGroupBaseline(SLIDES_FIDELITY_REGRESSION_GROUP_SCENARIOS);
 
   assert.equal(baseline.empty_bullet_generation_rate, 0);
   assert.equal(baseline.bullet_count_error_rate, 0);
@@ -46,6 +56,15 @@ test("slides fidelity regression baseline meets phase 4A.7 thresholds", () => {
     `major_manual_reflow_rate=${baseline.major_manual_reflow_rate}`
   );
   assert.equal(baseline.term_consistency_rate, 1);
+  assert.equal(
+    groupBaseline.cluster_scale_mismatch_rate,
+    0,
+    `cluster_scale_mismatch_rate=${groupBaseline.cluster_scale_mismatch_rate}`
+  );
+  assert.ok(
+    groupBaseline.single_line_degradation_rate < 0.1,
+    `single_line_degradation_rate=${groupBaseline.single_line_degradation_rate}`
+  );
 });
 
 test("paragraph counting ignores trailing newline so empty bullet does not inflate paragraph mismatch", () => {
@@ -174,4 +193,27 @@ test("bullet count metric compares preserved bullet paragraphs instead of all in
 
   assert.equal(baseline.bullet_count_error_rate, 0);
   assert.equal(baseline.paragraph_count_error_rate, 0);
+});
+
+test("regression baseline covers inherited-theme German title shrink with explicit write-back font size", () => {
+  const sample = SLIDES_FIDELITY_REGRESSION_SAMPLES.find(
+    (candidate) => candidate.sample_id === "de-theme-title-oracle"
+  );
+  assert.ok(sample);
+
+  const requests = __buildNodeWriteRequestsForTests({
+    sourceNode: sample.source_node,
+    translatedNode: sample.translated_node,
+    objectId: `${sample.source_node.object_id}_copy`,
+  });
+  const textStyleRequest = requests.find((request) => request.updateTextStyle);
+
+  assert.ok(textStyleRequest?.updateTextStyle);
+  assert.equal(
+    typeof textStyleRequest?.updateTextStyle?.style?.fontSize?.magnitude,
+    "number"
+  );
+  assert.ok(
+    (textStyleRequest?.updateTextStyle?.style?.fontSize?.magnitude ?? 0) < 28
+  );
 });

@@ -39,6 +39,7 @@ function createNode(
     paragraphs: overrides.paragraphs ?? [],
     visible_style: overrides.visible_style,
     layout_hint: overrides.layout_hint,
+    layout_hint_source: overrides.layout_hint_source,
     row_index: overrides.row_index,
     col_index: overrides.col_index,
   };
@@ -570,6 +571,86 @@ test("writer applies fit-pass scaling proportionally across style hierarchy and 
   );
 });
 
+test("writer injects explicit font size when shrinking inherited-theme text runs", () => {
+  const sourceNode = createNode({
+    node_id: "theme_inherited_body",
+    text: "Platform overview",
+    full_text: "Platform overview",
+    slide_index: 4,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "theme_inherited_body",
+    box: {
+      width_emu: 92 * 12700,
+      height_emu: 24 * 12700,
+      translate_x_emu: 0,
+      translate_y_emu: 0,
+      rotation_deg: 0,
+    },
+    visible_style: {
+      alignment: "START",
+      font_family: "Arial",
+      min_font_size_pt: 22,
+      max_font_size_pt: 22,
+    },
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        text: "Platform overview",
+        start_index: 0,
+        end_index: 17,
+        paragraph_style: {},
+        runs: [
+          {
+            run_id: "r0",
+            text: "Platform overview",
+            start_index: 0,
+            end_index: 17,
+            style_role: "default",
+            text_style: {
+              weightedFontFamily: { fontFamily: "Arial" },
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  const translatedNode: TranslatedNode = {
+    node_id: "theme_inherited_body",
+    translated_full_text: "Plattformubersicht fur unternehmensweite Daten- und KI-Workloads",
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        translated_text: "Plattformubersicht fur unternehmensweite Daten- und KI-Workloads",
+        bullet_behavior: "none",
+      },
+    ],
+    segments: [
+      {
+        segment_id: "r0",
+        translated_text: "Plattformubersicht fur unternehmensweite Daten- und KI-Workloads",
+        style_role: "default",
+      },
+    ],
+  };
+
+  const requests = __buildNodeWriteRequestsForTests({
+    sourceNode,
+    translatedNode,
+    objectId: "theme_inherited_body_copy",
+  });
+  const textStyleRequest = requests.find((request) => request.updateTextStyle);
+
+  assert.ok(textStyleRequest?.updateTextStyle);
+  assert.equal(
+    typeof textStyleRequest?.updateTextStyle?.style?.fontSize?.magnitude,
+    "number"
+  );
+  assert.ok((textStyleRequest?.updateTextStyle?.style?.fontSize?.magnitude ?? 0) < 22);
+  assert.equal(textStyleRequest?.updateTextStyle?.style?.fontSize?.unit, "PT");
+});
+
 test("writer handles empty translated nodes by issuing only deleteText", () => {
   const sourceNode = createNode({
     node_id: "shape_empty",
@@ -1000,6 +1081,7 @@ test("writer does not emit fallback warning when the model explicitly returns de
       scale_sync: "independent",
       confidence: 0,
     },
+    layout_hint_source: "model",
   });
   const translatedNode: TranslatedNode = {
     node_id: "default_hint_from_model",

@@ -6,9 +6,7 @@ import type { SlideExtractionResult, SlideTextNode } from "../adapters/slides";
 import type { AuthoritySourceNode } from "../providers/vertex-gemini-authority";
 import {
   groupNodesForTranslation,
-  projectLayoutHint,
   projectNodesToContextSummaries,
-  projectVisibleStyle,
 } from "./context-pack";
 
 export interface AuthorityCoverageAuditResult {
@@ -26,8 +24,6 @@ export function projectNodesToAuthoritySourceNodes(
     element_type: node.element_type,
     archetype: node.archetype,
     full_text: node.full_text,
-    visible_style: projectVisibleStyle(node),
-    layout_hint: projectLayoutHint(node),
   }));
 }
 
@@ -95,4 +91,12 @@ export function buildMaterializationGroups(
     }
   }
   return groups;
+}
+
+export function explodeMaterializationGroup(
+  group: MaterializationGroup
+): MaterializationGroup[] {
+  return group.node_summaries.map((nodeSummary) => ({
+    node_summaries: [nodeSummary],
+  }));
 }
