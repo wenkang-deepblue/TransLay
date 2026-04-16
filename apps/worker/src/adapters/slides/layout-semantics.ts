@@ -12,6 +12,7 @@ import {
   SLIDE_LAYOUT_SCALE_SYNC_OPTIONS,
   SLIDE_LAYOUT_VISUAL_ROLES,
 } from "./types";
+import { measureTextWeight } from "./fit-pass";
 
 const DEFAULT_VISUAL_ROLE: SlideLayoutVisualRole = "unknown";
 const DEFAULT_LINE_POLICY: SlideLayoutLinePolicy = "allow_wrap";
@@ -159,25 +160,255 @@ export async function annotateSlidesWithLayoutSemanticsBestEffort(
       (hintsBySlideIndex.get(slide.slide_index) ?? []).map((hint) => [hint.node_id, hint])
     );
     const fallbackHints = buildRuleBasedFallbackHints(slide.nodes);
+    const resolved = slide.nodes.map((node) =>
+      resolveNodeLayoutSemantics(node, slideHints, fallbackHints)
+    );
 
     return {
       ...slide,
-      nodes: slide.nodes.map((node) => {
-        if (node.element_type === "speaker_notes") {
-          return node;
-        }
-
-        return {
-          ...node,
-          layout_hint:
-            slideHints.get(node.node_id) ??
-            fallbackHints.get(node.node_id) ??
-            buildDefaultLayoutHint(node.node_id),
-          layout_hint_source: slideHints.has(node.node_id) ? "model" : "fallback",
-        };
-      }),
+      nodes: applyGeometricClusterOverride(resolved, fallbackHints),
     };
   });
+}
+
+export async function annotateSlidesWithLayoutSemanticsBestEffortOnDemand(
+  slides: readonly SlideExtractionResult[],
+  getThumbnail: (slide: SlideExtractionResult) => Promise<StoryboardFrame>,
+  analyzeSlide: SlideLayoutSemanticAnalyzer
+): Promise<SlideExtractionResult[]> {
+  const hintsBySlideIndex = new Map<number, readonly SlideLayoutSemanticHint[]>();
+
+  for (const slide of slides) {
+    const thumbnail = await getThumbnail(slide);
+    const [input] = buildLayoutSemanticInputs([slide], { frames: [thumbnail] });
+    if (!input) {
+      hintsBySlideIndex.set(slide.slide_index, []);
+      continue;
+    }
+
+    try {
+      const rawHints = await analyzeSlide(input);
+      const validatedHints = validateSlideLayoutHints(input, rawHints);
+      const hintStats = summarizeHintValidation(
+        input,
+        Array.isArray(rawHints) ? rawHints : [],
+        validatedHints
+      );
+      console.log(
+        `Layout semantics slide ${slide.slide_index + 1}: accepted=${hintStats.accepted}, rejected_low_confidence=${hintStats.rejectedLowConfidence}, ignored_invalid=${hintStats.ignoredInvalid}`
+      );
+      hintsBySlideIndex.set(slide.slide_index, validatedHints);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      console.warn(
+        `Layout semantics analysis fallback applied for slide ${slide.slide_index + 1}: ${message}`
+      );
+      hintsBySlideIndex.set(slide.slide_index, []);
+    }
+  }
+
+  return annotateSlidesWithPersistedLayoutHints(
+    slides,
+    slides.flatMap((slide) =>
+      (hintsBySlideIndex.get(slide.slide_index) ?? []).map((hint) => ({
+        ...hint,
+        slide_index: slide.slide_index,
+      }))
+    )
+  );
+}
+
+export function annotateSlidesWithPersistedLayoutHints(
+  slides: readonly SlideExtractionResult[],
+  hints: readonly (SlideLayoutSemanticHint & { readonly slide_index: number })[]
+): SlideExtractionResult[] {
+  const hintsBySlideIndex = new Map<number, SlideLayoutSemanticHint[]>();
+  for (const hint of hints) {
+    const members = hintsBySlideIndex.get(hint.slide_index) ?? [];
+    members.push(hint);
+    hintsBySlideIndex.set(hint.slide_index, members);
+  }
+
+  return slides.map((slide) => {
+    const slideHints = new Map(
+      (hintsBySlideIndex.get(slide.slide_index) ?? []).map((hint) => [hint.node_id, hint])
+    );
+    const fallbackHints = buildRuleBasedFallbackHints(slide.nodes);
+    const resolved = slide.nodes.map((node) =>
+      resolveNodeLayoutSemantics(node, slideHints, fallbackHints)
+    );
+
+    return {
+      ...slide,
+      nodes: applyGeometricClusterOverride(resolved, fallbackHints),
+    };
+  });
+}
+
+/**
+ * Layout semantics policy matrix:
+ * 1. Accepted model hints define visual intent and remain the primary source.
+ * 2. Rule-based fallback only fills gaps when the model is missing, invalid,
+ *    or below confidence threshold after validation.
+ * 3. Fit-pass remains the physical arbiter: it may degrade single-line intent
+ *    when transform-aware geometry proves the hint impossible to honor.
+ * 4. High-confidence geometric sync groups may merge fragmented short-label
+ *    clusters when the model clearly under-clusters a repeated visual series.
+ */
+function resolveNodeLayoutSemantics(
+  node: SlideTextNode,
+  modelHints: ReadonlyMap<string, SlideLayoutSemanticHint>,
+  fallbackHints: ReadonlyMap<string, SlideLayoutSemanticHint>
+): SlideTextNode {
+  if (node.element_type === "speaker_notes") {
+    return node;
+  }
+
+  const modelHint = modelHints.get(node.node_id);
+  if (modelHint) {
+    const corrected = applyGeometricLineCorrection(node, modelHint, fallbackHints);
+    return {
+      ...node,
+      layout_hint: corrected,
+      layout_hint_source: "model",
+    };
+  }
+
+  return {
+    ...node,
+    layout_hint: fallbackHints.get(node.node_id) ?? buildDefaultLayoutHint(node.node_id),
+    layout_hint_source: "fallback",
+  };
+}
+
+/**
+ * If the model classifies a source-single-line label as wrap-tolerant or
+ * intentionally multiline, override it back to prefer_single_line. The model
+ * lacks precise geometric awareness and occasionally overreacts to long text
+ * or rounded labels; this correction restores the source's visible treatment.
+ */
+function applyGeometricLineCorrection(
+  node: SlideTextNode,
+  hint: SlideLayoutSemanticHint,
+  fallbackHints: ReadonlyMap<string, SlideLayoutSemanticHint>
+): SlideLayoutSemanticHint {
+  const fallback = fallbackHints.get(node.node_id);
+  if (fallback?.line_policy === "prefer_single_line" && isSourceSingleLine(node, fallback.visual_role)) {
+    return { ...hint, line_policy: "prefer_single_line" };
+  }
+
+  return hint;
+}
+
+/**
+ * When fallback hints discover a high-confidence geometric sync group and the
+ * resolved hints fragment a repeated short-label series, merge them into one
+ * geometric cluster. This is a narrow safety net for obvious repeating peers
+ * (agenda items, badges, captions) rather than a general replacement for the
+ * model's semantic grouping.
+ */
+function applyGeometricClusterOverride(
+  nodes: readonly SlideTextNode[],
+  fallbackHints: ReadonlyMap<string, SlideLayoutSemanticHint>
+): SlideTextNode[] {
+  const geoGroups = new Map<string, string[]>();
+  for (const [nodeId, hint] of fallbackHints) {
+    if (hint.scale_sync === "sync_with_group" && hint.cluster_id.startsWith("geo_sync_")) {
+      const members = geoGroups.get(hint.cluster_id) ?? [];
+      members.push(nodeId);
+      geoGroups.set(hint.cluster_id, members);
+    }
+  }
+
+  if (geoGroups.size === 0) return nodes as SlideTextNode[];
+
+  const nodesById = new Map(nodes.map((node) => [node.node_id, node]));
+
+  const overrideMap = new Map<string, string>();
+  for (const [clusterId, memberIds] of geoGroups) {
+    if (memberIds.length < 2) continue;
+    const members = memberIds
+      .map((nodeId) => nodesById.get(nodeId))
+      .filter((node): node is SlideTextNode => Boolean(node));
+    if (!shouldApplyGeometricClusterOverride(members)) {
+      continue;
+    }
+    for (const nodeId of memberIds) {
+      overrideMap.set(nodeId, clusterId);
+    }
+  }
+
+  return nodes.map((node) => {
+    const geoClusterId = overrideMap.get(node.node_id);
+    if (!geoClusterId) return node;
+
+    const hint = node.layout_hint;
+    if (!hint) return node;
+
+    if (hint.scale_sync === "sync_with_group" && hint.cluster_id === geoClusterId) {
+      return node;
+    }
+
+    return {
+      ...node,
+      layout_hint: {
+        ...hint,
+        cluster_id: geoClusterId,
+        scale_sync: "sync_with_group",
+      },
+    };
+  });
+}
+
+const GEO_OVERRIDE_COMPATIBLE_ROLES = new Set<SlideLayoutSemanticHint["visual_role"]>([
+  "agenda_item",
+  "step_label",
+  "section_label",
+  "caption",
+  "badge",
+  "subtitle",
+  "unknown",
+]);
+
+function shouldApplyGeometricClusterOverride(nodes: readonly SlideTextNode[]): boolean {
+  if (nodes.length < 2) {
+    return false;
+  }
+
+  const hints = nodes
+    .map((node) => node.layout_hint)
+    .filter((hint): hint is SlideLayoutSemanticHint => Boolean(hint));
+  if (hints.length !== nodes.length) {
+    return false;
+  }
+
+  if (
+    !nodes.every((node) => {
+      const hint = node.layout_hint;
+      return (
+        node.paragraphs.length === 1 &&
+        node.full_text.trim().length > 0 &&
+        node.full_text.trim().length < 80 &&
+        hint?.line_policy !== "fixed_multiline" &&
+        GEO_OVERRIDE_COMPATIBLE_ROLES.has(hint?.visual_role ?? "unknown")
+      );
+    })
+  ) {
+    return false;
+  }
+
+  const syncSignatures = new Set(
+    hints.map((hint) =>
+      hint.scale_sync === "sync_with_group"
+        ? `group:${hint.cluster_id}`
+        : `independent:${hint.node_id}`
+    )
+  );
+  if (syncSignatures.size <= 1) {
+    return false;
+  }
+
+  return true;
 }
 
 function projectNodeToLayoutSemanticInput(
@@ -209,6 +440,24 @@ function buildDefaultLayoutHint(nodeId: string): SlideLayoutSemanticHint {
     line_policy: DEFAULT_LINE_POLICY,
     scale_sync: DEFAULT_SCALE_SYNC,
     confidence: 0,
+  };
+}
+
+const EMU_PER_PT = 12700;
+const SINGLE_LINE_WIDTH_FACTOR = 0.56;
+const DEFAULT_SHAPE_INSET_H_EMU = 91440;
+
+function resolveSingleLineInsetBudgetEmu(node: SlideTextNode) {
+  if (node.element_type !== "shape") {
+    return {
+      left_emu: 0,
+      right_emu: 0,
+    };
+  }
+
+  return {
+    left_emu: node.text_insets_emu?.left_emu ?? DEFAULT_SHAPE_INSET_H_EMU,
+    right_emu: node.text_insets_emu?.right_emu ?? DEFAULT_SHAPE_INSET_H_EMU,
   };
 }
 
@@ -256,10 +505,147 @@ function buildRuleBasedFallbackHints(
         node.node_id,
         buildFallbackHint(node.node_id, "body", "allow_wrap", "independent")
       );
+      continue;
+    }
+
+    const visualRole = inferShortTextVisualRole(node, titleCandidate);
+    if (isSourceSingleLine(node, visualRole)) {
+      hints.set(
+        node.node_id,
+        buildFallbackHint(node.node_id, visualRole, "prefer_single_line", "independent")
+      );
     }
   }
 
+  assignGeometricSyncGroups(visibleNodes, hints, titleCandidate);
+
   return hints;
+}
+
+/**
+ * Post-process fallback hints: find groups of geometrically near-identical
+ * short-text shape nodes on the same slide and assign them a shared cluster
+ * with sync_with_group. Typical targets are agenda items, step labels, or
+ * repeating tag elements the user drew with similar dimensions and font size.
+ */
+function assignGeometricSyncGroups(
+  nodes: readonly SlideTextNode[],
+  hints: Map<string, SlideLayoutSemanticHint>,
+  titleCandidate: SlideTextNode | undefined
+): void {
+  const candidates = nodes.filter((n) => {
+    if (n.element_type !== "shape") return false;
+    if (titleCandidate && n.node_id === titleCandidate.node_id) return false;
+    if (n.archetype === "bullet_list" || n.archetype === "table_cell") return false;
+    if (n.paragraphs.length > 1) return false;
+    if (n.full_text.trim().length >= 80) return false;
+    if (hints.get(n.node_id)?.line_policy !== "prefer_single_line") return false;
+    const fontSize = n.visible_style?.max_font_size_pt ?? 0;
+    return fontSize > 0;
+  });
+
+  if (candidates.length < 2) return;
+
+  type BucketKey = string;
+  const buckets = new Map<BucketKey, SlideTextNode[]>();
+
+  for (const node of candidates) {
+    const fontSize = Math.round((node.visible_style?.max_font_size_pt ?? 0) * 10);
+    const w = Math.round(node.box.width_emu / 10000);
+    const h = Math.round(node.box.height_emu / 10000);
+    const key: BucketKey = `${node.slide_index}:${w}:${h}:${fontSize}`;
+    const bucket = buckets.get(key) ?? [];
+    bucket.push(node);
+    buckets.set(key, bucket);
+  }
+
+  for (const group of buckets.values()) {
+    if (group.length < 2) continue;
+
+    const clusterId = `geo_sync_${group[0]!.node_id}`;
+    for (const node of group) {
+      const existing = hints.get(node.node_id);
+      if (existing) {
+        hints.set(node.node_id, {
+          ...existing,
+          cluster_id: clusterId,
+          scale_sync: "sync_with_group",
+        });
+      } else {
+        hints.set(
+          node.node_id,
+          buildFallbackHint(node.node_id, "section_label", "prefer_single_line", "sync_with_group")
+        );
+        const h = hints.get(node.node_id)!;
+        hints.set(node.node_id, { ...h, cluster_id: clusterId });
+      }
+    }
+  }
+}
+
+/**
+ * Detect whether the source text visually fits on a single line
+ * inside its bounding box at its current font size.
+ */
+function isSourceSingleLine(
+  node: SlideTextNode,
+  visualRole: SlideLayoutVisualRole = "unknown"
+): boolean {
+  if (node.paragraphs.length !== 1) {
+    return false;
+  }
+
+  const text = node.full_text.trim();
+  if (!text || text.length === 0) {
+    return false;
+  }
+
+  const fontSize = node.visible_style?.max_font_size_pt ?? 0;
+  if (fontSize <= 0) {
+    return false;
+  }
+
+  const inset = resolveSingleLineInsetBudgetEmu(node);
+  const widthPt = Math.max(1, (node.box.width_emu - inset.left_emu - inset.right_emu) / EMU_PER_PT);
+  const charsPerLine = widthPt / (fontSize * SINGLE_LINE_WIDTH_FACTOR);
+  const textWeight = measureTextWeight(text);
+  const toleranceFactor = resolveSourceSingleLineToleranceFactor(visualRole);
+
+  return textWeight <= charsPerLine * toleranceFactor;
+}
+
+function resolveSourceSingleLineToleranceFactor(visualRole: SlideLayoutVisualRole): number {
+  switch (visualRole) {
+    case "title":
+      return 1.06;
+    case "subtitle":
+    case "caption":
+    case "section_label":
+    case "badge":
+    case "agenda_item":
+    case "step_label":
+      return 1.08;
+    default:
+      return 1.03;
+  }
+}
+
+function inferShortTextVisualRole(
+  node: SlideTextNode,
+  titleNode: SlideTextNode | undefined
+): SlideLayoutVisualRole {
+  const fontSize = node.visible_style?.max_font_size_pt ?? 0;
+  const titleFontSize = titleNode?.visible_style?.max_font_size_pt ?? 0;
+
+  if (titleFontSize > 0 && fontSize >= titleFontSize * 0.7 && fontSize < titleFontSize) {
+    return "subtitle";
+  }
+
+  if (node.box.width_emu >= 200 * EMU_PER_PT && fontSize >= 10) {
+    return "caption";
+  }
+
+  return "section_label";
 }
 
 function buildFallbackHint(

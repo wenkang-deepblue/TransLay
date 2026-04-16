@@ -22,6 +22,7 @@ interface BuildRichTextNodeParams {
   readonly textContent: slides_v1.Schema$TextContent;
   readonly box: SlideBoxGeometry;
   readonly visibleStyle?: SlideVisibleStyleSummary;
+  readonly inheritedFontSizePt?: number;
   readonly rowIndex?: number;
   readonly colIndex?: number;
 }
@@ -44,7 +45,12 @@ export function buildRichTextNode(
     return null;
   }
 
-  const extractedParagraphs = extractParagraphs(params.textContent);
+  let extractedParagraphs = extractParagraphs(params.textContent);
+
+  if (typeof params.inheritedFontSizePt === "number" && params.inheritedFontSizePt > 0) {
+    extractedParagraphs = applyInheritedFontSize(extractedParagraphs, params.inheritedFontSizePt);
+  }
+
   const archetype = classifyNodeArchetype(
     params.elementType,
     fullText,
@@ -126,17 +132,43 @@ export function extractParagraphs(
 }
 
 export function extractBoxGeometry(
-  element: slides_v1.Schema$PageElement
+  element: slides_v1.Schema$PageElement,
+  parentGroupScaleX?: number,
+  parentGroupScaleY?: number
 ): SlideBoxGeometry {
+  // This returns transform-aware effective geometry. Downstream fit / overflow
+  // code must consume these EMU dimensions directly instead of reapplying
+  // scaleX/scaleY or falling back to raw element size.
   const transform = element.transform;
+  const rawWidth = dimensionToEmu(element.size?.width);
+  const rawHeight = dimensionToEmu(element.size?.height);
+  let scaleX = affineAxisScale(
+    transform?.scaleX ?? 1,
+    transform?.shearY ?? 0
+  );
+  let scaleY = affineAxisScale(
+    transform?.scaleY ?? 1,
+    transform?.shearX ?? 0
+  );
+
+  if (typeof parentGroupScaleX === "number" && parentGroupScaleX > 0) {
+    scaleX *= parentGroupScaleX;
+  }
+  if (typeof parentGroupScaleY === "number" && parentGroupScaleY > 0) {
+    scaleY *= parentGroupScaleY;
+  }
 
   return {
-    width_emu: dimensionToEmu(element.size?.width),
-    height_emu: dimensionToEmu(element.size?.height),
+    width_emu: rawWidth * scaleX,
+    height_emu: rawHeight * scaleY,
     translate_x_emu: magnitudeToEmu(transform?.translateX, transform?.unit),
     translate_y_emu: magnitudeToEmu(transform?.translateY, transform?.unit),
     rotation_deg: affineRotationDeg(transform),
   };
+}
+
+function affineAxisScale(primaryComponent: number, orthogonalComponent: number): number {
+  return Math.sqrt(primaryComponent ** 2 + orthogonalComponent ** 2);
 }
 
 export function extractVisibleStyleSummary(
@@ -279,6 +311,27 @@ function extractBulletMetadata(
     glyph: bullet.glyph ?? undefined,
     nesting_level: bullet.nestingLevel ?? undefined,
   };
+}
+
+function applyInheritedFontSize(
+  paragraphs: readonly SlideParagraph[],
+  inheritedFontSizePt: number
+): SlideParagraph[] {
+  return paragraphs.map((paragraph) => ({
+    ...paragraph,
+    runs: paragraph.runs.map((run) => {
+      if (typeof run.text_style.fontSize?.magnitude === "number" && run.text_style.fontSize.magnitude > 0) {
+        return run;
+      }
+      return {
+        ...run,
+        text_style: {
+          ...run.text_style,
+          fontSize: { magnitude: inheritedFontSizePt, unit: "PT" },
+        },
+      };
+    }),
+  }));
 }
 
 function assignStyleRoles(

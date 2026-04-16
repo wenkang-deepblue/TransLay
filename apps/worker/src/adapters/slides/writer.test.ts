@@ -6,6 +6,8 @@ import type { SlideTextNode } from "./types";
 import {
   __buildNodeWarningsForTests,
   __buildNodeWriteRequestsForTests,
+  __resetWriteRuntimeForTests,
+  __setWriteRuntimeForTests,
   writeBackAppend,
   writeBackNewFile,
 } from "./writer";
@@ -949,6 +951,105 @@ test("writer skips zero-length text style ranges for empty translated segments",
   });
 });
 
+test("writer skips zero-length paragraph style ranges for accepted trailing empty paragraphs", () => {
+  const sourceNode = createNode({
+    node_id: "shape_trailing_empty_suffix",
+    text: "App + API Protection",
+    full_text: "App + API\nProtection",
+    slide_index: 9,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_trailing_empty_suffix",
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        text: "App + API",
+        start_index: 0,
+        end_index: 9,
+        paragraph_style: {
+          alignment: "CENTER",
+        },
+        runs: [
+          {
+            run_id: "p0_r0",
+            text: "App + API",
+            start_index: 0,
+            end_index: 9,
+            style_role: "default",
+            text_style: {
+              fontSize: { magnitude: 18, unit: "PT" },
+            },
+          },
+        ],
+      },
+      {
+        paragraph_id: "p1",
+        text: "Protection",
+        start_index: 10,
+        end_index: 20,
+        paragraph_style: {
+          alignment: "CENTER",
+        },
+        runs: [
+          {
+            run_id: "p1_r0",
+            text: "Protection",
+            start_index: 10,
+            end_index: 20,
+            style_role: "default",
+            text_style: {
+              fontSize: { magnitude: 18, unit: "PT" },
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  const translatedNode: TranslatedNode = {
+    node_id: "shape_trailing_empty_suffix",
+    translated_full_text: "APP + API-Schutz\n",
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        translated_text: "APP + API-Schutz",
+        bullet_behavior: "none",
+      },
+      {
+        paragraph_id: "p1",
+        translated_text: "",
+        bullet_behavior: "none",
+      },
+    ],
+    segments: [
+      {
+        segment_id: "p0_r0",
+        translated_text: "APP + API-Schutz",
+        style_role: "default",
+      },
+      {
+        segment_id: "p1_r0",
+        translated_text: "",
+        style_role: "default",
+      },
+    ],
+  };
+
+  const requests = __buildNodeWriteRequestsForTests({
+    sourceNode,
+    translatedNode,
+    objectId: "shape_trailing_empty_suffix_copy",
+  });
+  const paragraphStyleRequests = requests.filter((request) => request.updateParagraphStyle);
+
+  assert.equal(paragraphStyleRequests.length, 1);
+  assert.deepEqual(paragraphStyleRequests[0]?.updateParagraphStyle?.textRange, {
+    type: "FIXED_RANGE",
+    startIndex: 0,
+    endIndex: "APP + API-Schutz".length,
+  });
+});
+
 test("writer emits structured warning metadata without leaking source or translated text", () => {
   const sourceNode = createNode({
     node_id: "metric_warning",
@@ -1137,6 +1238,13 @@ test("writer emits layout semantics fallback warning when a node has no layout h
       slide_index: 7,
       archetype: "plain_text",
       risk_level: "medium",
+      risk_reason: "manual_review_recommended",
+    },
+    {
+      node_id: "fallback_warning",
+      slide_index: 7,
+      archetype: "plain_text",
+      risk_level: "medium",
       risk_reason: "layout_semantics_fallback_applied",
     },
   ]);
@@ -1217,6 +1325,89 @@ test("writer does not emit fallback warning when the model explicitly returns de
   assert.equal(
     warnings.some((warning) => warning.risk_reason === "layout_semantics_fallback_applied"),
     false
+  );
+});
+
+test("writer emits trailing empty suffix acceptance warning from translated node risk flags", () => {
+  const sourceNode = createNode({
+    node_id: "tail_empty_warning",
+    text: "Pipeline overview",
+    full_text: "Pipeline overview",
+    slide_index: 8,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "tail_empty_warning",
+    box: {
+      width_emu: 160 * 12700,
+      height_emu: 40 * 12700,
+      translate_x_emu: 0,
+      translate_y_emu: 0,
+      rotation_deg: 0,
+    },
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        text: "Pipeline overview",
+        start_index: 0,
+        end_index: 17,
+        paragraph_style: {},
+        runs: [
+          {
+            run_id: "r0",
+            text: "Pipeline overview",
+            start_index: 0,
+            end_index: 17,
+            style_role: "default",
+            text_style: {
+              fontSize: { magnitude: 20, unit: "PT" },
+            },
+          },
+        ],
+      },
+    ],
+    layout_hint: {
+      node_id: "tail_empty_warning",
+      visual_role: "unknown",
+      cluster_id: "tail_empty_warning",
+      line_policy: "allow_wrap",
+      scale_sync: "independent",
+      confidence: 0,
+    },
+    layout_hint_source: "model",
+  });
+  const translatedNode: TranslatedNode = {
+    node_id: "tail_empty_warning",
+    translated_full_text: "Resumen del pipeline",
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        translated_text: "Resumen del pipeline",
+        bullet_behavior: "none",
+      },
+    ],
+    segments: [
+      {
+        segment_id: "r0",
+        translated_text: "Resumen del pipeline",
+        style_role: "default",
+      },
+    ],
+    risk_flags: ["materialization_trailing_empty_suffix_accepted"],
+  };
+
+  const warnings = __buildNodeWarningsForTests({
+    sourceNode,
+    translatedNode,
+    objectId: "tail_empty_warning_copy",
+  });
+
+  assert.equal(
+    warnings.some(
+      (warning) =>
+        warning.node_id === "tail_empty_warning" &&
+        warning.risk_reason === "materialization_trailing_empty_suffix_accepted"
+    ),
+    true
   );
 });
 
@@ -1374,6 +1565,66 @@ test("writeBackAppend cleans up failed duplicated slide and continues later slid
   }
 });
 
+test("writeBackAppend anchors duplication and insertion by source slide object id", async () => {
+  const anchoredNode = createSingleParagraphNode({
+    node_id: "shape_anchor",
+    text: "Anchor",
+    full_text: "Anchor",
+    slide_index: 1,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_anchor",
+  });
+  const batchUpdateCalls: slides_v1.Params$Resource$Presentations$Batchupdate[] = [];
+
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async () => ({
+          data: {
+            slides: [
+              createShapeSlide("source_0", "shape_0"),
+              createShapeSlide("tl_existing_0", "shape_tl"),
+              createShapeSlide("source_1", "shape_anchor"),
+            ],
+          },
+        }),
+        batchUpdate: async (
+          params: slides_v1.Params$Resource$Presentations$Batchupdate
+        ) => {
+          batchUpdateCalls.push(params);
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackAppend(
+      "presentation_anchor",
+      [
+        {
+          slide_index: 1,
+          slide_object_id: "source_1",
+          slide_fingerprint: "fingerprint_source_1",
+          nodes: [anchoredNode],
+        },
+      ],
+      [createValidTranslatedNode(anchoredNode, "Anclado")]
+    );
+
+    assert.equal(result.committedUnits, 1);
+    const duplicateCall = batchUpdateCalls[0];
+    assert.ok(duplicateCall);
+    const requests = duplicateCall.requestBody?.requests ?? [];
+    assert.equal(requests[0]?.duplicateObject?.objectId, "source_1");
+    assert.equal(requests[1]?.updateSlidesPosition?.insertionIndex, 3);
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
 test("writeBackNewFile keeps committed slides when one slide write fails", async () => {
   const firstNode = createSingleParagraphNode({
     node_id: "shape_first",
@@ -1440,6 +1691,439 @@ test("writeBackNewFile keeps committed slides when one slide write fails", async
         [0, "skipped_write_failed"],
         [1, "committed"],
       ]
+    );
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
+test("writeBackNewFile batches slide writes by default instead of issuing one API call per node", async () => {
+  const firstNode = createSingleParagraphNode({
+    node_id: "shape_batch_1",
+    text: "First",
+    full_text: "First",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_batch_1",
+  });
+  const secondNode = createSingleParagraphNode({
+    node_id: "shape_batch_2",
+    text: "Second",
+    full_text: "Second",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_batch_2",
+  });
+  const batchUpdateCalls: Array<slides_v1.Params$Resource$Presentations$Batchupdate> = [];
+
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async () => ({
+          data: {
+            slides: [
+              {
+                objectId: "slide_0",
+                pageElements: [
+                  { objectId: "shape_batch_1", shape: { text: { textElements: [] } } },
+                  { objectId: "shape_batch_2", shape: { text: { textElements: [] } } },
+                ],
+              },
+            ],
+          },
+        }),
+        batchUpdate: async (
+          params: slides_v1.Params$Resource$Presentations$Batchupdate
+        ) => {
+          batchUpdateCalls.push(params);
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackNewFile(
+      "presentation_batch",
+      [{ slide_index: 0, slide_object_id: "slide_0", nodes: [firstNode, secondNode] }],
+      [
+        createValidTranslatedNode(firstNode, "Uno"),
+        createValidTranslatedNode(secondNode, "Dos"),
+      ]
+    );
+
+    assert.equal(result.committedUnits, 1);
+    assert.equal(batchUpdateCalls.length, 1);
+    assert.ok((batchUpdateCalls[0]?.requestBody?.requests?.length ?? 0) > 2);
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
+test("writeBackNewFile retries rate-limited slide writes and enables slow mode for later requests", async () => {
+  const firstNode = createSingleParagraphNode({
+    node_id: "shape_rate_1",
+    text: "First",
+    full_text: "First",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_rate_1",
+  });
+  const secondNode = createSingleParagraphNode({
+    node_id: "shape_rate_2",
+    text: "Second",
+    full_text: "Second",
+    slide_index: 1,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_rate_2",
+  });
+  const sleepCalls: number[] = [];
+  let batchUpdateCalls = 0;
+
+  __setWriteRuntimeForTests({
+    sleep: async (ms) => {
+      sleepCalls.push(ms);
+    },
+    random: () => 0.5,
+  });
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async () => ({
+          data: {
+            slides: [
+              createShapeSlide("slide_0", "shape_rate_1"),
+              createShapeSlide("slide_1", "shape_rate_2"),
+            ],
+          },
+        }),
+        batchUpdate: async () => {
+          batchUpdateCalls += 1;
+          if (batchUpdateCalls <= 2) {
+            throw Object.assign(
+              new Error("Quota exceeded for quota metric 'Write requests'"),
+              {
+                response: {
+                  status: 429,
+                  data: {
+                    error: {
+                      status: "RESOURCE_EXHAUSTED",
+                      errors: [{ reason: "rateLimitExceeded" }],
+                    },
+                  },
+                },
+              }
+            );
+          }
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackNewFile(
+      "presentation_rate",
+      [
+        { slide_index: 0, slide_object_id: "slide_0", nodes: [firstNode] },
+        { slide_index: 1, slide_object_id: "slide_1", nodes: [secondNode] },
+      ],
+      [
+        createValidTranslatedNode(firstNode, "Uno"),
+        createValidTranslatedNode(secondNode, "Dos"),
+      ]
+    );
+
+    assert.equal(result.committedUnits, 2);
+    assert.equal(batchUpdateCalls, 4);
+    assert.equal(sleepCalls.includes(500), true);
+    assert.equal(sleepCalls.includes(1000), true);
+    assert.equal(
+      sleepCalls.some((ms) => ms >= 500 && ms <= 1000),
+      true
+    );
+  } finally {
+    __resetSlidesClientForTests();
+    __resetWriteRuntimeForTests();
+  }
+});
+
+test("writeBackNewFile disables slow mode after enough successful writes", async () => {
+  const sleepCalls: number[] = [];
+  let batchUpdateCalls = 0;
+  const slides = Array.from({ length: 7 }, (_, slideIndex) => {
+    const node = createSingleParagraphNode({
+      node_id: `shape_recover_${slideIndex}`,
+      text: `Node ${slideIndex}`,
+      full_text: `Node ${slideIndex}`,
+      slide_index: slideIndex,
+      element_type: "shape",
+      archetype: "plain_text",
+      object_id: `shape_recover_${slideIndex}`,
+    });
+    return {
+      extracted: {
+        slide_index: slideIndex,
+        slide_object_id: `slide_recover_${slideIndex}`,
+        nodes: [node],
+      },
+      translated: createValidTranslatedNode(node, `Texto ${slideIndex}`),
+    };
+  });
+
+  __setWriteRuntimeForTests({
+    sleep: async (ms) => {
+      sleepCalls.push(ms);
+    },
+    random: () => 0.5,
+  });
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async () => ({
+          data: {
+            slides: slides.map(({ extracted }) =>
+              createShapeSlide(extracted.slide_object_id, extracted.nodes[0]!.object_id)
+            ),
+          },
+        }),
+        batchUpdate: async () => {
+          batchUpdateCalls += 1;
+          if (batchUpdateCalls <= 2) {
+            throw Object.assign(new Error("Rate limit exceeded"), {
+              response: {
+                status: 429,
+                data: {
+                  error: {
+                    status: "RESOURCE_EXHAUSTED",
+                    errors: [{ reason: "rateLimitExceeded" }],
+                  },
+                },
+              },
+            });
+          }
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackNewFile(
+      "presentation_recover",
+      slides.map(({ extracted }) => extracted),
+      slides.map(({ translated }) => translated)
+    );
+
+    assert.equal(result.committedUnits, 7);
+    assert.equal(batchUpdateCalls, 9);
+    assert.equal(sleepCalls.length, 7);
+  } finally {
+    __resetSlidesClientForTests();
+    __resetWriteRuntimeForTests();
+  }
+});
+
+test("writeBackAppend limits quota retries and trips circuit breaker on repeated quota failures", async () => {
+  const slides = [0, 1, 2].map((slideIndex) => {
+    const node = createSingleParagraphNode({
+      node_id: `shape_quota_${slideIndex}`,
+      text: `Slide ${slideIndex}`,
+      full_text: `Slide ${slideIndex}`,
+      slide_index: slideIndex,
+      element_type: "shape",
+      archetype: "plain_text",
+      object_id: `shape_quota_${slideIndex}`,
+    });
+    return {
+      extracted: {
+        slide_index: slideIndex,
+        slide_object_id: `slide_quota_${slideIndex}`,
+        nodes: [node],
+      },
+      translated: createValidTranslatedNode(node, `Texto ${slideIndex}`),
+    };
+  });
+  const sleepCalls: number[] = [];
+  let batchUpdateCalls = 0;
+
+  __setWriteRuntimeForTests({
+    sleep: async (ms) => {
+      sleepCalls.push(ms);
+    },
+    random: () => 0.5,
+  });
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async () => ({
+          data: {
+            slides: slides.map(({ extracted }) =>
+              createShapeSlide(extracted.slide_object_id, extracted.nodes[0]!.object_id)
+            ),
+          },
+        }),
+        batchUpdate: async () => {
+          batchUpdateCalls += 1;
+          throw Object.assign(new Error("Quota exceeded"), {
+            response: {
+              status: 403,
+              data: {
+                error: {
+                  status: "RESOURCE_EXHAUSTED",
+                  errors: [{ reason: "quotaExceeded" }],
+                },
+              },
+            },
+          });
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackAppend(
+      "presentation_quota",
+      slides.map(({ extracted }) => extracted),
+      slides.map(({ translated }) => translated)
+    );
+
+    assert.equal(result.committedUnits, 0);
+    assert.equal(batchUpdateCalls, 4);
+    assert.deepEqual(result.failed_slide_indexes, [2, 1, 0]);
+    assert.deepEqual(
+      result.slide_results.map((item) => item.error_code),
+      ["QUOTA_EXCEEDED", "QUOTA_EXCEEDED", "QUOTA_EXCEEDED"]
+    );
+    assert.deepEqual(sleepCalls, [500, 500]);
+  } finally {
+    __resetSlidesClientForTests();
+    __resetWriteRuntimeForTests();
+  }
+});
+
+test("writeBackNewFile degrades structural batch failures into smaller groups before failing single nodes", async () => {
+  const firstNode = createSingleParagraphNode({
+    node_id: "shape_group_1",
+    text: "First",
+    full_text: "First",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_group_1",
+  });
+  const secondNode = createSingleParagraphNode({
+    node_id: "shape_group_2",
+    text: "Second",
+    full_text: "Second",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_group_2",
+  });
+  const failingNode = createSingleParagraphNode({
+    node_id: "shape_group_3",
+    text: "Third",
+    full_text: "Third",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_group_3",
+  });
+  const objectIdsPerCall: string[][] = [];
+
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async () => ({
+          data: {
+            slides: [
+              {
+                objectId: "slide_0",
+                pageElements: [
+                  { objectId: "shape_group_1", shape: { text: { textElements: [] } } },
+                  { objectId: "shape_group_2", shape: { text: { textElements: [] } } },
+                  { objectId: "shape_group_3", shape: { text: { textElements: [] } } },
+                ],
+              },
+            ],
+          },
+        }),
+        batchUpdate: async (
+          params: slides_v1.Params$Resource$Presentations$Batchupdate
+        ) => {
+          const objectIds = (params.requestBody?.requests ?? [])
+            .flatMap((request) => {
+              const deleteRange = request.deleteText?.objectId;
+              const insertRange = request.insertText?.objectId;
+              const textStyleRange = request.updateTextStyle?.objectId;
+              const paragraphRange = request.updateParagraphStyle?.objectId;
+              return [deleteRange, insertRange, textStyleRange, paragraphRange].filter(
+                (value): value is string => Boolean(value)
+              );
+            });
+          objectIdsPerCall.push([...new Set(objectIds)]);
+
+          const uniqueObjectIds = [...new Set(objectIds)];
+          if (uniqueObjectIds.length === 3) {
+            throw Object.assign(new Error("invalid batch"), {
+              response: { status: 400, data: { error: { status: "INVALID_ARGUMENT" } } },
+            });
+          }
+          if (uniqueObjectIds.length === 1 && uniqueObjectIds[0] === "shape_group_3") {
+            throw Object.assign(new Error("invalid node"), {
+              response: { status: 400, data: { error: { status: "INVALID_ARGUMENT" } } },
+            });
+          }
+
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackNewFile(
+      "presentation_group",
+      [
+        {
+          slide_index: 0,
+          slide_object_id: "slide_0",
+          nodes: [firstNode, secondNode, failingNode],
+        },
+      ],
+      [
+        createValidTranslatedNode(firstNode, "Uno"),
+        createValidTranslatedNode(secondNode, "Dos"),
+        createValidTranslatedNode(failingNode, "Tres"),
+      ]
+    );
+
+    assert.equal(result.committedUnits, 1);
+    assert.deepEqual(result.committed_slide_indexes, [0]);
+    assert.deepEqual(result.failed_slide_indexes, []);
+    assert.deepEqual(
+      result.slide_results[0]?.committed_node_ids,
+      ["shape_group_1", "shape_group_2"]
+    );
+    assert.deepEqual(
+      result.slide_results[0]?.failed_node_ids,
+      ["shape_group_3"]
+    );
+    assert.equal(objectIdsPerCall.some((ids) => ids.length === 3), true);
+    assert.equal(objectIdsPerCall.some((ids) => ids.length === 2), true);
+    assert.equal(
+      objectIdsPerCall.some((ids) => ids.length === 1 && ids[0] === "shape_group_3"),
+      true
     );
   } finally {
     __resetSlidesClientForTests();

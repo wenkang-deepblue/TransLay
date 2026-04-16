@@ -49,12 +49,27 @@ export type SlideLayoutScaleSync =
 export type SlideTextStyleSnapshot = slides_v1.Schema$TextStyle;
 export type SlideParagraphStyleSnapshot = slides_v1.Schema$ParagraphStyle;
 
+/**
+ * Effective visual geometry after applying the element's affine transform
+ * plus any ancestor group transforms already composed by the extractor.
+ *
+ * Consumers must treat these EMU values as the transform-aware layout budget
+ * for fit / overflow decisions and must not fall back to the raw Slides size
+ * as the sole source of truth.
+ */
 export interface SlideBoxGeometry {
   readonly width_emu: number;
   readonly height_emu: number;
   readonly translate_x_emu: number;
   readonly translate_y_emu: number;
   readonly rotation_deg: number;
+}
+
+export interface SlideTextInsetsEmu {
+  readonly left_emu: number;
+  readonly right_emu: number;
+  readonly top_emu: number;
+  readonly bottom_emu: number;
 }
 
 export interface SlideBulletMetadata {
@@ -114,8 +129,20 @@ export interface SlideTextNode {
   readonly archetype: SlideNodeArchetype;
   readonly object_id: string;
   readonly box: SlideBoxGeometry;
+  /**
+   * Effective text body insets in EMU, if a future extraction path can surface
+   * them from the Slides source. Today the public Slides API does not expose
+   * per-shape inset truth, so most nodes leave this undefined and downstream
+   * fit logic falls back to editor defaults.
+   */
+  readonly text_insets_emu?: SlideTextInsetsEmu;
   readonly paragraphs: SlideParagraph[];
   readonly visible_style?: SlideVisibleStyleSummary;
+  /**
+   * Final layout intent consumed by fit-pass.
+   * Accepted model hints take precedence; fallback hints are only used when
+   * the model result is missing, invalid, or below the confidence threshold.
+   */
   readonly layout_hint?: SlideLayoutSemanticHint;
   readonly layout_hint_source?: SlideLayoutHintSource;
   /** For table cells: row and column indices. */
@@ -127,6 +154,7 @@ export interface SlideTextNode {
 export interface SlideExtractionResult {
   readonly slide_index: number;
   readonly slide_object_id: string;
+  readonly slide_fingerprint?: string;
   readonly nodes: SlideTextNode[];
 }
 

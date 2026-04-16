@@ -47,6 +47,7 @@ interface SourceParagraphInput {
   readonly paragraph_id: string;
   readonly text: string;
   readonly bullet_level?: number;
+  readonly paragraph_style?: SlideParagraph["paragraph_style"];
   readonly runs: readonly SourceRunInput[];
 }
 
@@ -394,6 +395,87 @@ export const SLIDES_FIDELITY_REGRESSION_SAMPLES: readonly SlidesFidelityRegressi
     term_expectations: [
       { key: "arr", expected_translation: "arr" },
     ],
+  },
+  {
+    sample_id: "de-bullet-spaced",
+    target_language: "de",
+    source_node: createSourceNode({
+      node_id: "de-bullet-spaced",
+      slide_index: 4,
+      archetype: "bullet_list",
+      object_id: "shape_de_bullet_spaced",
+      element_type: "shape",
+      box: createBox(320, 138),
+      visible_style: {
+        min_font_size_pt: 16,
+        max_font_size_pt: 16,
+      },
+      paragraphs: [
+        {
+          paragraph_id: "p0",
+          text: "Data pipelines remain fragmented",
+          bullet_level: 0,
+          paragraph_style: {
+            lineSpacing: 126,
+            spaceAbove: { magnitude: 4, unit: "PT" },
+            spaceBelow: { magnitude: 4, unit: "PT" },
+          },
+          runs: [
+            {
+              run_id: "r0",
+              text: "Data pipelines remain fragmented",
+              style_role: "default",
+              text_style: { fontSize: { magnitude: 16, unit: "PT" } },
+            },
+          ],
+        },
+        {
+          paragraph_id: "p1",
+          text: "Private context is hard to keep aligned",
+          bullet_level: 0,
+          paragraph_style: {
+            lineSpacing: 126,
+            spaceAbove: { magnitude: 4, unit: "PT" },
+            spaceBelow: { magnitude: 4, unit: "PT" },
+          },
+          runs: [
+            {
+              run_id: "r1",
+              text: "Private context is hard to keep aligned",
+              style_role: "default",
+              text_style: { fontSize: { magnitude: 16, unit: "PT" } },
+            },
+          ],
+        },
+      ],
+    }),
+    translated_node: createTranslatedNode({
+      node_id: "de-bullet-spaced",
+      paragraphs: [
+        {
+          paragraph_id: "p0",
+          translated_text: "Datenpipelines bleiben in mehreren Systemen fragmentiert",
+          bullet_behavior: "preserve",
+        },
+        {
+          paragraph_id: "p1",
+          translated_text: "Privater Geschaeftskontext laesst sich nur schwer dauerhaft ausrichten",
+          bullet_behavior: "preserve",
+        },
+      ],
+      segments: [
+        {
+          segment_id: "r0",
+          translated_text: "Datenpipelines bleiben in mehreren Systemen fragmentiert",
+          style_role: "default",
+        },
+        {
+          segment_id: "r1",
+          translated_text: "Privater Geschaeftskontext laesst sich nur schwer dauerhaft ausrichten",
+          style_role: "default",
+        },
+      ],
+    }),
   },
   {
     sample_id: "zh-hans-notes-arr",
@@ -1070,6 +1152,115 @@ export const SLIDES_FIDELITY_REGRESSION_GROUP_SCENARIOS: readonly SlidesFidelity
       },
     ],
   },
+  {
+    scenario_id: "de-reject-invalid-cluster-sync",
+    target_language: "de",
+    tags: ["messy_cluster_sync"],
+    nodes: [
+      {
+        sample_id: "de-invalid-cluster-1",
+        source_node: createSourceNode({
+          node_id: "de-invalid-cluster-1",
+          slide_index: 12,
+          archetype: "plain_text",
+          object_id: "shape_de_invalid_cluster_1",
+          element_type: "shape",
+          box: createBox(120, 26),
+          layout_hint: {
+            node_id: "de-invalid-cluster-1",
+            visual_role: "agenda_item",
+            cluster_id: "invalid_cluster",
+            line_policy: "prefer_single_line",
+            scale_sync: "sync_with_group",
+            confidence: 0.9,
+          },
+          layout_hint_source: "model",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "Plan",
+              runs: [
+                {
+                  run_id: "r0",
+                  text: "Plan",
+                  style_role: "default",
+                  text_style: { fontSize: { magnitude: 18, unit: "PT" } },
+                },
+              ],
+            },
+          ],
+        }),
+        translated_node: createTranslatedNode({
+          node_id: "de-invalid-cluster-1",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              translated_text: "Plan",
+              bullet_behavior: "none",
+            },
+          ],
+          segments: [
+            {
+              segment_id: "r0",
+              translated_text: "Plan",
+              style_role: "default",
+            },
+          ],
+        }),
+      },
+      {
+        sample_id: "de-invalid-cluster-2",
+        source_node: createSourceNode({
+          node_id: "de-invalid-cluster-2",
+          slide_index: 12,
+          archetype: "plain_text",
+          object_id: "shape_de_invalid_cluster_2",
+          element_type: "shape",
+          box: createBox(280, 58),
+          layout_hint: {
+            node_id: "de-invalid-cluster-2",
+            visual_role: "title",
+            cluster_id: "invalid_cluster",
+            line_policy: "prefer_single_line",
+            scale_sync: "sync_with_group",
+            confidence: 0.9,
+          },
+          layout_hint_source: "model",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "Execution workstream",
+              runs: [
+                {
+                  run_id: "r0",
+                  text: "Execution workstream",
+                  style_role: "default",
+                  text_style: { fontSize: { magnitude: 28, unit: "PT" } },
+                },
+              ],
+            },
+          ],
+        }),
+        translated_node: createTranslatedNode({
+          node_id: "de-invalid-cluster-2",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              translated_text: "Ausfuehrungsarbeitsstrom mit abhaengigen Aufgaben",
+              bullet_behavior: "none",
+            },
+          ],
+          segments: [
+            {
+              segment_id: "r0",
+              translated_text: "Ausfuehrungsarbeitsstrom mit abhaengigen Aufgaben",
+              style_role: "default",
+            },
+          ],
+        }),
+      },
+    ],
+  },
 ] as const;
 
 export function evaluateRegressionBaseline(
@@ -1189,7 +1380,10 @@ export function evaluateRegressionGroupBaseline(
     const sourceNodes = scenario.nodes.map((node) => node.source_node);
     const translatedNodes = scenario.nodes.map((node) => node.translated_node);
     const fits = resolveSlideNodeFits(sourceNodes, translatedNodes);
-    const clusterGroups = new Map<string, number[]>();
+    const clusterGroups = new Map<
+      string,
+      Array<{ scale: number; rejectedGroupSync: boolean }>
+    >();
 
     for (const sourceNode of sourceNodes) {
       const fit = fits.get(sourceNode.node_id);
@@ -1198,7 +1392,7 @@ export function evaluateRegressionGroupBaseline(
         continue;
       }
 
-      if (layoutHint.line_policy === "prefer_single_line") {
+      if (layoutHint.line_policy === "prefer_single_line" && !fit.rejectedGroupSync) {
         singleLineCaseCount += 1;
         if (fit.degradedSingleLine) {
           singleLineDegradations += 1;
@@ -1207,7 +1401,10 @@ export function evaluateRegressionGroupBaseline(
 
       if (layoutHint.scale_sync === "sync_with_group") {
         const scales = clusterGroups.get(layoutHint.cluster_id) ?? [];
-        scales.push(fit.scale);
+        scales.push({
+          scale: fit.scale,
+          rejectedGroupSync: fit.rejectedGroupSync,
+        });
         clusterGroups.set(layoutHint.cluster_id, scales);
       }
     }
@@ -1216,9 +1413,12 @@ export function evaluateRegressionGroupBaseline(
       if (scales.length < 2) {
         continue;
       }
+      if (scales.every((entry) => entry.rejectedGroupSync)) {
+        continue;
+      }
       clusterSyncCaseCount += 1;
       const [firstScale, ...restScales] = scales;
-      if (restScales.some((scale) => Math.abs(scale - firstScale) > 0.001)) {
+      if (restScales.some((entry) => Math.abs(entry.scale - firstScale.scale) > 0.001)) {
         clusterScaleMismatches += 1;
       }
     }
@@ -1497,7 +1697,7 @@ function createSourceNode(input: SourceNodeInput): SlideTextNode {
         typeof paragraphInput.bullet_level === "number"
           ? { nesting_level: paragraphInput.bullet_level }
           : undefined,
-      paragraph_style: {},
+      paragraph_style: structuredClone(paragraphInput.paragraph_style ?? {}),
       runs,
     });
 

@@ -28,6 +28,22 @@ export type JobStatus = (typeof JOB_STATUSES)[number];
 /** Statuses that indicate a job is still in progress (not terminal). */
 export type JobInProgressStatus = "pending" | "queued" | "extracting" | "translating" | "writing";
 
+export const JOB_EXECUTION_STAGES = [
+  "extract",
+  "layout_semantics",
+  "authority",
+  "finalize",
+] as const;
+export type JobExecutionStage = (typeof JOB_EXECUTION_STAGES)[number];
+
+export const JOB_STAGE_STATUSES = [
+  "pending",
+  "queued",
+  "running",
+  "completed",
+] as const;
+export type JobStageStatus = (typeof JOB_STAGE_STATUSES)[number];
+
 export const JOB_WARNING_RISK_LEVELS = ["medium", "high"] as const;
 export type JobWarningRiskLevel = (typeof JOB_WARNING_RISK_LEVELS)[number];
 
@@ -37,8 +53,18 @@ export const JOB_WARNING_REASONS = [
   "bullet_structure_rebuilt_with_compaction",
   "single_line_policy_degraded",
   "layout_semantics_fallback_applied",
+  "materialization_trailing_empty_suffix_accepted",
   "unsafe_slide_excluded",
   "manual_review_recommended",
+  "slide_translation_failed",
+  "slide_materialization_failed",
+  "slide_write_failed",
+  "slide_notes_translation_failed",
+  "slide_notes_write_failed",
+  "slide_partial_content_only",
+  "slide_partial_notes_only",
+  "slide_notes_truncated",
+  "slide_charge_refunded",
 ] as const;
 export type JobWarningReason = (typeof JOB_WARNING_REASONS)[number];
 
@@ -69,6 +95,8 @@ export type SlideFailureStage = (typeof SLIDE_FAILURE_STAGES)[number];
  */
 export interface JobSlideResult {
   readonly slide_index: number;
+  readonly source_slide_object_id?: string;
+  readonly source_slide_fingerprint?: string;
   readonly status: SlideExecutionStatus;
   readonly failure_stage?: SlideFailureStage;
   readonly failure_reason_code?: string;
@@ -76,7 +104,26 @@ export interface JobSlideResult {
   readonly provisionally_billed: boolean;
   readonly final_billable: boolean;
   readonly refund_required: boolean;
+  readonly refunded: boolean;
   readonly output_visible: boolean;
+  readonly output_slide_object_id?: string;
+  readonly notes_present?: boolean;
+  readonly content_translated?: boolean;
+  readonly notes_translated?: boolean;
+  readonly content_output_visible?: boolean;
+  readonly notes_output_visible?: boolean;
+  readonly notes_truncated?: boolean;
+  readonly body_node_count?: number;
+  readonly notes_node_count?: number;
+  readonly body_translated_node_count?: number;
+  readonly notes_translated_node_count?: number;
+  readonly body_failed_node_count?: number;
+  readonly notes_failed_node_count?: number;
+  readonly body_written_node_count?: number;
+  readonly notes_written_node_count?: number;
+  readonly provisional_billed_units?: number;
+  readonly final_billed_units?: number;
+  readonly refunded_units?: number;
 }
 
 /** Structured warning metadata exposed to clients without persisting document content. */
@@ -129,6 +176,9 @@ export interface JobProgressResponse {
   readonly job_id: string;
   readonly status: JobInProgressStatus;
   readonly progress_percent: number;
+  readonly current_stage?: JobExecutionStage;
+  readonly stage_status?: JobStageStatus;
+  readonly stage_attempt?: number;
   readonly current_step?: string;
   readonly details?: string;
   readonly translated_units_billed?: number;
@@ -141,6 +191,16 @@ export interface JobCompletedResponse {
   readonly progress_percent: 100;
   readonly output_document_url: string;
   readonly message: string;
+  readonly fully_delivered_body_slide_indices: readonly number[];
+  readonly content_only_slide_indices: readonly number[];
+  readonly notes_only_slide_indices: readonly number[];
+  readonly body_partial_slide_indices: readonly number[];
+  readonly skipped_slide_indices: readonly number[];
+  readonly refunded_slide_indices: readonly number[];
+  readonly total_billed_units: number;
+  readonly gross_billed_slides: number;
+  readonly refunded_slides: number;
+  readonly net_billed_slides: number;
   readonly warnings?: readonly JobWarning[];
 }
 
@@ -160,6 +220,17 @@ export interface JobFailedResponse {
   readonly status: "failed";
   readonly error: string;
   readonly message: string;
+  readonly output_document_url?: string;
+  readonly fully_delivered_body_slide_indices?: readonly number[];
+  readonly content_only_slide_indices?: readonly number[];
+  readonly notes_only_slide_indices?: readonly number[];
+  readonly body_partial_slide_indices?: readonly number[];
+  readonly skipped_slide_indices?: readonly number[];
+  readonly refunded_slide_indices?: readonly number[];
+  readonly total_billed_units?: number;
+  readonly gross_billed_slides?: number;
+  readonly refunded_slides?: number;
+  readonly net_billed_slides?: number;
   readonly warnings?: readonly JobWarning[];
 }
 
@@ -181,4 +252,6 @@ export interface TaskPayload {
   readonly job_id: string;
   readonly attempt: number;
   readonly requested_at: string;
+  readonly expected_stage?: JobExecutionStage;
+  readonly stage_attempt?: number;
 }

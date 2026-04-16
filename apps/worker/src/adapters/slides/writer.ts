@@ -32,9 +32,14 @@ interface NodeWriteRequestParams {
 
 export interface SlideWriteResult {
   readonly slide_index: number;
+  readonly source_slide_object_id?: string;
   readonly status: "committed" | "skipped_write_failed";
   readonly warning_codes: readonly string[];
   readonly error_code?: string;
+  readonly output_slide_object_id?: string;
+  readonly object_id_map?: Readonly<Record<string, string>>;
+  readonly committed_node_ids?: readonly string[];
+  readonly failed_node_ids?: readonly string[];
 }
 
 export interface WriteBackResult {
@@ -46,9 +51,30 @@ export interface WriteBackResult {
   readonly warnings: readonly JobWarning[];
 }
 
+export interface ExistingSlideWriteTarget {
+  readonly slide_index: number;
+  readonly output_slide_object_id?: string;
+  readonly object_id_map?: Readonly<Record<string, string>>;
+}
+
 interface ReplacePlan {
   readonly requests: slides_v1.Schema$Request[];
   readonly warnings: JobWarning[];
+}
+
+interface NodeWriteExecutionResult {
+  readonly warnings: readonly JobWarning[];
+  readonly committedNodeIds: readonly string[];
+  readonly failedNodeIds: readonly string[];
+  readonly errorCode?: string;
+  readonly context: WriteExecutionContext;
+}
+
+interface PreparedNodeWritePlan {
+  readonly nodeId: string;
+  readonly slideIndex: number;
+  readonly requests: readonly slides_v1.Schema$Request[];
+  readonly warnings: readonly JobWarning[];
 }
 
 interface NodeWriteArtifacts {
@@ -89,6 +115,12 @@ interface RichTextWritePlan {
 
 const DEFAULT_BULLET_PRESET = "BULLET_DISC_CIRCLE_SQUARE";
 const WRITE_CIRCUIT_BREAKER_THRESHOLD = 2;
+const RATE_LIMIT_RETRY_BASE_DELAYS_MS = [1000, 2000, 4000, 8000] as const;
+const QUOTA_RETRY_BASE_DELAYS_MS = [1000] as const;
+const GLOBAL_SLOW_MODE_MIN_DELAY_MS = 500;
+const GLOBAL_SLOW_MODE_MAX_DELAY_MS = 1000;
+const GLOBAL_SLOW_MODE_RATE_LIMIT_STREAK_THRESHOLD = 2;
+const GLOBAL_SLOW_MODE_SUCCESS_RECOVERY_THRESHOLD = 5;
 const LOCAL_WRITER_VALIDATION_PATTERN =
   /missing an object ID|missing segment|missing paragraph|unexpected paragraphs|unexpected segments|paragraph reconstruction|full text does not match/i;
 
@@ -110,6 +142,23 @@ interface WriteCircuitBreakerState {
   readonly streak: number;
 }
 
+interface WriteThrottleState {
+  readonly slowModeEnabled: boolean;
+  readonly consecutiveRateLimitFailures: number;
+  readonly consecutiveSuccessesSinceSlowMode: number;
+}
+
+interface WriteExecutionContext {
+  readonly throttleState: WriteThrottleState;
+}
+
+type WriteSleepFn = (ms: number) => Promise<void>;
+type WriteRandomFn = () => number;
+
+let writeSleep: WriteSleepFn = async (ms) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+let writeRandom: WriteRandomFn = () => Math.random();
+
 export async function writeBackAppend(
   presentationId: string,
   extractedSlides: SlideExtractionResult[],
@@ -127,6 +176,16 @@ export async function writeBackAppend(
 
   const pres = await slides.presentations.get({ presentationId });
   const allSlides = pres.data.slides ?? [];
+  const slideByObjectId = new Map(
+    allSlides
+      .filter((slide): slide is slides_v1.Schema$Page & { objectId: string } => Boolean(slide.objectId))
+      .map((slide) => [slide.objectId, slide])
+  );
+  const slideIndexByObjectId = new Map(
+    allSlides
+      .filter((slide): slide is slides_v1.Schema$Page & { objectId: string } => Boolean(slide.objectId))
+      .map((slide, index) => [slide.objectId, index] as const)
+  );
   const sortedSlides = [...extractedSlides].sort(
     (a, b) => b.slide_index - a.slide_index
   );
@@ -135,18 +194,27 @@ export async function writeBackAppend(
     category: null,
     streak: 0,
   };
+  let writeContext: WriteExecutionContext = {
+    throttleState: {
+      slowModeEnabled: false,
+      consecutiveRateLimitFailures: 0,
+      consecutiveSuccessesSinceSlowMode: 0,
+    },
+  };
 
   for (let index = 0; index < sortedSlides.length; index += 1) {
     const extracted = sortedSlides[index]!;
-    const sourceSlide = allSlides[extracted.slide_index];
-    if (!sourceSlide?.objectId) {
+    const sourceSlide = slideByObjectId.get(extracted.slide_object_id);
+    const insertionIndex = slideIndexByObjectId.get(extracted.slide_object_id);
+    if (!sourceSlide?.objectId || insertionIndex === undefined) {
       console.error(
         `[slides-writer] append slide ${extracted.slide_index + 1} cannot start because source object id is missing`
       );
       writeResult = appendFailedSlideResult(
         writeResult,
         extracted.slide_index,
-        "HOST_ADAPTER_ERROR"
+        "HOST_ADAPTER_ERROR",
+        extracted.slide_object_id
       );
       if (onProgress) {
         await onProgress(writeResult);
@@ -167,45 +235,54 @@ export async function writeBackAppend(
 
     let duplicated = false;
     try {
-      await slides.presentations.batchUpdate({
+      writeContext = await executeBatchUpdateWithRetry(
+        slides,
         presentationId,
-        requestBody: {
-          requests: [
-            {
-              duplicateObject: {
-                objectId: plan.sourceSlide.objectId!,
-                objectIds: plan.objectIds,
-              },
+        [
+          {
+            duplicateObject: {
+              objectId: plan.sourceSlide.objectId!,
+              objectIds: plan.objectIds,
             },
-            {
-              updateSlidesPosition: {
-                slideObjectIds: [plan.newSlideId],
-                insertionIndex: plan.extractedSlide.slide_index + 1,
-              },
+          },
+          {
+            updateSlidesPosition: {
+              slideObjectIds: [plan.newSlideId],
+              insertionIndex: insertionIndex + 1,
             },
-          ],
-        },
-      });
+          },
+        ],
+        writeContext,
+        {
+          phase: "duplicate_slide",
+          slideIndex: extracted.slide_index,
+        }
+      );
       duplicated = true;
 
-      const replacePlan = buildReplacePlan(
+      const nodeWriteResult = await executeNodeWritesForSlide(
+        slides,
+        presentationId,
         plan.sourceSlide,
         plan.extractedSlide.nodes,
         translationMap,
-        (sourceObjectId) => plan.objectIds[sourceObjectId] ?? sourceObjectId
+        (sourceObjectId) => plan.objectIds[sourceObjectId] ?? sourceObjectId,
+        writeContext
       );
-
-      if (replacePlan.requests.length > 0) {
-        await slides.presentations.batchUpdate({
-          presentationId,
-          requestBody: { requests: replacePlan.requests },
-        });
+      writeContext = nodeWriteResult.context;
+      if (nodeWriteResult.committedNodeIds.length === 0) {
+        throw new Error(nodeWriteResult.errorCode ?? "No translated nodes were written");
       }
 
       writeResult = appendCommittedSlideResult(
         writeResult,
         extracted.slide_index,
-        replacePlan.warnings
+        nodeWriteResult.warnings,
+        plan.newSlideId,
+        plan.objectIds,
+        extracted.slide_object_id,
+        nodeWriteResult.committedNodeIds,
+        nodeWriteResult.failedNodeIds
       );
       if (onProgress) {
         await onProgress(writeResult);
@@ -221,13 +298,15 @@ export async function writeBackAppend(
           slides,
           presentationId,
           [plan.newSlideId],
-          extracted.slide_index
+          extracted.slide_index,
+          writeContext
         );
       }
       writeResult = appendFailedSlideResult(
         writeResult,
         extracted.slide_index,
-        classifiedError.errorCode
+        classifiedError.errorCode,
+        extracted.slide_object_id
       );
       const remainingSlideIndexes = sortedSlides
         .slice(index + 1)
@@ -289,6 +368,13 @@ export async function writeBackNewFile(
     category: null,
     streak: 0,
   };
+  let writeContext: WriteExecutionContext = {
+    throttleState: {
+      slowModeEnabled: false,
+      consecutiveRateLimitFailures: 0,
+      consecutiveSuccessesSinceSlowMode: 0,
+    },
+  };
 
   for (let index = 0; index < extractedSlides.length; index += 1) {
     const extracted = extractedSlides[index]!;
@@ -300,7 +386,8 @@ export async function writeBackNewFile(
       writeResult = appendFailedSlideResult(
         writeResult,
         extracted.slide_index,
-        "HOST_ADAPTER_ERROR"
+        "HOST_ADAPTER_ERROR",
+        extracted.slide_object_id
       );
       if (onProgress) {
         await onProgress(writeResult);
@@ -309,24 +396,29 @@ export async function writeBackNewFile(
     }
 
     try {
-      const replacePlan = buildReplacePlan(
+      const nodeWriteResult = await executeNodeWritesForSlide(
+        slides,
+        targetPresentationId,
         slide,
         extracted.nodes,
         translationMap,
-        (sourceObjectId) => sourceObjectId
+        (sourceObjectId) => sourceObjectId,
+        writeContext
       );
-
-      if (replacePlan.requests.length > 0) {
-        await slides.presentations.batchUpdate({
-          presentationId: targetPresentationId,
-          requestBody: { requests: replacePlan.requests },
-        });
+      writeContext = nodeWriteResult.context;
+      if (nodeWriteResult.committedNodeIds.length === 0) {
+        throw new Error(nodeWriteResult.errorCode ?? "No translated nodes were written");
       }
 
       writeResult = appendCommittedSlideResult(
         writeResult,
         extracted.slide_index,
-        replacePlan.warnings
+        nodeWriteResult.warnings,
+        slide.objectId ?? undefined,
+        undefined,
+        extracted.slide_object_id,
+        nodeWriteResult.committedNodeIds,
+        nodeWriteResult.failedNodeIds
       );
       if (onProgress) {
         await onProgress(writeResult);
@@ -339,7 +431,8 @@ export async function writeBackNewFile(
       writeResult = appendFailedSlideResult(
         writeResult,
         extracted.slide_index,
-        classifiedError.errorCode
+        classifiedError.errorCode,
+        extracted.slide_object_id
       );
       const remainingSlideIndexes = extractedSlides
         .slice(index + 1)
@@ -379,6 +472,131 @@ export async function writeBackNewFile(
   return writeResult;
 }
 
+export async function writeBackExistingSlides(
+  presentationId: string,
+  extractedSlides: SlideExtractionResult[],
+  translatedNodes: readonly TranslatedNode[],
+  existingTargets: readonly ExistingSlideWriteTarget[],
+  onProgress?: (result: WriteBackResult) => Promise<void>
+): Promise<WriteBackResult> {
+  const { slides } = getSlidesClient();
+  const translationMap = buildTranslationMap(translatedNodes);
+  const outputUrl = `https://docs.google.com/presentation/d/${presentationId}/edit`;
+  let writeResult = createEmptyWriteBackResult(outputUrl);
+
+  if (extractedSlides.length === 0) {
+    return writeResult;
+  }
+
+  const targetBySlideIndex = new Map(existingTargets.map((target) => [target.slide_index, target]));
+  const pres = await slides.presentations.get({ presentationId });
+  const allSlides = pres.data.slides ?? [];
+  const slideByObjectId = new Map(
+    allSlides
+      .filter((slide): slide is slides_v1.Schema$Page & { objectId: string } => Boolean(slide.objectId))
+      .map((slide) => [slide.objectId, slide])
+  );
+  let breakerState: WriteCircuitBreakerState = {
+    category: null,
+    streak: 0,
+  };
+  let writeContext: WriteExecutionContext = {
+    throttleState: {
+      slowModeEnabled: false,
+      consecutiveRateLimitFailures: 0,
+      consecutiveSuccessesSinceSlowMode: 0,
+    },
+  };
+
+  for (let index = 0; index < extractedSlides.length; index += 1) {
+    const extracted = extractedSlides[index]!;
+    const target = targetBySlideIndex.get(extracted.slide_index);
+    const outputSlide =
+      target?.output_slide_object_id
+        ? slideByObjectId.get(target.output_slide_object_id)
+        : allSlides[extracted.slide_index];
+
+    if (!outputSlide?.objectId) {
+      writeResult = appendFailedSlideResult(
+        writeResult,
+        extracted.slide_index,
+        "HOST_ADAPTER_ERROR",
+        extracted.slide_object_id
+      );
+      if (onProgress) {
+        await onProgress(writeResult);
+      }
+      continue;
+    }
+
+    try {
+      const nodeWriteResult = await executeNodeWritesForSlide(
+        slides,
+        presentationId,
+        outputSlide,
+        extracted.nodes,
+        translationMap,
+        (sourceObjectId) => target?.object_id_map?.[sourceObjectId] ?? sourceObjectId,
+        writeContext
+      );
+      writeContext = nodeWriteResult.context;
+      if (nodeWriteResult.committedNodeIds.length === 0) {
+        throw new Error(nodeWriteResult.errorCode ?? "No translated nodes were written");
+      }
+
+      writeResult = appendCommittedSlideResult(
+        writeResult,
+        extracted.slide_index,
+        nodeWriteResult.warnings,
+        outputSlide.objectId,
+        target?.object_id_map,
+        extracted.slide_object_id,
+        nodeWriteResult.committedNodeIds,
+        nodeWriteResult.failedNodeIds
+      );
+      if (onProgress) {
+        await onProgress(writeResult);
+      }
+    } catch (err) {
+      const classifiedError = classifyWriteError(err);
+      logWriteFailure("create_new_file", extracted.slide_index, classifiedError, {
+        target_presentation_id: presentationId,
+        existing_output_slide_object_id: outputSlide.objectId,
+      });
+      writeResult = appendFailedSlideResult(
+        writeResult,
+        extracted.slide_index,
+        classifiedError.errorCode,
+        extracted.slide_object_id
+      );
+      const remainingSlideIndexes = extractedSlides
+        .slice(index + 1)
+        .map((slideItem) => slideItem.slide_index);
+      const breakerEvaluation = evaluateWriteCircuitBreaker(
+        breakerState,
+        classifiedError,
+        remainingSlideIndexes.length
+      );
+      breakerState = breakerEvaluation.nextState;
+      if (breakerEvaluation.shouldBreak) {
+        writeResult = appendFailedSlidesResult(
+          writeResult,
+          remainingSlideIndexes,
+          classifiedError.errorCode
+        );
+      }
+      if (onProgress) {
+        await onProgress(writeResult);
+      }
+      if (breakerEvaluation.shouldBreak) {
+        break;
+      }
+    }
+  }
+
+  return writeResult;
+}
+
 function createEmptyWriteBackResult(outputUrl: string): WriteBackResult {
   return {
     outputUrl,
@@ -393,7 +611,12 @@ function createEmptyWriteBackResult(outputUrl: string): WriteBackResult {
 function appendCommittedSlideResult(
   current: WriteBackResult,
   slideIndex: number,
-  warningsForSlide: readonly JobWarning[]
+  warningsForSlide: readonly JobWarning[],
+  outputSlideObjectId?: string,
+  objectIdMap?: Readonly<Record<string, string>>,
+  sourceSlideObjectId?: string,
+  committedNodeIds: readonly string[] = [],
+  failedNodeIds: readonly string[] = []
 ): WriteBackResult {
   return {
     ...current,
@@ -403,8 +626,13 @@ function appendCommittedSlideResult(
       ...current.slide_results,
       {
         slide_index: slideIndex,
+        source_slide_object_id: sourceSlideObjectId,
         status: "committed",
         warning_codes: collectWarningCodes(warningsForSlide),
+        output_slide_object_id: outputSlideObjectId,
+        object_id_map: objectIdMap,
+        committed_node_ids: committedNodeIds,
+        failed_node_ids: failedNodeIds,
       },
     ],
     warnings: [...current.warnings, ...warningsForSlide],
@@ -414,7 +642,8 @@ function appendCommittedSlideResult(
 function appendFailedSlideResult(
   current: WriteBackResult,
   slideIndex: number,
-  errorCode: string
+  errorCode: string,
+  sourceSlideObjectId?: string
 ): WriteBackResult {
   return {
     ...current,
@@ -425,6 +654,7 @@ function appendFailedSlideResult(
       ...current.slide_results,
       {
         slide_index: slideIndex,
+        source_slide_object_id: sourceSlideObjectId,
         status: "skipped_write_failed",
         warning_codes: [],
         error_code: errorCode,
@@ -443,6 +673,286 @@ function appendFailedSlidesResult(
     nextResult = appendFailedSlideResult(nextResult, slideIndex, errorCode);
   }
   return nextResult;
+}
+
+async function executeNodeWritesForSlide(
+  slides: ReturnType<typeof getSlidesClient>["slides"],
+  presentationId: string,
+  slide: slides_v1.Schema$Page,
+  originalNodes: readonly SlideTextNode[],
+  translationMap: Map<string, TranslatedNode>,
+  resolveObjectId: (sourceObjectId: string) => string,
+  context: WriteExecutionContext
+): Promise<NodeWriteExecutionResult> {
+  const fitByNodeId = resolveSlideNodeFits(
+    originalNodes,
+    originalNodes
+      .map((node) => translationMap.get(node.node_id))
+      .filter((translatedNode): translatedNode is TranslatedNode => Boolean(translatedNode))
+  );
+  const preparedPlans: PreparedNodeWritePlan[] = [];
+  const failedNodeIds: string[] = [];
+  let firstErrorCode: string | undefined;
+
+  for (const node of originalNodes) {
+    const translated = translationMap.get(node.node_id);
+    if (!translated) {
+      continue;
+    }
+
+    const resolvedObjectId = resolveObjectId(node.object_id);
+    if (!resolvedObjectId) {
+      failedNodeIds.push(node.node_id);
+      firstErrorCode ??= "HOST_ADAPTER_ERROR";
+      continue;
+    }
+
+    try {
+      const cellLocation =
+        node.element_type === "table_cell"
+          ? {
+              rowIndex: node.row_index ?? 0,
+              columnIndex: node.col_index ?? 0,
+            }
+          : undefined;
+      const artifacts = buildNodeWriteArtifacts({
+        sourceNode: node,
+        translatedNode: translated,
+        objectId: resolvedObjectId,
+        cellLocation,
+        fit: fitByNodeId.get(node.node_id),
+      });
+      preparedPlans.push({
+        nodeId: node.node_id,
+        slideIndex: node.slide_index,
+        requests: artifacts.requests,
+        warnings: artifacts.warnings,
+      });
+    } catch (error) {
+      const classifiedError = classifyWriteError(error);
+      failedNodeIds.push(node.node_id);
+      firstErrorCode ??= classifiedError.errorCode;
+      logWriteFailure("node_write", node.slide_index, classifiedError, {
+        presentationId,
+        node_id: node.node_id,
+        source_object_id: node.object_id,
+        resolved_object_id: resolvedObjectId,
+      });
+    }
+  }
+
+  const execution = await executePreparedNodeWritePlans(
+    slides,
+    presentationId,
+    preparedPlans,
+    context
+  );
+
+  return {
+    warnings: execution.warnings,
+    committedNodeIds: execution.committedNodeIds,
+    failedNodeIds: [...failedNodeIds, ...execution.failedNodeIds],
+    errorCode: firstErrorCode ?? execution.errorCode,
+    context: execution.context,
+  };
+}
+
+async function executePreparedNodeWritePlans(
+  slides: ReturnType<typeof getSlidesClient>["slides"],
+  presentationId: string,
+  plans: readonly PreparedNodeWritePlan[],
+  context: WriteExecutionContext
+): Promise<NodeWriteExecutionResult & { readonly context: WriteExecutionContext }> {
+  if (plans.length === 0) {
+    return {
+      warnings: [],
+      committedNodeIds: [],
+      failedNodeIds: [],
+      context,
+    };
+  }
+
+  try {
+    const nextContext = await executeBatchUpdateWithRetry(
+      slides,
+      presentationId,
+      plans.flatMap((plan) => plan.requests),
+      context,
+      {
+        phase: plans.length === 1 ? "single_node_write" : "group_write",
+        slideIndex: plans[0]?.slideIndex,
+        nodeIds: plans.map((plan) => plan.nodeId),
+      }
+    );
+    return {
+      warnings: plans.flatMap((plan) => plan.warnings),
+      committedNodeIds: plans.map((plan) => plan.nodeId),
+      failedNodeIds: [],
+      context: nextContext,
+    };
+  } catch (error) {
+    const classifiedError = classifyWriteError(error);
+    if (
+      (classifiedError.systemicCategory === "rate_limit" ||
+        classifiedError.systemicCategory === "quota") ||
+      plans.length === 1
+    ) {
+      return {
+        warnings: [],
+        committedNodeIds: [],
+        failedNodeIds: plans.map((plan) => plan.nodeId),
+        errorCode: classifiedError.errorCode,
+        context,
+      };
+    }
+
+    const splitIndex = Math.ceil(plans.length / 2);
+    const leftPlans = plans.slice(0, splitIndex);
+    const rightPlans = plans.slice(splitIndex);
+    const leftResult = await executePreparedNodeWritePlans(
+      slides,
+      presentationId,
+      leftPlans,
+      context
+    );
+    const rightResult = await executePreparedNodeWritePlans(
+      slides,
+      presentationId,
+      rightPlans,
+      leftResult.context
+    );
+    return {
+      warnings: [...leftResult.warnings, ...rightResult.warnings],
+      committedNodeIds: [...leftResult.committedNodeIds, ...rightResult.committedNodeIds],
+      failedNodeIds: [...leftResult.failedNodeIds, ...rightResult.failedNodeIds],
+      errorCode: leftResult.errorCode ?? rightResult.errorCode,
+      context: rightResult.context,
+    };
+  }
+}
+
+async function executeBatchUpdateWithRetry(
+  slides: ReturnType<typeof getSlidesClient>["slides"],
+  presentationId: string,
+  requests: readonly slides_v1.Schema$Request[],
+  context: WriteExecutionContext,
+  metadata: {
+    readonly phase: string;
+    readonly slideIndex?: number;
+    readonly nodeIds?: readonly string[];
+  }
+): Promise<WriteExecutionContext> {
+  if (requests.length === 0) {
+    return context;
+  }
+
+  let nextContext = context;
+  for (let attempt = 0; attempt <= RATE_LIMIT_RETRY_BASE_DELAYS_MS.length; attempt += 1) {
+    nextContext = await maybeApplyGlobalSlowModeDelay(nextContext);
+    try {
+      await slides.presentations.batchUpdate({
+        presentationId,
+        requestBody: { requests: [...requests] },
+      });
+      return noteWriteSuccess(nextContext);
+    } catch (error) {
+      const classifiedError = classifyWriteError(error);
+      const retryBaseDelays =
+        classifiedError.systemicCategory === "quota"
+          ? QUOTA_RETRY_BASE_DELAYS_MS
+          : RATE_LIMIT_RETRY_BASE_DELAYS_MS;
+      if (
+        (classifiedError.systemicCategory !== "rate_limit" &&
+          classifiedError.systemicCategory !== "quota") ||
+        attempt >= retryBaseDelays.length
+      ) {
+        throw error;
+      }
+
+      nextContext =
+        classifiedError.systemicCategory === "rate_limit"
+          ? noteRateLimitFailure(nextContext)
+          : noteQuotaFailure(nextContext);
+      const delayMs = computeRateLimitRetryDelayMs(retryBaseDelays[attempt]!);
+      console.warn(
+        `[slides-writer] throttled retry scheduled`,
+        JSON.stringify({
+          phase: metadata.phase,
+          slide_index: metadata.slideIndex,
+          node_ids: metadata.nodeIds,
+          attempt: attempt + 1,
+          delay_ms: delayMs,
+          slow_mode_enabled: nextContext.throttleState.slowModeEnabled,
+          error_code: classifiedError.errorCode,
+        })
+      );
+      await writeSleep(delayMs);
+    }
+  }
+
+  return nextContext;
+}
+
+async function maybeApplyGlobalSlowModeDelay(
+  context: WriteExecutionContext
+): Promise<WriteExecutionContext> {
+  if (!context.throttleState.slowModeEnabled) {
+    return context;
+  }
+
+  const delayMs = computeGlobalSlowModeDelayMs();
+  await writeSleep(delayMs);
+  return context;
+}
+
+function noteRateLimitFailure(context: WriteExecutionContext): WriteExecutionContext {
+  const nextStreak = context.throttleState.consecutiveRateLimitFailures + 1;
+  return {
+    throttleState: {
+      slowModeEnabled:
+        context.throttleState.slowModeEnabled ||
+        nextStreak >= GLOBAL_SLOW_MODE_RATE_LIMIT_STREAK_THRESHOLD,
+      consecutiveRateLimitFailures: nextStreak,
+      consecutiveSuccessesSinceSlowMode: 0,
+    },
+  };
+}
+
+function noteQuotaFailure(context: WriteExecutionContext): WriteExecutionContext {
+  return {
+    throttleState: {
+      ...context.throttleState,
+      consecutiveSuccessesSinceSlowMode: 0,
+    },
+  };
+}
+
+function noteWriteSuccess(context: WriteExecutionContext): WriteExecutionContext {
+  const nextSuccessCount = context.throttleState.slowModeEnabled
+    ? context.throttleState.consecutiveSuccessesSinceSlowMode + 1
+    : 0;
+  const slowModeEnabled =
+    context.throttleState.slowModeEnabled &&
+    nextSuccessCount < GLOBAL_SLOW_MODE_SUCCESS_RECOVERY_THRESHOLD;
+
+  return {
+    throttleState: {
+      slowModeEnabled,
+      consecutiveRateLimitFailures: 0,
+      consecutiveSuccessesSinceSlowMode: slowModeEnabled ? nextSuccessCount : 0,
+    },
+  };
+}
+
+function computeRateLimitRetryDelayMs(baseDelayMs: number): number {
+  return Math.max(0, Math.round(writeRandom() * baseDelayMs));
+}
+
+function computeGlobalSlowModeDelayMs(): number {
+  return Math.round(
+    GLOBAL_SLOW_MODE_MIN_DELAY_MS +
+      (GLOBAL_SLOW_MODE_MAX_DELAY_MS - GLOBAL_SLOW_MODE_MIN_DELAY_MS) * writeRandom()
+  );
 }
 
 function collectWarningCodes(
@@ -508,6 +1018,27 @@ function classifyWriteError(error: unknown): ClassifiedWriteError {
   }
 
   if (httpStatus === 429) {
+    if (
+      googleReasons.some((reason) =>
+        /rateLimitExceeded|userRateLimitExceeded|tooManyRequests/i.test(reason)
+      )
+    ) {
+      return {
+        errorCode: "GOOGLE_API_RATE_LIMIT",
+        systemicCategory: "rate_limit",
+        metadata,
+      };
+    }
+    if (
+      googleReasons.some((reason) => /quotaExceeded|dailyLimitExceeded/i.test(reason)) ||
+      /quota/i.test(errorMessage)
+    ) {
+      return {
+        errorCode: "QUOTA_EXCEEDED",
+        systemicCategory: "quota",
+        metadata,
+      };
+    }
     return {
       errorCode: "GOOGLE_API_RATE_LIMIT",
       systemicCategory: "rate_limit",
@@ -578,7 +1109,7 @@ function buildWriteErrorMetadata(error: unknown): Record<string, unknown> {
 }
 
 function logWriteFailure(
-  outputMode: "append_in_file" | "create_new_file",
+  outputMode: "append_in_file" | "create_new_file" | "node_write",
   slideIndex: number,
   classifiedError: ClassifiedWriteError,
   extraMetadata: Record<string, unknown>
@@ -604,6 +1135,13 @@ function evaluateWriteCircuitBreaker(
   readonly shouldBreak: boolean;
 } {
   if (!classifiedError.systemicCategory) {
+    return {
+      nextState: { category: null, streak: 0 },
+      shouldBreak: false,
+    };
+  }
+
+  if (classifiedError.systemicCategory === "rate_limit") {
     return {
       nextState: { category: null, streak: 0 },
       shouldBreak: false,
@@ -836,6 +1374,9 @@ function buildNodeWriteArtifacts(
       if (Object.keys(paragraphPlan.sourceParagraph.paragraph_style).length === 0) {
         continue;
       }
+      if (paragraphPlan.styleRangeStart === paragraphPlan.styleRangeEnd) {
+        continue;
+      }
 
       requests.push({
         updateParagraphStyle: {
@@ -1066,6 +1607,7 @@ const KNOWN_JOB_WARNING_REASONS = new Set<JobWarningReason>([
   "bullet_structure_rebuilt_with_compaction",
   "single_line_policy_degraded",
   "layout_semantics_fallback_applied",
+  "materialization_trailing_empty_suffix_accepted",
   "manual_review_recommended",
 ]);
 
@@ -1207,21 +1749,26 @@ async function cleanupDuplicatedSlides(
   slides: ReturnType<typeof getSlidesClient>["slides"],
   presentationId: string,
   slideObjectIds: readonly string[],
-  slideIndex: number
+  slideIndex: number,
+  context: WriteExecutionContext
 ): Promise<void> {
   if (slideObjectIds.length === 0) {
     return;
   }
 
   try {
-    await slides.presentations.batchUpdate({
+    await executeBatchUpdateWithRetry(
+      slides,
       presentationId,
-      requestBody: {
-        requests: slideObjectIds.map((objectId) => ({
-          deleteObject: { objectId },
-        })),
-      },
-    });
+      slideObjectIds.map((objectId) => ({
+        deleteObject: { objectId },
+      })),
+      context,
+      {
+        phase: "cleanup_duplicated_slides",
+        slideIndex,
+      }
+    );
   } catch (error) {
     const classifiedError = classifyWriteError(error);
     console.error(
@@ -1236,4 +1783,17 @@ async function cleanupDuplicatedSlides(
       })
     );
   }
+}
+
+export function __setWriteRuntimeForTests(runtime: {
+  readonly sleep?: WriteSleepFn;
+  readonly random?: WriteRandomFn;
+}): void {
+  writeSleep = runtime.sleep ?? writeSleep;
+  writeRandom = runtime.random ?? writeRandom;
+}
+
+export function __resetWriteRuntimeForTests(): void {
+  writeSleep = async (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  writeRandom = () => Math.random();
 }

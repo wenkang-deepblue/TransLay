@@ -1,6 +1,8 @@
 import type { Pool, PoolClient } from "pg";
 import type {
   HostType,
+  JobExecutionStage,
+  JobStageStatus,
   JobWarning,
   OutputMode,
   RangeMode,
@@ -36,6 +38,14 @@ export interface JobRow {
   error_message: string | null;
   warnings: JobWarning[];
   cancel_requested_at: Date | null;
+  current_stage: JobExecutionStage | null;
+  stage_status: JobStageStatus | null;
+  stage_cursor: Record<string, unknown>;
+  stage_payload: Record<string, unknown>;
+  stage_attempt: number;
+  stage_lease_expires_at: Date | null;
+  stage_last_heartbeat_at: Date | null;
+  queued_task_name: string | null;
   started_at: Date;
   completed_at: Date | null;
 }
@@ -45,7 +55,10 @@ const JOB_COLUMNS = `id, user_id, host_type, source_doc_id, source_doc_name, tar
   source_language_mode, source_language, target_language_input, target_language_code,
   output_mode, range_mode, range_expression, provider_route, status,
   provisionally_billed_units, gross_billed_slides, refunded_slides, net_billed_slides, total_units_billed,
-  output_document_url, error_code, error_message, warnings, cancel_requested_at, started_at, completed_at`;
+  output_document_url, error_code, error_message, warnings, cancel_requested_at,
+  current_stage, stage_status, stage_cursor, stage_payload, stage_attempt,
+  stage_lease_expires_at, stage_last_heartbeat_at, queued_task_name,
+  started_at, completed_at`;
 
 export async function createJob(
   client: PoolClient,
@@ -67,8 +80,8 @@ export async function createJob(
     `INSERT INTO translation_jobs
        (user_id, host_type, source_doc_id, source_doc_name, target_doc_id,
         source_language_mode, target_language_input, target_language_code,
-        output_mode, range_mode, range_expression, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending')
+       output_mode, range_mode, range_expression, status, current_stage, stage_status, stage_cursor, stage_payload, stage_attempt)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', 'extract', 'pending', '{}'::jsonb, '{}'::jsonb, 0)
      RETURNING id`,
     [
       params.userId,
@@ -96,7 +109,7 @@ export async function getJobById(
     `SELECT ${JOB_COLUMNS} FROM translation_jobs WHERE id = $1 AND user_id = $2`,
     [jobId, userId]
   );
-  return result.rows[0] ?? null;
+  return normalizeJobRow(result.rows[0]);
 }
 
 export async function hasRunningJob(
@@ -126,6 +139,14 @@ export async function updateJobStatus(
     netBilledSlides?: number;
     totalUnitsBilled?: number;
     warnings?: readonly JobWarning[];
+    currentStage?: JobExecutionStage | null;
+    stageStatus?: JobStageStatus | null;
+    stageCursor?: Record<string, unknown>;
+    stagePayload?: Record<string, unknown>;
+    stageAttempt?: number;
+    stageLeaseExpiresAt?: Date | null;
+    stageLastHeartbeatAt?: Date | null;
+    queuedTaskName?: string | null;
   }
 ): Promise<void> {
   const setClauses = ["status = $2"];
@@ -183,6 +204,46 @@ export async function updateJobStatus(
   if (extra?.warnings !== undefined) {
     setClauses.push(`warnings = $${idx}`);
     params.push(JSON.stringify(extra.warnings));
+    idx++;
+  }
+  if (extra?.currentStage !== undefined) {
+    setClauses.push(`current_stage = $${idx}`);
+    params.push(extra.currentStage);
+    idx++;
+  }
+  if (extra?.stageStatus !== undefined) {
+    setClauses.push(`stage_status = $${idx}`);
+    params.push(extra.stageStatus);
+    idx++;
+  }
+  if (extra?.stageCursor !== undefined) {
+    setClauses.push(`stage_cursor = $${idx}`);
+    params.push(JSON.stringify(extra.stageCursor));
+    idx++;
+  }
+  if (extra?.stagePayload !== undefined) {
+    setClauses.push(`stage_payload = $${idx}`);
+    params.push(JSON.stringify(extra.stagePayload));
+    idx++;
+  }
+  if (extra?.stageAttempt !== undefined) {
+    setClauses.push(`stage_attempt = $${idx}`);
+    params.push(extra.stageAttempt);
+    idx++;
+  }
+  if (extra?.stageLeaseExpiresAt !== undefined) {
+    setClauses.push(`stage_lease_expires_at = $${idx}`);
+    params.push(extra.stageLeaseExpiresAt);
+    idx++;
+  }
+  if (extra?.stageLastHeartbeatAt !== undefined) {
+    setClauses.push(`stage_last_heartbeat_at = $${idx}`);
+    params.push(extra.stageLastHeartbeatAt);
+    idx++;
+  }
+  if (extra?.queuedTaskName !== undefined) {
+    setClauses.push(`queued_task_name = $${idx}`);
+    params.push(extra.queuedTaskName);
     idx++;
   }
 
@@ -243,4 +304,55 @@ export async function hasCompletedEquivalentJob(
     ]
   );
   return result.rows.length > 0;
+}
+
+function normalizeJobRow(row: JobRow | undefined): JobRow | null {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ...row,
+    provisionally_billed_units: toNumber(row.provisionally_billed_units),
+    gross_billed_slides: toNumber(row.gross_billed_slides),
+    refunded_slides: toNumber(row.refunded_slides),
+    net_billed_slides: toNumber(row.net_billed_slides),
+    total_units_billed: toNumber(row.total_units_billed),
+    warnings: Array.isArray(row.warnings) ? row.warnings : [],
+    stage_cursor: toJsonObject(row.stage_cursor),
+    stage_payload: toJsonObject(row.stage_payload),
+    stage_attempt: toNumber(row.stage_attempt),
+  };
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+}
+
+function toJsonObject(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
 }

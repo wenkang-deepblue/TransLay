@@ -11,6 +11,23 @@ function optionalEnv(name: string, fallback: string): string {
   return process.env[name] ?? fallback;
 }
 
+function optionalBooleanEnv(name: string, fallback: boolean): boolean {
+  const raw = process.env[name];
+  if (raw === undefined) {
+    return fallback;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+
+  throw new Error(`Environment variable ${name} must be a boolean, got: ${raw}`);
+}
+
 function requireIntEnv(name: string, raw: string): number {
   const parsed = parseInt(raw, 10);
   if (isNaN(parsed)) {
@@ -87,11 +104,13 @@ export type AppConfig = ReturnType<typeof loadConfig>;
 
 export function loadWorkerConfig() {
   const nodeEnv = optionalEnv("NODE_ENV", "development");
+  const workerUrl = optionalEnv("WORKER_URL", "").replace(/\/$/, "");
   const cloudTasksAudience = optionalEnv("CLOUD_TASKS_AUDIENCE", "");
   const cloudTasksInvokerServiceAccount = optionalEnv(
     "CLOUD_TASKS_INVOKER_SA",
     ""
   );
+  const captureLlmOutputs = optionalBooleanEnv("DEBUG_CAPTURE_LLM_OUTPUTS", false);
 
   if (nodeEnv === "production" && !cloudTasksAudience) {
     throw new Error("CLOUD_TASKS_AUDIENCE is required in production");
@@ -99,6 +118,16 @@ export function loadWorkerConfig() {
 
   if (nodeEnv === "production" && !cloudTasksInvokerServiceAccount) {
     throw new Error("CLOUD_TASKS_INVOKER_SA is required in production");
+  }
+
+  if (nodeEnv === "production" && !workerUrl) {
+    throw new Error("WORKER_URL is required in production");
+  }
+
+  if (nodeEnv === "production" && captureLlmOutputs) {
+    throw new Error(
+      "DEBUG_CAPTURE_LLM_OUTPUTS must remain disabled in production to enforce zero-content retention."
+    );
   }
 
   return {
@@ -131,8 +160,20 @@ export function loadWorkerConfig() {
     },
 
     cloudTasks: {
+      queueName: optionalEnv("CLOUD_TASKS_QUEUE_NAME", "YOUR_CLOUD_TASKS_QUEUE"),
+      location: optionalEnv("CLOUD_TASKS_LOCATION", "us-central1"),
+      workerUrl,
       audience: cloudTasksAudience,
       invokerServiceAccount: cloudTasksInvokerServiceAccount,
+    },
+
+    // Development-only debugging toggle. Must stay disabled by default.
+    debug: {
+      captureLlmOutputs,
+      llmOutputRetentionHours: requireIntEnv(
+        "DEBUG_LLM_OUTPUT_RETENTION_HOURS",
+        optionalEnv("DEBUG_LLM_OUTPUT_RETENTION_HOURS", "72")
+      ),
     },
   } as const;
 }

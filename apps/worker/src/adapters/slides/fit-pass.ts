@@ -15,6 +15,7 @@ export interface FitPassResult {
   readonly avoidExpansion: boolean;
   readonly degradedSingleLine: boolean;
   readonly usedFallbackLayoutHint: boolean;
+  readonly rejectedGroupSync: boolean;
 }
 
 interface FitProfile {
@@ -28,11 +29,63 @@ interface FitProfile {
 const EMU_PER_PT = 12700;
 const MIN_FONT_SIZE_PT = 6;
 const DENSE_SCRIPT_RE = /[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/;
+const LONG_COMPOUND_TOKEN_RE = /[A-Za-z\u00c0-\u024f]{14,}/;
+
+// Google Slides™ API does not expose per-shape text inset truth in the public
+// presentation response. Treat editor defaults as the fallback rendering
+// budget, but prefer node-level inset truth if a future extractor path can
+// surface it.
+const DEFAULT_SHAPE_INSET_H_EMU = 91440; // 0.1 inch per side (left + right)
+const DEFAULT_SHAPE_INSET_V_EMU = 45720; // 0.05 inch per side (top + bottom)
 const DEFAULT_LAYOUT_HINT = {
   visual_role: "unknown",
   line_policy: "allow_wrap",
   scale_sync: "independent",
 } as const;
+const PARAGRAPH_COMPACTION = {
+  lineSpacingScale: 0.94,
+  minLineSpacing: 80,
+  spaceScale: 0.82,
+} as const;
+
+type FitCompactness = FitPassResult["compactness"];
+
+function resolveTextInsetBudgetEmu(sourceNode: SlideTextNode) {
+  if (sourceNode.element_type !== "shape") {
+    return {
+      left_emu: 0,
+      right_emu: 0,
+      top_emu: 0,
+      bottom_emu: 0,
+    };
+  }
+
+  return (
+    sourceNode.text_insets_emu ?? {
+      left_emu: DEFAULT_SHAPE_INSET_H_EMU,
+      right_emu: DEFAULT_SHAPE_INSET_H_EMU,
+      top_emu: DEFAULT_SHAPE_INSET_V_EMU,
+      bottom_emu: DEFAULT_SHAPE_INSET_V_EMU,
+    }
+  );
+}
+
+function usableWidthPt(node: SlideTextNode): number {
+  const inset = resolveTextInsetBudgetEmu(node);
+  return Math.max(1, (node.box.width_emu - inset.left_emu - inset.right_emu) / EMU_PER_PT);
+}
+
+function usableHeightPt(node: SlideTextNode): number {
+  const inset = resolveTextInsetBudgetEmu(node);
+  return Math.max(1, (node.box.height_emu - inset.top_emu - inset.bottom_emu) / EMU_PER_PT);
+}
+
+interface OverflowAnalysis {
+  readonly overflow: number;
+  readonly widthPressure: number;
+  readonly heightPressure: number;
+  readonly sourceFullness: number;
+}
 
 const FIT_PROFILE_BY_ARCHETYPE: Record<SlideTextNode["archetype"], FitProfile> = {
   plain_text: {
@@ -53,7 +106,7 @@ const FIT_PROFILE_BY_ARCHETYPE: Record<SlideTextNode["archetype"], FitProfile> =
     widthFactor: 0.78,
     lineHeightFactor: 1.12,
     pressureBias: 1.18,
-    minScale: 0.84,
+    minScale: 0.78,
     spacingTightenFactor: 0.95,
   },
   mixed_emphasis: {
@@ -89,10 +142,7 @@ export function fitTranslatedNode(
   }
 
   if (layoutHint.line_policy === "prefer_single_line") {
-    const singleLineFit = fitWithSingleLinePriority(sourceNode, translatedNode);
-    if (singleLineFit) {
-      return singleLineFit;
-    }
+    return fitWithSingleLinePriority(sourceNode, translatedNode);
   }
 
   return fitWithWrapAllowed(sourceNode, translatedNode);
@@ -135,6 +185,19 @@ export function resolveSlideNodeFits(
       continue;
     }
 
+    if (!isGeometryCompatibleSyncGroup(groupMembers.map(({ sourceNode }) => sourceNode))) {
+      for (const { sourceNode } of groupMembers) {
+        const currentFit = fitsByNodeId.get(sourceNode.node_id);
+        if (currentFit) {
+          fitsByNodeId.set(sourceNode.node_id, {
+            ...currentFit,
+            rejectedGroupSync: true,
+          });
+        }
+      }
+      continue;
+    }
+
     const sharedScale = Math.min(
       ...groupMembers.map(({ sourceNode }) => fitsByNodeId.get(sourceNode.node_id)?.scale ?? 1)
     );
@@ -168,16 +231,16 @@ function fitWithWrapAllowed(
 function fitWithSingleLinePriority(
   sourceNode: SlideTextNode,
   translatedNode: TranslatedNode
-): FitPassResult | null {
+): FitPassResult {
   if (translatedNode.paragraphs.length !== 1) {
-    return null;
+    return fitWithWrapAllowed(sourceNode, translatedNode);
   }
 
   const profile = FIT_PROFILE_BY_ARCHETYPE[sourceNode.archetype];
   const archetypeMinScale = resolveMinScale(sourceNode, translatedNode, profile.minScale);
   const singleLineMinScale = resolveSingleLineMinScale(sourceNode);
   const minScale = sourceNode.archetype === "metric_card"
-    ? Math.max(archetypeMinScale, singleLineMinScale)
+    ? Math.max(0.84, archetypeMinScale, singleLineMinScale)
     : Math.min(archetypeMinScale, singleLineMinScale);
   let scale = 1;
 
@@ -186,7 +249,13 @@ function fitWithSingleLinePriority(
   }
 
   if (estimateSingleLineOverflow(sourceNode, translatedNode, scale) > 1) {
-    return null;
+    const constrainedFit = evaluateFitAtScale(sourceNode, translatedNode, minScale);
+    if (resolveSingleLineEnforcement(sourceNode) === "strong") {
+      return constrainedFit;
+    }
+
+    const wrapFit = fitWithWrapAllowed(sourceNode, translatedNode);
+    return choosePreferredSoftSingleLineFit(constrainedFit, wrapFit);
   }
 
   return evaluateFitAtScale(sourceNode, translatedNode, scale);
@@ -195,25 +264,33 @@ function fitWithSingleLinePriority(
 function evaluateFitAtScale(
   sourceNode: SlideTextNode,
   translatedNode: TranslatedNode,
-  scale: number
+  scale: number,
+  options?: {
+    readonly rejectedGroupSync?: boolean;
+  }
 ): FitPassResult {
-  const profile = FIT_PROFILE_BY_ARCHETYPE[sourceNode.archetype];
   const layoutHint = resolveEffectiveLayoutHint(sourceNode);
-  const overflowAtScale = estimateOverflow(sourceNode, translatedNode, scale);
+  const normalAnalysis = analyzeOverflow(sourceNode, translatedNode, scale, "normal");
+  const singleLineOverflow =
+    layoutHint.line_policy === "prefer_single_line" && translatedNode.paragraphs.length === 1
+      ? estimateSingleLineOverflow(sourceNode, translatedNode, scale)
+      : null;
   const honorsSingleLine =
     layoutHint.line_policy === "prefer_single_line" &&
     translatedNode.paragraphs.length === 1 &&
-    estimateSingleLineOverflow(sourceNode, translatedNode, scale) <= 1;
+    (singleLineOverflow ?? Number.POSITIVE_INFINITY) <= 1;
 
   let applyTighterParagraphSpacing = false;
-  let adjustedOverflow = overflowAtScale;
+  let adjustedOverflow = normalAnalysis.overflow;
 
-  if (overflowAtScale > 1) {
+  if (honorsSingleLine && singleLineOverflow !== null) {
+    adjustedOverflow = Math.min(normalAnalysis.overflow, singleLineOverflow);
+  } else if (normalAnalysis.overflow > 1) {
     applyTighterParagraphSpacing = true;
-    adjustedOverflow = overflowAtScale * profile.spacingTightenFactor;
+    adjustedOverflow = analyzeOverflow(sourceNode, translatedNode, scale, "tight").overflow;
   } else if (scale < 0.92 && sourceNode.archetype === "bullet_list") {
     applyTighterParagraphSpacing = true;
-    adjustedOverflow = overflowAtScale * profile.spacingTightenFactor;
+    adjustedOverflow = analyzeOverflow(sourceNode, translatedNode, scale, "tight").overflow;
   }
 
   let risk: FitPassRisk = "low";
@@ -233,6 +310,7 @@ function evaluateFitAtScale(
     degradedSingleLine:
       layoutHint.line_policy === "prefer_single_line" && !honorsSingleLine,
     usedFallbackLayoutHint: layoutHint.usedFallbackLayoutHint,
+    rejectedGroupSync: options?.rejectedGroupSync ?? false,
   };
 }
 
@@ -241,42 +319,54 @@ export function estimateOverflow(
   translatedNode: TranslatedNode,
   scale = 1
 ): number {
-  const profile = FIT_PROFILE_BY_ARCHETYPE[sourceNode.archetype];
-  const widthPt = Math.max(1, sourceNode.box.width_emu / EMU_PER_PT);
-  const heightPt = Math.max(1, sourceNode.box.height_emu / EMU_PER_PT);
-  const paragraphCount = Math.max(1, translatedNode.paragraphs.length);
-  const sourceParagraphCount = Math.max(1, sourceNode.paragraphs.length);
-  const baseFontSizePt = getMaxSourceFontSize(sourceNode);
-  const effectiveFontSizePt = Math.max(MIN_FONT_SIZE_PT, baseFontSizePt * scale);
-  const charsPerLineBudget = Math.max(
-    1,
-    widthPt / (effectiveFontSizePt * profile.widthFactor)
-  );
-  const lineBudget = Math.max(
-    paragraphCount,
-    heightPt / (effectiveFontSizePt * profile.lineHeightFactor)
-  );
+  return analyzeOverflow(sourceNode, translatedNode, scale, "normal").overflow;
+}
 
+function analyzeOverflow(
+  sourceNode: SlideTextNode,
+  translatedNode: TranslatedNode,
+  scale: number,
+  compactness: FitCompactness
+): OverflowAnalysis {
+  const profile = FIT_PROFILE_BY_ARCHETYPE[sourceNode.archetype];
+  const widthPt = usableWidthPt(sourceNode);
+  const heightPt = usableHeightPt(sourceNode);
+  const baseFontSizePt = getMaxSourceFontSize(sourceNode);
   const sourceTotal = Math.max(1, measureTextWeight(sourceNode.full_text));
   const targetTotal = Math.max(1, measureTextWeight(translatedNode.translated_full_text));
-  const sourceLongest = Math.max(
-    1,
-    ...sourceNode.paragraphs.map((paragraph) => estimateWrapFriendlyLineWeight(paragraph.text))
-  );
+  const sourceLongest = Math.max(1, estimateMaxWrappedLineWeight(sourceNode.paragraphs.map((p) => p.text)));
   const targetLongest = Math.max(
     1,
-    ...translatedNode.paragraphs.map((paragraph) =>
-      estimateWrapFriendlyLineWeight(paragraph.translated_text)
-    )
+    estimateMaxWrappedLineWeight(translatedNode.paragraphs.map((p) => p.translated_text))
   );
-
-  const estimatedSourceLines = Math.max(
-    sourceParagraphCount,
-    sourceTotal / charsPerLineBudget
+  const horizontalBudget = Math.max(
+    1,
+    widthPt / (Math.max(MIN_FONT_SIZE_PT, baseFontSizePt * scale) * profile.widthFactor)
   );
-  const estimatedTargetLines = Math.max(paragraphCount, targetTotal / charsPerLineBudget);
-  const widthPressure = targetLongest / charsPerLineBudget;
-  const heightPressure = estimatedTargetLines / lineBudget;
+  const widthPressure = targetLongest / horizontalBudget;
+  const sourceOccupancyPt = estimateNodeVerticalOccupancy(
+    sourceNode,
+    sourceNode.paragraphs.map((paragraph) => paragraph.text),
+    scale,
+    compactness
+  );
+  const targetOccupancyPt = estimateNodeVerticalOccupancy(
+    sourceNode,
+    resolveTargetParagraphTexts(sourceNode, translatedNode),
+    scale,
+    compactness
+  );
+  const sourceFullness = sourceOccupancyPt / heightPt;
+  const safetyMarginPt = estimateDynamicSafetyMarginPt(
+    sourceNode,
+    translatedNode,
+    sourceOccupancyPt,
+    targetOccupancyPt,
+    heightPt,
+    scale,
+    compactness
+  );
+  const heightPressure = (targetOccupancyPt + safetyMarginPt) / heightPt;
   const metricSegmentPressure = estimateMetricSegmentPressure(
     sourceNode,
     translatedNode,
@@ -284,14 +374,20 @@ export function estimateOverflow(
   );
   const expansionPressure =
     0.55 * (targetLongest / sourceLongest) + 0.45 * (targetTotal / sourceTotal);
-  const sourceFitBias = Math.max(0.85, Math.min(1.05, estimatedSourceLines / lineBudget));
+  const sourceFitBias = Math.max(0.9, Math.min(1.06, 0.92 + sourceFullness * 0.08));
+  const rawExpansionPenalty = Math.max(0, expansionPressure - 1) * 0.18;
+  const expansionDamping = Math.min(1, Math.pow(widthPressure, 1.5));
 
-  return (
-    Math.max(widthPressure, heightPressure, metricSegmentPressure) *
+  return {
+    overflow:
+      Math.max(widthPressure, heightPressure, metricSegmentPressure) *
       profile.pressureBias *
       sourceFitBias +
-    Math.max(0, expansionPressure - 1) * 0.25
-  );
+      rawExpansionPenalty * expansionDamping,
+    widthPressure,
+    heightPressure,
+    sourceFullness,
+  };
 }
 
 function estimateSingleLineOverflow(
@@ -304,27 +400,114 @@ function estimateSingleLineOverflow(
   }
 
   const profile = FIT_PROFILE_BY_ARCHETYPE[sourceNode.archetype];
-  const widthPt = Math.max(1, sourceNode.box.width_emu / EMU_PER_PT);
+  const widthPt = usableWidthPt(sourceNode);
+  const heightPt = usableHeightPt(sourceNode);
   const baseFontSizePt = getMaxSourceFontSize(sourceNode);
   const effectiveFontSizePt = Math.max(MIN_FONT_SIZE_PT, baseFontSizePt * scale);
+  const widthSafetyFactor = resolveSingleLineWidthSafetyFactor(sourceNode, translatedNode);
   const charsPerLineBudget = Math.max(
     1,
-    widthPt / (effectiveFontSizePt * profile.widthFactor)
+    (widthPt * widthSafetyFactor) / (effectiveFontSizePt * profile.widthFactor)
   );
   const sourceSingleLine = Math.max(1, measureTextWeight(sourceNode.full_text));
   const targetSingleLine = Math.max(1, measureTextWeight(translatedNode.translated_full_text));
+  const sourceOccupancyPt = estimateNodeVerticalOccupancy(
+    sourceNode,
+    sourceNode.paragraphs.map((paragraph) => paragraph.text),
+    scale,
+    "normal"
+  );
+  const targetOccupancyPt = estimateNodeVerticalOccupancy(
+    sourceNode,
+    [translatedNode.translated_full_text],
+    scale,
+    "normal"
+  );
   const metricSegmentPressure = estimateMetricSegmentPressure(
     sourceNode,
     translatedNode,
     scale
   );
   const noWrapPressure = targetSingleLine / charsPerLineBudget;
+  const heightPressure = targetOccupancyPt / heightPt;
   const expansionPressure = targetSingleLine / sourceSingleLine;
+  const sourceFullness = sourceOccupancyPt / heightPt;
+  const rawExpansionPenalty = Math.max(0, expansionPressure - 1) * 0.18;
+  const expansionDamping = Math.min(1, Math.pow(noWrapPressure, 1.5));
 
   return (
-    Math.max(noWrapPressure, metricSegmentPressure) * profile.pressureBias +
-    Math.max(0, expansionPressure - 1) * 0.25
+    Math.max(noWrapPressure, heightPressure, metricSegmentPressure) *
+      profile.pressureBias *
+      Math.max(0.9, Math.min(1.12, 0.94 + sourceFullness * 0.12)) +
+    rawExpansionPenalty * expansionDamping
   );
+}
+
+function resolveSingleLineWidthSafetyFactor(
+  sourceNode: SlideTextNode,
+  translatedNode: TranslatedNode
+): number {
+  const layoutHint = resolveEffectiveLayoutHint(sourceNode);
+  let factor = 0.98;
+  const sourceSingleLine = Math.max(1, measureTextWeight(sourceNode.full_text));
+  const targetSingleLine = Math.max(1, measureTextWeight(translatedNode.translated_full_text));
+  const expansionRatio = targetSingleLine / sourceSingleLine;
+  const longestTokenWeight = estimateLongestTokenWeight(translatedNode.translated_full_text);
+
+  if (layoutHint.visual_role === "title" || layoutHint.visual_role === "subtitle") {
+    factor -= 0.01;
+  }
+
+  if (expansionRatio > 1.75) {
+    factor -= 0.005;
+  }
+
+  if (longestTokenWeight >= 14) {
+    factor -= 0.005;
+  }
+
+  return Math.max(0.96, factor);
+}
+
+function resolveSingleLineEnforcement(sourceNode: SlideTextNode): "strong" | "soft" {
+  const layoutHint = resolveEffectiveLayoutHint(sourceNode);
+  if (layoutHint.visual_role === "title" || layoutHint.visual_role === "subtitle") {
+    return "strong";
+  }
+
+  return sourceLooksSingleLineAtSourceSize(sourceNode) ? "strong" : "soft";
+}
+
+function sourceLooksSingleLineAtSourceSize(sourceNode: SlideTextNode): boolean {
+  if (sourceNode.paragraphs.length !== 1) {
+    return false;
+  }
+
+  const text = sourceNode.full_text.trim();
+  if (!text) {
+    return false;
+  }
+
+  const fontSize = getMaxSourceFontSize(sourceNode);
+  if (fontSize <= 0) {
+    return false;
+  }
+
+  const widthPt = usableWidthPt(sourceNode);
+  const profile = FIT_PROFILE_BY_ARCHETYPE[sourceNode.archetype];
+  const charsPerLineBudget = Math.max(1, widthPt / (fontSize * profile.widthFactor));
+  return measureTextWeight(text) <= charsPerLineBudget;
+}
+
+function choosePreferredSoftSingleLineFit(
+  constrainedFit: FitPassResult,
+  wrapFit: FitPassResult
+): FitPassResult {
+  if (wrapFit.scale >= constrainedFit.scale + 0.06 && wrapFit.risk !== "high") {
+    return wrapFit;
+  }
+
+  return constrainedFit;
 }
 
 export function applyFitToTextStyle(
@@ -360,24 +543,226 @@ export function applyFitToParagraphStyle(
   }
 
   if (typeof nextStyle.lineSpacing === "number") {
-    nextStyle.lineSpacing = Math.max(80, nextStyle.lineSpacing * 0.94);
+    nextStyle.lineSpacing = Math.max(
+      PARAGRAPH_COMPACTION.minLineSpacing,
+      nextStyle.lineSpacing * PARAGRAPH_COMPACTION.lineSpacingScale
+    );
   }
 
   if (nextStyle.spaceAbove?.magnitude) {
     nextStyle.spaceAbove = {
       ...nextStyle.spaceAbove,
-      magnitude: Math.max(0, nextStyle.spaceAbove.magnitude * 0.82),
+      magnitude: Math.max(0, nextStyle.spaceAbove.magnitude * PARAGRAPH_COMPACTION.spaceScale),
     };
   }
 
   if (nextStyle.spaceBelow?.magnitude) {
     nextStyle.spaceBelow = {
       ...nextStyle.spaceBelow,
-      magnitude: Math.max(0, nextStyle.spaceBelow.magnitude * 0.82),
+      magnitude: Math.max(0, nextStyle.spaceBelow.magnitude * PARAGRAPH_COMPACTION.spaceScale),
     };
   }
 
   return nextStyle;
+}
+
+function resolveTargetParagraphTexts(
+  sourceNode: SlideTextNode,
+  translatedNode: TranslatedNode
+): string[] {
+  const translatedByParagraphId = new Map(
+    translatedNode.paragraphs.map((paragraph) => [paragraph.paragraph_id, paragraph.translated_text] as const)
+  );
+
+  return sourceNode.paragraphs.map((paragraph, index) => {
+    const translatedText = translatedByParagraphId.get(paragraph.paragraph_id);
+    if (typeof translatedText === "string") {
+      return translatedText;
+    }
+    return translatedNode.paragraphs[index]?.translated_text ?? "";
+  });
+}
+
+function estimateNodeVerticalOccupancy(
+  sourceNode: SlideTextNode,
+  paragraphTexts: readonly string[],
+  scale: number,
+  compactness: FitCompactness
+): number {
+  const widthPt = usableWidthPt(sourceNode);
+  const profile = FIT_PROFILE_BY_ARCHETYPE[sourceNode.archetype];
+  const baseFontSizePt = getMaxSourceFontSize(sourceNode);
+  const roundUpWrappedLines = paragraphTexts.length > 1;
+  let total = 0;
+
+  for (let index = 0; index < paragraphTexts.length; index += 1) {
+    const sourceParagraph = sourceNode.paragraphs[index] ?? sourceNode.paragraphs[sourceNode.paragraphs.length - 1];
+    const paragraphText = paragraphTexts[index] ?? "";
+    const paragraphFontSizePt = Math.max(
+      MIN_FONT_SIZE_PT,
+      resolveParagraphFontSize(sourceParagraph, baseFontSizePt) * scale
+    );
+    const charsPerLineBudget = Math.max(
+      1,
+      widthPt / (paragraphFontSizePt * profile.widthFactor)
+    );
+    const lineCount = estimateParagraphWrappedLines(
+      paragraphText,
+      charsPerLineBudget,
+      roundUpWrappedLines
+    );
+
+    total +=
+      lineCount *
+        resolveParagraphLineHeightMultiplier(sourceParagraph, profile.lineHeightFactor, compactness) *
+        paragraphFontSizePt +
+      resolveParagraphSpacingPt(sourceParagraph.paragraph_style.spaceAbove, compactness) +
+      resolveParagraphSpacingPt(sourceParagraph.paragraph_style.spaceBelow, compactness);
+  }
+
+  return total;
+}
+
+function estimateDynamicSafetyMarginPt(
+  sourceNode: SlideTextNode,
+  translatedNode: TranslatedNode,
+  sourceOccupancyPt: number,
+  targetOccupancyPt: number,
+  heightPt: number,
+  scale: number,
+  compactness: FitCompactness
+): number {
+  const sourceTotal = Math.max(1, measureTextWeight(sourceNode.full_text));
+  const targetTotal = Math.max(1, measureTextWeight(translatedNode.translated_full_text));
+  const paragraphCount = Math.max(1, translatedNode.paragraphs.length);
+  const sourceFullness = sourceOccupancyPt / heightPt;
+  const expansionRatio = targetTotal / sourceTotal;
+  const baseFontSizePt = Math.max(MIN_FONT_SIZE_PT, getMaxSourceFontSize(sourceNode) * scale);
+  const avgSpacingPt =
+    sourceNode.paragraphs.reduce((sum, paragraph) => {
+      return (
+        sum +
+        resolveParagraphSpacingPt(paragraph.paragraph_style.spaceAbove, compactness) +
+        resolveParagraphSpacingPt(paragraph.paragraph_style.spaceBelow, compactness)
+      );
+    }, 0) / Math.max(1, sourceNode.paragraphs.length);
+
+  if (paragraphCount === 1) {
+    // Keep single-paragraph wrap evaluation only slightly conservative.
+    // A small fixed height reserve is enough to avoid optimistic edge fits
+    // without forcing narrow labels back into over-shrunk single-line output.
+    return heightPt * 0.01;
+  }
+
+  let extraLines = 0;
+  if (paragraphCount >= 3) {
+    extraLines += Math.min(0.6, 0.08 * (paragraphCount - 2));
+  }
+  if (sourceFullness > 0.82) {
+    extraLines += Math.min(0.25, (sourceFullness - 0.82) * 0.65);
+  }
+  if (expansionRatio > 1.12) {
+    extraLines += Math.min(0.25, (expansionRatio - 1.12) * 0.35);
+  }
+  if (LONG_COMPOUND_TOKEN_RE.test(translatedNode.translated_full_text)) {
+    extraLines += 0.1;
+  }
+  if (avgSpacingPt > baseFontSizePt * 0.2) {
+    extraLines += 0.08;
+  }
+
+  const occupancyDelta = Math.max(0, targetOccupancyPt - sourceOccupancyPt);
+  return extraLines * baseFontSizePt * 0.8 + occupancyDelta * 0.03;
+}
+
+function resolveParagraphFontSize(
+  paragraph: SlideTextNode["paragraphs"][number] | undefined,
+  fallbackFontSizePt: number
+): number {
+  if (!paragraph) {
+    return fallbackFontSizePt;
+  }
+
+  const weightedRuns = paragraph.runs
+    .map((run) => ({
+      fontSize: run.text_style.fontSize?.magnitude,
+      weight: Math.max(1, run.text.replace(/\s+/g, "").length),
+    }))
+    .filter(
+      (entry): entry is { fontSize: number; weight: number } =>
+        typeof entry.fontSize === "number" && entry.fontSize > 0
+    );
+
+  if (weightedRuns.length > 0) {
+    const weightedSum = weightedRuns.reduce(
+      (sum, entry) => sum + entry.fontSize * entry.weight,
+      0
+    );
+    const totalWeight = weightedRuns.reduce((sum, entry) => sum + entry.weight, 0);
+    return weightedSum / Math.max(1, totalWeight);
+  }
+
+  return fallbackFontSizePt;
+}
+
+function resolveParagraphLineHeightMultiplier(
+  paragraph: SlideTextNode["paragraphs"][number] | undefined,
+  defaultLineHeightFactor: number,
+  compactness: FitCompactness
+): number {
+  const rawLineSpacing = paragraph?.paragraph_style.lineSpacing;
+  let lineSpacingPercent =
+    typeof rawLineSpacing === "number" && Number.isFinite(rawLineSpacing) && rawLineSpacing > 0
+      ? rawLineSpacing
+      : defaultLineHeightFactor * 100;
+
+  if (compactness === "tight") {
+    lineSpacingPercent = Math.max(
+      PARAGRAPH_COMPACTION.minLineSpacing,
+      lineSpacingPercent * PARAGRAPH_COMPACTION.lineSpacingScale
+    );
+  }
+
+  return Math.max(0.8, Math.min(2.2, lineSpacingPercent / 100));
+}
+
+function resolveParagraphSpacingPt(
+  dimension: SlideParagraphStyleSnapshot["spaceAbove"] | SlideParagraphStyleSnapshot["spaceBelow"],
+  compactness: FitCompactness
+): number {
+  const magnitude = dimension?.magnitude;
+  if (typeof magnitude !== "number" || !Number.isFinite(magnitude) || magnitude <= 0) {
+    return 0;
+  }
+
+  const scaledMagnitude =
+    compactness === "tight" ? magnitude * PARAGRAPH_COMPACTION.spaceScale : magnitude;
+  return dimension?.unit === "EMU" ? scaledMagnitude / EMU_PER_PT : scaledMagnitude;
+}
+
+function estimateParagraphWrappedLines(
+  text: string,
+  charsPerLineBudget: number,
+  roundUpWrappedLines: boolean
+): number {
+  const weight = measureWrapAwareTextWeight(text);
+  if (weight <= 0) {
+    return 1;
+  }
+
+  const rawLineCount = Math.max(1, weight / charsPerLineBudget);
+  return roundUpWrappedLines ? Math.max(1, Math.ceil(rawLineCount)) : rawLineCount;
+}
+
+function estimateMaxWrappedLineWeight(paragraphTexts: readonly string[]): number {
+  if (paragraphTexts.length === 0) {
+    return 1;
+  }
+
+  return Math.max(
+    1,
+    ...paragraphTexts.map((paragraphText) => estimateWrapFriendlyLineWeight(paragraphText))
+  );
 }
 
 function getMaxSourceFontSize(sourceNode: SlideTextNode): number {
@@ -578,8 +963,16 @@ export function measureTextWeight(text: string): number {
   return total;
 }
 
+function normalizeWrapBreakText(text: string): string {
+  return text.replace(/[-‐‑‒–—]+/g, " ");
+}
+
+function measureWrapAwareTextWeight(text: string): number {
+  return measureTextWeight(normalizeWrapBreakText(text));
+}
+
 function estimateWrapFriendlyLineWeight(text: string): number {
-  const normalized = text.replace(/\s+/g, " ").trim();
+  const normalized = normalizeWrapBreakText(text).replace(/\s+/g, " ").trim();
   if (!normalized) {
     return 0;
   }
@@ -598,6 +991,15 @@ function estimateWrapFriendlyLineWeight(text: string): number {
   return Math.max(longestTokenWeight, totalWeight / lineCountHint);
 }
 
+function estimateLongestTokenWeight(text: string): number {
+  const normalized = normalizeWrapBreakText(text).replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return 0;
+  }
+
+  return Math.max(...normalized.split(" ").map((token) => measureTextWeight(token)));
+}
+
 function resolveSingleLineMinScale(sourceNode: SlideTextNode): number {
   const layoutHint = resolveEffectiveLayoutHint(sourceNode);
 
@@ -606,6 +1008,7 @@ function resolveSingleLineMinScale(sourceNode: SlideTextNode): number {
       return 0.58;
     case "subtitle":
       return 0.62;
+    case "caption":
     case "section_label":
     case "agenda_item":
     case "step_label":
@@ -636,6 +1039,24 @@ function resolveEffectiveLayoutHint(sourceNode: SlideTextNode): {
 
 function usesFallbackLayoutHint(sourceNode: SlideTextNode): boolean {
   return sourceNode.layout_hint_source === "fallback" || !sourceNode.layout_hint;
+}
+
+function isGeometryCompatibleSyncGroup(sourceNodes: readonly SlideTextNode[]): boolean {
+  if (sourceNodes.length < 2) {
+    return true;
+  }
+
+  const widths = sourceNodes.map((node) => Math.max(1, node.box.width_emu));
+  const heights = sourceNodes.map((node) => Math.max(1, node.box.height_emu));
+  const fontSizes = sourceNodes.map((node) => Math.max(MIN_FONT_SIZE_PT, getMaxSourceFontSize(node)));
+  const visualRoles = new Set(
+    sourceNodes.map((node) => resolveEffectiveLayoutHint(node).visual_role)
+  );
+  const widthRatio = Math.max(...widths) / Math.min(...widths);
+  const heightRatio = Math.max(...heights) / Math.min(...heights);
+  const fontRatio = Math.max(...fontSizes) / Math.min(...fontSizes);
+
+  return visualRoles.size <= 2 && widthRatio <= 1.35 && heightRatio <= 1.45 && fontRatio <= 1.35;
 }
 
 function roundScale(value: number): number {

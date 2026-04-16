@@ -30,3 +30,29 @@ tmp/
 
 #Configuration
 **/.clasp.json
+
+# Database export artifacts
+*.dump
+*.sql.gz
+*.sql.zip
+*.bak
+*.backup
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.db-journal
+*.psql
+
+# Local database / test data directories
+.pgdata/
+.postgres-data/
+.local-db/
+.local-data/
+local-data/
+local-test-data/
+test-data-local/
+db-dumps/
+backups/
+exports/

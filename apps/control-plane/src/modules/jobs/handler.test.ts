@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { JobId, JobWarning, UserId } from "@translay/shared-contracts";
+import type { JobId, JobSlideResult, JobWarning, UserId } from "@translay/shared-contracts";
 import { __buildJobStatusResponseForTests } from "./handler";
 
 function createBaseJob() {
@@ -30,8 +30,54 @@ function createBaseJob() {
     error_message: null,
     warnings: [],
     cancel_requested_at: null,
+    current_stage: null,
+    stage_status: null,
+    stage_cursor: {},
+    stage_payload: {},
+    stage_attempt: 0,
+    stage_lease_expires_at: null,
+    stage_last_heartbeat_at: null,
+    queued_task_name: null,
     started_at: new Date("2026-04-10T10:00:00.000Z"),
     completed_at: new Date("2026-04-10T10:01:00.000Z"),
+  };
+}
+
+function createSlideResult(overrides: Partial<JobSlideResult>): JobSlideResult {
+  const bodyNodeCount = overrides.body_node_count ?? 1;
+  const bodyWrittenNodeCount =
+    overrides.body_written_node_count ??
+    (overrides.content_output_visible || overrides.output_visible ? bodyNodeCount : 0);
+  return {
+    slide_index: 0,
+    status: "pending",
+    warning_codes: [],
+    provisionally_billed: false,
+    final_billable: false,
+    refund_required: false,
+    refunded: false,
+    output_visible: false,
+    content_output_visible: overrides.content_output_visible ?? overrides.output_visible ?? false,
+    content_translated: overrides.content_translated ?? overrides.output_visible ?? false,
+    notes_output_visible: overrides.notes_output_visible ?? false,
+    notes_translated: overrides.notes_translated ?? false,
+    body_node_count: bodyNodeCount,
+    notes_node_count: overrides.notes_present ? 1 : 0,
+    body_written_node_count: bodyWrittenNodeCount,
+    body_failed_node_count: overrides.body_failed_node_count ?? 0,
+    body_translated_node_count:
+      overrides.body_translated_node_count ??
+      (overrides.content_translated || overrides.content_output_visible || overrides.output_visible
+        ? bodyNodeCount
+        : 0),
+    notes_written_node_count:
+      overrides.notes_written_node_count ??
+      (overrides.notes_output_visible ? 1 : 0),
+    notes_failed_node_count: overrides.notes_failed_node_count ?? 0,
+    notes_translated_node_count:
+      overrides.notes_translated_node_count ??
+      (overrides.notes_translated || overrides.notes_output_visible ? 1 : 0),
+    ...overrides,
   };
 }
 
@@ -53,18 +99,39 @@ test("job handler returns completed_with_warnings payload with structured warnin
     },
   ];
 
-  const response = __buildJobStatusResponseForTests({
-    ...createBaseJob(),
-    status: "completed_with_warnings",
-    warnings,
-  });
+  const response = __buildJobStatusResponseForTests(
+    {
+      ...createBaseJob(),
+      status: "completed_with_warnings",
+      warnings,
+    },
+    [
+      createSlideResult({
+        slide_index: 0,
+        status: "committed",
+        provisionally_billed: true,
+        final_billable: true,
+        output_visible: true,
+      }),
+    ]
+  );
 
   assert.deepEqual(response, {
     job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
     status: "completed_with_warnings",
     progress_percent: 100,
     output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
-    message: "Translation completed with 1 container requiring review. Review the highlighted Slides containers for layout fidelity.",
+    message: "Translation completed with warnings. Review 1 container for layout fidelity.",
+    fully_delivered_body_slide_indices: [1],
+    content_only_slide_indices: [],
+    notes_only_slide_indices: [],
+    body_partial_slide_indices: [],
+    skipped_slide_indices: [],
+    refunded_slide_indices: [],
+    total_billed_units: 12,
+    gross_billed_slides: 12,
+    refunded_slides: 0,
+    net_billed_slides: 12,
     warnings,
   });
 });
@@ -94,11 +161,33 @@ test("job handler surfaces skipped unsafe slides in completed-with-warnings mess
     },
   ];
 
-  const response = __buildJobStatusResponseForTests({
-    ...createBaseJob(),
-    status: "completed_with_warnings",
-    warnings,
-  });
+  const response = __buildJobStatusResponseForTests(
+    {
+      ...createBaseJob(),
+      status: "completed_with_warnings",
+      gross_billed_slides: 3,
+      refunded_slides: 0,
+      net_billed_slides: 3,
+      warnings,
+    },
+    [
+      createSlideResult({
+        slide_index: 0,
+        status: "committed",
+        provisionally_billed: true,
+        final_billable: true,
+        output_visible: true,
+      }),
+      createSlideResult({
+        slide_index: 3,
+        status: "excluded_unsafe",
+      }),
+      createSlideResult({
+        slide_index: 6,
+        status: "excluded_unsafe",
+      }),
+    ]
+  );
 
   assert.deepEqual(response, {
     job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
@@ -106,7 +195,17 @@ test("job handler surfaces skipped unsafe slides in completed-with-warnings mess
     progress_percent: 100,
     output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
     message:
-      "Translation completed with 1 container requiring review. Slides 4, 7 were skipped because their content looked unsafe for model input.",
+      "Translation completed with warnings. Slides 4, 7 were skipped because their content looked unsafe for model input. Review 1 container for layout fidelity.",
+    fully_delivered_body_slide_indices: [1],
+    content_only_slide_indices: [],
+    notes_only_slide_indices: [],
+    body_partial_slide_indices: [],
+    skipped_slide_indices: [4, 7],
+    refunded_slide_indices: [],
+    total_billed_units: 12,
+    gross_billed_slides: 3,
+    refunded_slides: 0,
+    net_billed_slides: 3,
     warnings,
   });
 });
@@ -129,11 +228,19 @@ test("job handler surfaces skipped unsafe slides in the completed message", () =
     },
   ];
 
-  const response = __buildJobStatusResponseForTests({
-    ...createBaseJob(),
-    status: "completed_with_warnings",
-    warnings,
-  });
+  const response = __buildJobStatusResponseForTests(
+    {
+      ...createBaseJob(),
+      status: "completed_with_warnings",
+      warnings,
+    },
+    [
+      createSlideResult({
+        slide_index: 1,
+        status: "excluded_unsafe",
+      }),
+    ]
+  );
 
   assert.deepEqual(response, {
     job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
@@ -141,7 +248,17 @@ test("job handler surfaces skipped unsafe slides in the completed message", () =
     progress_percent: 100,
     output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
     message:
-      "Translation completed with 1 container requiring review. Slide 2 was skipped because its content looked unsafe for model input.",
+      "Translation completed with warnings. Slide 2 was skipped because its content looked unsafe for model input. Review 1 container for layout fidelity.",
+    fully_delivered_body_slide_indices: [],
+    content_only_slide_indices: [],
+    notes_only_slide_indices: [],
+    body_partial_slide_indices: [],
+    skipped_slide_indices: [2],
+    refunded_slide_indices: [],
+    total_billed_units: 12,
+    gross_billed_slides: 12,
+    refunded_slides: 0,
+    net_billed_slides: 12,
     warnings,
   });
 });
@@ -157,26 +274,78 @@ test("job handler returns failed payload with persisted unsafe-slide warnings", 
     },
   ];
 
-  const response = __buildJobStatusResponseForTests({
-    ...createBaseJob(),
-    status: "failed",
-    error_code: "JOB_INTERNAL_ERROR",
-    error_message: "Translation failed.",
-    warnings,
-  });
+  const response = __buildJobStatusResponseForTests(
+    {
+      ...createBaseJob(),
+      status: "failed",
+      gross_billed_slides: 2,
+      refunded_slides: 1,
+      net_billed_slides: 1,
+      error_code: "JOB_INTERNAL_ERROR",
+      error_message: "Translation failed.",
+      warnings,
+    },
+    [
+      createSlideResult({
+        slide_index: 0,
+        status: "translated",
+        provisionally_billed: true,
+        refund_required: true,
+        refunded: true,
+      }),
+      createSlideResult({
+        slide_index: 1,
+        status: "excluded_unsafe",
+      }),
+    ]
+  );
 
   assert.deepEqual(response, {
     job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
     status: "failed",
     error: "JOB_INTERNAL_ERROR",
     message:
-      "Translation failed. Slide 2 was skipped because its content looked unsafe for model input.",
-    warnings,
+      "Translation failed. Refunded slides: 1. Slide 2 was skipped because its content looked unsafe for model input.",
+    output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
+    total_billed_units: 12,
+    skipped_slide_indices: [1, 2],
+    refunded_slide_indices: [1],
+    gross_billed_slides: 2,
+    refunded_slides: 1,
+    net_billed_slides: 1,
+    warnings: [
+      ...warnings,
+      {
+        node_id: "slide_result_1_refund",
+        slide_index: 0,
+        archetype: "plain_text",
+        risk_level: "high",
+        risk_reason: "slide_charge_refunded",
+      },
+    ],
   });
 });
 
 test("job handler returns plain completed payload without warnings when none exist", () => {
-  const response = __buildJobStatusResponseForTests(createBaseJob());
+  const response = __buildJobStatusResponseForTests(
+    createBaseJob(),
+    [
+      createSlideResult({
+        slide_index: 0,
+        status: "committed",
+        provisionally_billed: true,
+        final_billable: true,
+        output_visible: true,
+      }),
+      createSlideResult({
+        slide_index: 1,
+        status: "committed",
+        provisionally_billed: true,
+        final_billable: true,
+        output_visible: true,
+      }),
+    ]
+  );
 
   assert.deepEqual(response, {
     job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
@@ -184,22 +353,171 @@ test("job handler returns plain completed payload without warnings when none exi
     progress_percent: 100,
     output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
     message: "Translation completed successfully.",
+    fully_delivered_body_slide_indices: [1, 2],
+    content_only_slide_indices: [],
+    notes_only_slide_indices: [],
+    body_partial_slide_indices: [],
+    skipped_slide_indices: [],
+    refunded_slide_indices: [],
+    total_billed_units: 12,
+    gross_billed_slides: 12,
+    refunded_slides: 0,
+    net_billed_slides: 12,
+  });
+});
+
+test("job handler exposes notes-only and partial not billed slide indices", () => {
+  const response = __buildJobStatusResponseForTests(
+    {
+      ...createBaseJob(),
+      total_units_billed: 13.5,
+      gross_billed_slides: 14,
+      refunded_slides: 0.5,
+      net_billed_slides: 13.5,
+    },
+    [
+      createSlideResult({
+        slide_index: 0,
+        status: "committed",
+        provisionally_billed: true,
+        final_billable: true,
+        output_visible: true,
+        content_output_visible: true,
+      }),
+      createSlideResult({
+        slide_index: 10,
+        status: "committed",
+        provisionally_billed: true,
+        final_billable: true,
+        output_visible: true,
+        notes_present: true,
+        notes_output_visible: true,
+        content_output_visible: false,
+        body_node_count: 2,
+        body_written_node_count: 0,
+        body_failed_node_count: 2,
+        final_billed_units: 0.5,
+      }),
+      createSlideResult({
+        slide_index: 11,
+        status: "committed",
+        provisionally_billed: false,
+        final_billable: false,
+        output_visible: true,
+        content_output_visible: true,
+        body_node_count: 3,
+        body_written_node_count: 2,
+        body_failed_node_count: 1,
+        final_billed_units: 0,
+      }),
+    ]
+  );
+
+  assert.deepEqual(response, {
+    job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+    status: "completed",
+    progress_percent: 100,
+    output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
+    message: "Translation completed with warnings. Notes-only fallback: slides 11. Partially translated slides: 12, not billed.",
+    fully_delivered_body_slide_indices: [1],
+    content_only_slide_indices: [],
+    notes_only_slide_indices: [11],
+    body_partial_slide_indices: [12],
+    skipped_slide_indices: [],
+    refunded_slide_indices: [],
+    total_billed_units: 13.5,
+    gross_billed_slides: 14,
+    refunded_slides: 0.5,
+    net_billed_slides: 13.5,
   });
 });
 
 test("job handler tolerates null warnings on historical rows without crashing", () => {
-  const response = __buildJobStatusResponseForTests({
-    ...createBaseJob(),
-    status: "completed_with_warnings",
-    warnings: null as unknown as JobWarning[],
-  });
+  const response = __buildJobStatusResponseForTests(
+    {
+      ...createBaseJob(),
+      status: "completed_with_warnings",
+      warnings: null as unknown as JobWarning[],
+    },
+    [
+      createSlideResult({
+        slide_index: 2,
+        status: "skipped_write_failed",
+        failure_stage: "write",
+        failure_reason_code: "HOST_ADAPTER_ERROR",
+        provisionally_billed: true,
+        refund_required: true,
+        refunded: true,
+      }),
+    ]
+  );
 
   assert.deepEqual(response, {
     job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
     status: "completed_with_warnings",
     progress_percent: 100,
     output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
-    message: "Translation completed successfully.",
+    message: "Translation completed with warnings. Slide 3 could not be delivered due to translation or write-back issues and was refunded.",
+    fully_delivered_body_slide_indices: [],
+    content_only_slide_indices: [],
+    notes_only_slide_indices: [],
+    body_partial_slide_indices: [],
+    skipped_slide_indices: [3],
+    refunded_slide_indices: [3],
+    total_billed_units: 12,
+    gross_billed_slides: 12,
+    refunded_slides: 0,
+    net_billed_slides: 12,
+    warnings: [
+      {
+        node_id: "slide_result_3",
+        slide_index: 2,
+        archetype: "plain_text",
+        risk_level: "high",
+        risk_reason: "slide_write_failed",
+      },
+      {
+        node_id: "slide_result_3_refund",
+        slide_index: 2,
+        archetype: "plain_text",
+        risk_level: "high",
+        risk_reason: "slide_charge_refunded",
+      },
+    ],
+  });
+});
+
+test("job handler does not surface refunded metadata for unsafe-excluded slides", () => {
+  const response = __buildJobStatusResponseForTests(
+    {
+      ...createBaseJob(),
+      status: "failed",
+      gross_billed_slides: 1,
+      refunded_slides: 1,
+      net_billed_slides: 0,
+      error_code: "JOB_INTERNAL_ERROR",
+      error_message: "Translation failed.",
+    },
+    [
+      createSlideResult({
+        slide_index: 4,
+        status: "excluded_unsafe",
+        refunded: true,
+      }),
+    ]
+  );
+
+  assert.deepEqual(response, {
+    job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+    status: "failed",
+    error: "JOB_INTERNAL_ERROR",
+    message: "Translation failed.",
+    output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
+    total_billed_units: 12,
+    skipped_slide_indices: [5],
+    gross_billed_slides: 1,
+    refunded_slides: 1,
+    net_billed_slides: 0,
   });
 });
 
@@ -212,6 +530,7 @@ test("job handler returns in-progress billed slide count for cancel warnings", (
       total_units_billed: 3,
       completed_at: null,
     },
+    [],
     {
       status: "translating",
       progress_percent: "64",

@@ -4,14 +4,28 @@ import type { Pool } from "pg";
 import type Redis from "ioredis";
 import type { WorkerConfig } from "@translay/shared-config";
 import type { TaskPayload } from "@translay/shared-contracts";
-import { runJobPipeline } from "../pipelines/job-pipeline";
+import { runJobPipeline, StageLeaseBusyError } from "../pipelines/job-pipeline";
+import {
+  computeDelayedStageRetryScheduleTime,
+  enqueueStageTask,
+} from "../tasks/cloud-tasks";
 
 const oidcClient = new OAuth2Client();
 const GOOGLE_ISSUERS = new Set(["accounts.google.com", "https://accounts.google.com"]);
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export function taskHandler(pool: Pool, redis: Redis, config: WorkerConfig) {
+export function taskHandler(
+  pool: Pool,
+  redis: Redis,
+  config: WorkerConfig,
+  deps: {
+    readonly runJobPipeline?: typeof runJobPipeline;
+    readonly enqueueStageTask?: typeof enqueueStageTask;
+  } = {}
+) {
+  const runPipeline = deps.runJobPipeline ?? runJobPipeline;
+  const enqueueTask = deps.enqueueStageTask ?? enqueueStageTask;
   return async (req: Request, res: Response): Promise<void> => {
     const authError = await verifyTaskRequest(req, config);
     if (authError) {
@@ -30,9 +44,24 @@ export function taskHandler(pool: Pool, redis: Redis, config: WorkerConfig) {
     console.log(`Received task for job ${payload.job_id}, attempt ${payload.attempt}`);
 
     try {
-      await runJobPipeline(pool, redis, config, payload);
+      await runPipeline(pool, redis, config, payload);
       res.status(200).json({ accepted: true, job_id: payload.job_id });
     } catch (err) {
+      if (err instanceof StageLeaseBusyError) {
+        console.warn(`Stage lease busy for job ${payload.job_id}: ${err.stage}`);
+        if (!payload.stage_attempt) {
+          res.status(429).json({ error: "STAGE_LEASE_BUSY" });
+          return;
+        }
+
+        const scheduleTime = computeDelayedStageRetryScheduleTime(err.leaseExpiresAt);
+        await enqueueTask(config, payload.job_id, err.stage, payload.stage_attempt, {
+          scheduleTime,
+          taskKind: "lease-retry",
+        });
+        res.status(200).json({ accepted: true, delayed: true, job_id: payload.job_id });
+        return;
+      }
       console.error(`Pipeline fatal error for job ${payload.job_id}:`, (err as Error).message);
       res.status(500).json({ error: "TASK_EXECUTION_FAILED" });
     }
@@ -119,6 +148,12 @@ function parseTaskPayload(value: unknown): TaskPayload | null {
     job_id: payload.job_id,
     attempt,
     requested_at: payload.requested_at,
+    expected_stage:
+      typeof payload.expected_stage === "string" ? payload.expected_stage : undefined,
+    stage_attempt:
+      typeof payload.stage_attempt === "number" && Number.isInteger(payload.stage_attempt)
+        ? payload.stage_attempt
+        : undefined,
   };
 }
 

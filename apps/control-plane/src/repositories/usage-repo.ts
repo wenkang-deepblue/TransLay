@@ -15,15 +15,20 @@ export async function getUsageSummary(
 ): Promise<UsageSummary> {
   const result = await pool.query(
     `SELECT
-       COALESCE(SUM(CASE WHEN host_type = 'slides' THEN quantity ELSE 0 END), 0)::int AS slides_used,
-       COALESCE(SUM(CASE WHEN host_type = 'docs' THEN quantity ELSE 0 END), 0)::int AS docs_pages_used,
-       COALESCE(SUM(CASE WHEN host_type = 'sheets' THEN quantity ELSE 0 END), 0)::int AS sheets_cells_used,
+       COALESCE(SUM(CASE WHEN host_type = 'slides' THEN quantity ELSE 0 END), 0)::numeric(12,1) AS slides_used,
+       COALESCE(SUM(CASE WHEN host_type = 'docs' THEN quantity ELSE 0 END), 0)::numeric(12,1) AS docs_pages_used,
+       COALESCE(SUM(CASE WHEN host_type = 'sheets' THEN quantity ELSE 0 END), 0)::numeric(12,1) AS sheets_cells_used,
        COUNT(DISTINCT job_id)::int AS total_jobs
      FROM usage_ledgers
      WHERE user_id = $1 AND billing_period_key = $2`,
     [userId, periodKey]
   );
-  return result.rows[0];
+  return {
+    slides_used: toNumber(result.rows[0]?.slides_used),
+    docs_pages_used: toNumber(result.rows[0]?.docs_pages_used),
+    sheets_cells_used: toNumber(result.rows[0]?.sheets_cells_used),
+    total_jobs: Number(result.rows[0]?.total_jobs ?? 0),
+  };
 }
 
 export async function insertUsageLedger(
@@ -71,4 +76,17 @@ export async function insertUsageLedger(
   );
 
   return result.rows[0].id;
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
 }

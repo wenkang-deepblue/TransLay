@@ -32,8 +32,15 @@ function createConfig(): WorkerConfig {
       url: "",
     },
     cloudTasks: {
+      queueName: "YOUR_CLOUD_TASKS_QUEUE",
+      location: "us-central1",
+      workerUrl: "https://worker.example.com",
       audience: "",
       invokerServiceAccount: "",
+    },
+    debug: {
+      captureLlmOutputs: false,
+      llmOutputRetentionHours: 72,
     },
   };
 }
@@ -346,6 +353,172 @@ test("translateWithVertexGemini rejects empty bullet paragraphs in structured ou
   }
 });
 
+test("translateWithVertexGemini preserves source boundary whitespace, rebuilds structured text, and emits debug capture", async () => {
+  __resetAccessTokenCacheForTests();
+  const request: TranslationRequest = {
+    provider: "vertex_gemini",
+    model: "gemini-3.1-flash-lite-preview",
+    source_language: "English",
+    target_language: "Chinese",
+    context_pack: {
+      deck_title: "Whitespace deck",
+      source_language: "English",
+      target_language: "Chinese",
+      deck_plaintext_context: "[Slide 1] Alpha\n[Slide 1] Beta",
+      glossary_candidates: [],
+      nodes: [
+        {
+          node_id: "n1",
+          archetype: "plain_text",
+          slide_index: 1,
+          full_text: "   Alpha\n  Beta",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "   Alpha",
+              bullet: undefined,
+              style_roles: ["default"],
+              segments: [
+                {
+                  segment_id: "r0",
+                  text: "   Alpha",
+                  style_role: "default",
+                },
+              ],
+            },
+            {
+              paragraph_id: "p1",
+              text: "  Beta",
+              bullet: undefined,
+              style_roles: ["default"],
+              segments: [
+                {
+                  segment_id: "r1",
+                  text: "  Beta",
+                  style_role: "default",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    nodes: [{ node_id: "n1", text: "   Alpha\n  Beta" }],
+  };
+
+  const debugEvents: unknown[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("metadata.google.internal")) {
+      return new Response(JSON.stringify({ access_token: "test-token", expires_in: 3600 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify([
+                    {
+                      node_id: "n1",
+                      translated_full_text: "wrong",
+                      paragraphs: [
+                        {
+                          paragraph_id: "p0",
+                          translated_text: "wrong-1",
+                          bullet_behavior: "none",
+                        },
+                        {
+                          paragraph_id: "p1",
+                          translated_text: "wrong-2",
+                          bullet_behavior: "none",
+                        },
+                      ],
+                      segments: [
+                        {
+                          segment_id: "r0",
+                          translated_text: "甲",
+                          style_role: "default",
+                        },
+                        {
+                          segment_id: "r1",
+                          translated_text: "乙",
+                          style_role: "default",
+                        },
+                      ],
+                    },
+                  ]),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const result = await translateWithVertexGemini(createConfig(), request, {
+      stage: "translation",
+      callLabel: "unit_translation",
+      debugCapture: async (event) => {
+        debugEvents.push(event);
+      },
+    });
+
+    assert.equal(result.nodes[0]?.translated_full_text, "   甲\n  乙");
+    assert.deepEqual(result.nodes[0]?.paragraphs, [
+      {
+        paragraph_id: "p0",
+        translated_text: "   甲",
+        bullet_behavior: "none",
+      },
+      {
+        paragraph_id: "p1",
+        translated_text: "  乙",
+        bullet_behavior: "none",
+      },
+    ]);
+    assert.deepEqual(result.nodes[0]?.segments, [
+      {
+        segment_id: "r0",
+        translated_text: "   甲",
+        style_role: "default",
+      },
+      {
+        segment_id: "r1",
+        translated_text: "  乙",
+        style_role: "default",
+      },
+    ]);
+    assert.equal(debugEvents.length, 1);
+    assert.match(
+      JSON.stringify(debugEvents[0]),
+      /unit_translation/
+    );
+    assert.match(
+      JSON.stringify(debugEvents[0]),
+      /"capture_status":"success"/
+    );
+    assert.doesNotMatch(
+      JSON.stringify(debugEvents[0]),
+      /raw_output_text|translated_full_text/
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("translateWithVertexGemini rejects segment count mismatch in structured output", async () => {
   __resetAccessTokenCacheForTests();
   const request: TranslationRequest = {
@@ -561,7 +734,7 @@ test("translateWithVertexGemini rejects duplicate segment_id in structured outpu
   }
 });
 
-test("translateWithVertexGemini rejects paragraph text that does not match segment concatenation", async () => {
+test("translateWithVertexGemini rebuilds paragraph text from segments when the model output disagrees", async () => {
   __resetAccessTokenCacheForTests();
   const request: TranslationRequest = {
     provider: "vertex_gemini",
@@ -661,10 +834,21 @@ test("translateWithVertexGemini rejects paragraph text that does not match segme
   }) as typeof fetch;
 
   try {
-    await assert.rejects(
-      () => translateWithVertexGemini(createConfig(), request),
-      /must equal the concatenation of its segment translations/i
-    );
+    const result = await translateWithVertexGemini(createConfig(), request);
+    assert.equal(result.nodes[0]?.translated_full_text, "顧客 成長");
+    assert.equal(result.nodes[0]?.paragraphs[0]?.translated_text, "顧客 成長");
+    assert.deepEqual(result.nodes[0]?.segments, [
+      {
+        segment_id: "r0",
+        translated_text: "顧客 ",
+        style_role: "default",
+      },
+      {
+        segment_id: "r1",
+        translated_text: "成長",
+        style_role: "emphasis",
+      },
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
     __resetAccessTokenCacheForTests();

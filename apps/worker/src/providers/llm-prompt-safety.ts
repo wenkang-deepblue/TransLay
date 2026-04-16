@@ -111,6 +111,47 @@ export function scanSlidesForPromptInjectionRisk(
   };
 }
 
+export function scanNodesForPromptInjectionRisk(
+  nodes: readonly SlideTextNode[],
+  slideIndexResolver?: (node: SlideTextNode) => number
+): PromptInjectionScanResult {
+  const findings: PromptInjectionFinding[] = [];
+
+  for (const node of nodes) {
+    const finding = scanNodeForPromptInjectionRisk(node);
+    if (!finding) {
+      continue;
+    }
+    findings.push({
+      slide_index: slideIndexResolver ? slideIndexResolver(node) : node.slide_index,
+      node_id: node.node_id,
+      severity: finding.severity,
+      reasons: finding.reasons,
+    });
+  }
+
+  const hardBlockSlideIndices = [...new Set(
+    findings
+      .filter((finding) => finding.severity === "hard_block")
+      .map((finding) => finding.slide_index)
+  )].sort((left, right) => left - right);
+  const softSignalSlideIndices = [...new Set(
+    findings
+      .filter((finding) => finding.severity === "soft_signal")
+      .map((finding) => finding.slide_index)
+  )].sort((left, right) => left - right);
+
+  return {
+    blocked: hardBlockSlideIndices.length > 0,
+    slide_indices: [...new Set(findings.map((finding) => finding.slide_index))].sort(
+      (left, right) => left - right
+    ),
+    hard_block_slide_indices: hardBlockSlideIndices,
+    soft_signal_slide_indices: softSignalSlideIndices,
+    findings,
+  };
+}
+
 function scanNodeForPromptInjectionRisk(
   node: SlideTextNode
 ): { readonly severity: "hard_block" | "soft_signal"; readonly reasons: readonly string[] } | null {

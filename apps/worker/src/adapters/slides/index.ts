@@ -1,6 +1,6 @@
 export { extractSlides } from "./extractor";
-export { writeBackAppend, writeBackNewFile } from "./writer";
-export type { WriteBackResult } from "./writer";
+export { writeBackAppend, writeBackExistingSlides, writeBackNewFile } from "./writer";
+export type { ExistingSlideWriteTarget, WriteBackResult } from "./writer";
 export type {
   SlideNodeArchetype,
   SlideRunStyleRole,

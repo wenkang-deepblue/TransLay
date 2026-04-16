@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   __applyWriteResultToSlideResultsForTests,
   __buildSlideBillingSettlementForTests,
+  __computeProviderRetryDelayMsForTests,
   __hasSlideExecutionWarningsForTests,
+  __orderTranslatedNodesForWriteForTests,
   __selectSlidesReadyForMaterializationForTests,
   __selectSlidesReadyForWriteForTests,
   __summarizeSlideExecutionForTests,
@@ -119,6 +121,11 @@ test("billing settlement refunds undelivered slides after successful job complet
     net_billed_slides: 1,
     provisional_slide_indices: [1, 2],
     refunded_slide_indices: [2],
+    provisional_units_by_slide: new Map([
+      [1, 1],
+      [2, 1],
+    ]),
+    refunded_units_by_slide: new Map([[2, 1]]),
   });
 });
 
@@ -136,6 +143,11 @@ test("billing settlement keeps provisionally billed slides on user cancellation"
     net_billed_slides: 2,
     provisional_slide_indices: [1, 2],
     refunded_slide_indices: [],
+    provisional_units_by_slide: new Map([
+      [1, 1],
+      [2, 1],
+    ]),
+    refunded_units_by_slide: new Map(),
   });
 });
 
@@ -152,5 +164,67 @@ test("billing settlement refunds provisional slides on terminal failure", () => 
     net_billed_slides: 1,
     provisional_slide_indices: [4, 5],
     refunded_slide_indices: [4],
+    provisional_units_by_slide: new Map([
+      [4, 1],
+      [5, 1],
+    ]),
+    refunded_units_by_slide: new Map([[4, 1]]),
   });
+});
+
+test("write stage preserves available translated nodes when some nodes are missing", () => {
+  const ordered = __orderTranslatedNodesForWriteForTests(
+    [{ node_id: "n1" }, { node_id: "n2" }, { node_id: "n3" }],
+    [
+      {
+        node_id: "n1",
+        translated_full_text: "uno",
+        paragraphs: [
+          {
+            paragraph_id: "p0",
+            translated_text: "uno",
+            bullet_behavior: "none",
+          },
+        ],
+        segments: [
+          {
+            segment_id: "p0_r0",
+            translated_text: "uno",
+            style_role: "default",
+          },
+        ],
+      },
+      {
+        node_id: "n3",
+        translated_full_text: "tres",
+        paragraphs: [
+          {
+            paragraph_id: "p0",
+            translated_text: "tres",
+            bullet_behavior: "none",
+          },
+        ],
+        segments: [
+          {
+            segment_id: "p0_r0",
+            translated_text: "tres",
+            style_role: "default",
+          },
+        ],
+      },
+    ]
+  );
+
+  assert.deepEqual(
+    ordered.map((node) => node.node_id),
+    ["n1", "n3"]
+  );
+});
+
+test("provider retry delays use exponential backoff with jitter", () => {
+  assert.equal(__computeProviderRetryDelayMsForTests(1, 0), 350);
+  assert.equal(__computeProviderRetryDelayMsForTests(1, 1), 650);
+  assert.equal(__computeProviderRetryDelayMsForTests(2, 0.5), 1000);
+  assert.equal(__computeProviderRetryDelayMsForTests(3, 0.5), 2000);
+  assert.equal(__computeProviderRetryDelayMsForTests(4, 1), 2600);
 });

@@ -14,6 +14,7 @@ import type {
   JobInProgressStatus,
   JobId,
   HostType,
+  JobSlideResult,
   JobStatus,
   JobStatusResponse,
   JobWarning,
@@ -38,6 +39,7 @@ import {
   requestJobCancel,
   updateJobStatus,
 } from "../../repositories/job-repo";
+import { listJobSlideResults } from "../../repositories/job-slide-result-repo";
 import {
   deleteIdempotencyRecord,
   findIdempotencyRecord,
@@ -87,40 +89,26 @@ function formatExcludedSlidesMessage(excludedSlides: readonly number[]): string 
   return `${slideNoun} ${excludedSlides.join(", ")} ${skipVerb} skipped because ${contentPronoun} content looked unsafe for model input.`;
 }
 
-function buildCompletedMessage(warnings: readonly JobWarning[]): string {
-  const excludedSlides = listExcludedSlides(warnings);
-  const reviewContainerCount = countUniqueWarningNodes(
-    warnings.filter((warning) => warning.risk_reason !== "unsafe_slide_excluded")
-  );
-
-  if (excludedSlides.length > 0 && reviewContainerCount > 0) {
-    const noun = reviewContainerCount === 1 ? "container" : "containers";
-    return `Translation completed with ${reviewContainerCount} ${noun} requiring review. ${formatExcludedSlidesMessage(excludedSlides)}`;
-  }
-
-  if (excludedSlides.length > 0) {
-    return `Translation completed with warnings. ${formatExcludedSlidesMessage(excludedSlides)}`;
-  }
-
-  if (reviewContainerCount > 0) {
-    const noun = reviewContainerCount === 1 ? "container" : "containers";
-    return `Translation completed with ${reviewContainerCount} ${noun} requiring review. Review the highlighted Slides containers for layout fidelity.`;
-  }
-
-  return "Translation completed successfully.";
-}
-
-function buildFailedMessage(baseMessage: string, warnings: readonly JobWarning[]): string {
-  const excludedSlides = listExcludedSlides(warnings);
-  if (excludedSlides.length === 0) {
-    return baseMessage;
-  }
-
-  return `${baseMessage} ${formatExcludedSlidesMessage(excludedSlides)}`;
-}
+type TerminalSlideSummary = {
+  fully_delivered_body_slide_indices: number[];
+  content_only_slide_indices: number[];
+  notes_only_slide_indices: number[];
+  body_partial_slide_indices: number[];
+  skipped_slide_indices: number[];
+  refunded_slide_indices: number[];
+};
 
 function normalizeWarnings(warnings: JobRow["warnings"] | null | undefined): JobRow["warnings"] {
   return Array.isArray(warnings) ? warnings : [];
+}
+
+function isSlideExecutionWarningReason(reason: JobWarning["risk_reason"]): boolean {
+  return (
+    reason === "slide_translation_failed" ||
+    reason === "slide_materialization_failed" ||
+    reason === "slide_write_failed" ||
+    reason === "slide_charge_refunded"
+  );
 }
 
 function countUniqueWarningNodes(warnings: readonly JobWarning[]): number {
@@ -135,30 +123,439 @@ function listExcludedSlides(warnings: readonly JobWarning[]): number[] {
   )].sort((left, right) => left - right);
 }
 
+function summarizeTerminalSlideResults(
+  slideResults: readonly JobSlideResult[]
+): TerminalSlideSummary {
+  const fullyDeliveredBody = new Set<number>();
+  const contentOnly = new Set<number>();
+  const notesOnly = new Set<number>();
+  const bodyPartial = new Set<number>();
+  const skipped = new Set<number>();
+  const refunded = new Set<number>();
+
+  for (const slideResult of slideResults) {
+    const slideNumber = slideResult.slide_index + 1;
+    if (slideResult.content_output_visible) {
+      const bodyNodeCount = slideResult.body_node_count ?? 0;
+      const bodyWrittenNodeCount = slideResult.body_written_node_count ?? 0;
+      const bodyFailedNodeCount = slideResult.body_failed_node_count ?? 0;
+      if (
+        bodyNodeCount > 0 &&
+        bodyWrittenNodeCount === bodyNodeCount &&
+        bodyFailedNodeCount === 0
+      ) {
+        fullyDeliveredBody.add(slideNumber);
+      }
+      if (bodyFailedNodeCount > 0) {
+        bodyPartial.add(slideNumber);
+      }
+    }
+
+    if (
+      slideResult.output_visible &&
+      slideResult.notes_present &&
+      slideResult.content_output_visible &&
+      !slideResult.notes_output_visible
+    ) {
+      contentOnly.add(slideNumber);
+    }
+
+    if (
+      slideResult.output_visible &&
+      slideResult.notes_present &&
+      !slideResult.content_output_visible &&
+      slideResult.notes_output_visible
+    ) {
+      notesOnly.add(slideNumber);
+    }
+
+    if (
+      slideResult.status === "excluded_unsafe" ||
+      slideResult.status === "skipped_translation_failed" ||
+      slideResult.status === "skipped_materialization_failed" ||
+      slideResult.status === "skipped_write_failed" ||
+      (slideResult.status === "translated" && !slideResult.output_visible)
+    ) {
+      skipped.add(slideNumber);
+    }
+
+    if (shouldSurfaceRefund(slideResult)) {
+      refunded.add(slideNumber);
+    }
+  }
+
+  return {
+    fully_delivered_body_slide_indices: [...fullyDeliveredBody].sort((left, right) => left - right),
+    content_only_slide_indices: [...contentOnly].sort((left, right) => left - right),
+    notes_only_slide_indices: [...notesOnly].sort((left, right) => left - right),
+    body_partial_slide_indices: [...bodyPartial].sort((left, right) => left - right),
+    skipped_slide_indices: [...skipped].sort((left, right) => left - right),
+    refunded_slide_indices: [...refunded].sort((left, right) => left - right),
+  };
+}
+
+function buildSyntheticSlideWarnings(
+  slideResults: readonly JobSlideResult[]
+): JobWarning[] {
+  const warnings: JobWarning[] = [];
+
+  for (const slideResult of slideResults) {
+    const warningNodeIdBase = `slide_result_${slideResult.slide_index + 1}`;
+    if (slideResult.status === "skipped_translation_failed") {
+      warnings.push({
+        node_id: warningNodeIdBase,
+        slide_index: slideResult.slide_index,
+        archetype: "plain_text",
+        risk_level: "high",
+        risk_reason: "slide_translation_failed",
+      });
+    } else if (slideResult.status === "skipped_materialization_failed") {
+      warnings.push({
+        node_id: warningNodeIdBase,
+        slide_index: slideResult.slide_index,
+        archetype: "plain_text",
+        risk_level: "high",
+        risk_reason: "slide_materialization_failed",
+      });
+    } else if (slideResult.status === "skipped_write_failed") {
+      warnings.push({
+        node_id: warningNodeIdBase,
+        slide_index: slideResult.slide_index,
+        archetype: "plain_text",
+        risk_level: "high",
+        risk_reason: "slide_write_failed",
+      });
+    }
+
+    if (shouldSurfaceRefund(slideResult)) {
+      warnings.push({
+        node_id: `${warningNodeIdBase}_refund`,
+        slide_index: slideResult.slide_index,
+        archetype: "plain_text",
+        risk_level: "high",
+        risk_reason: "slide_charge_refunded",
+      });
+    }
+  }
+
+  return warnings;
+}
+
+function shouldSurfaceRefund(slideResult: JobSlideResult): boolean {
+  return slideResult.status !== "excluded_unsafe" && slideResult.refunded;
+}
+
+function mergeWarningsWithSlideResults(
+  warnings: readonly JobWarning[],
+  slideResults: readonly JobSlideResult[]
+): JobWarning[] {
+  const merged = [...warnings];
+  const seen = new Set(merged.map((warning) => `${warning.slide_index}:${warning.risk_reason}:${warning.node_id}`));
+
+  for (const warning of buildSyntheticSlideWarnings(slideResults)) {
+    const key = `${warning.slide_index}:${warning.risk_reason}:${warning.node_id}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(warning);
+  }
+
+  return merged;
+}
+
+function formatSlideList(slides: readonly number[]): string {
+  return slides.join(", ");
+}
+
+function listPartialContentOnlySlides(slideResults: readonly JobSlideResult[]): number[] {
+  return slideResults
+    .filter((slideResult) =>
+      slideResult.output_visible &&
+      slideResult.notes_present &&
+      slideResult.content_output_visible &&
+      !slideResult.notes_output_visible
+    )
+    .map((slideResult) => slideResult.slide_index + 1)
+    .sort((left, right) => left - right);
+}
+
+function listPartialNotesOnlySlides(slideResults: readonly JobSlideResult[]): number[] {
+  return slideResults
+    .filter((slideResult) =>
+      slideResult.output_visible &&
+      slideResult.notes_present &&
+      !slideResult.content_output_visible &&
+      slideResult.notes_output_visible
+    )
+    .map((slideResult) => slideResult.slide_index + 1)
+    .sort((left, right) => left - right);
+}
+
+function listNotesTruncatedSlides(slideResults: readonly JobSlideResult[]): number[] {
+  return slideResults
+    .filter((slideResult) => slideResult.notes_truncated)
+    .map((slideResult) => slideResult.slide_index + 1)
+    .sort((left, right) => left - right);
+}
+
+function buildSlideDeliveryFailureMessage(
+  skippedSlides: readonly number[],
+  refundedSlides: readonly number[]
+): string {
+  if (skippedSlides.length === 0) {
+    return "";
+  }
+
+  const slideNoun = skippedSlides.length === 1 ? "Slide" : "Slides";
+  const refundVerb = skippedSlides.length === 1 ? "was" : "were";
+  if (refundedSlides.length === 0) {
+    return `${slideNoun} ${formatSlideList(skippedSlides)} could not be delivered due to translation or write-back issues.`;
+  }
+
+  if (refundedSlides.length === skippedSlides.length) {
+    return `${slideNoun} ${formatSlideList(skippedSlides)} could not be delivered due to translation or write-back issues and ${refundVerb} refunded.`;
+  }
+
+  return `${slideNoun} ${formatSlideList(skippedSlides)} could not be delivered. Refunded slides: ${formatSlideList(refundedSlides)}.`;
+}
+
+function buildCompletedMessage(
+  warnings: readonly JobWarning[],
+  slideSummary: TerminalSlideSummary
+  ,
+  slideResults: readonly JobSlideResult[]
+): string {
+  const excludedSlides = listExcludedSlides(warnings);
+  const reviewContainerCount = countUniqueWarningNodes(
+    warnings.filter((warning) =>
+      warning.risk_reason !== "unsafe_slide_excluded" &&
+      !isSlideExecutionWarningReason(warning.risk_reason)
+    )
+  );
+  const skippedDeliveredSlides = slideSummary.skipped_slide_indices.filter(
+    (slideNumber) => !excludedSlides.includes(slideNumber)
+  );
+
+  const parts: string[] = [];
+  if (skippedDeliveredSlides.length > 0) {
+    parts.push(
+      buildSlideDeliveryFailureMessage(
+        skippedDeliveredSlides,
+        slideSummary.refunded_slide_indices
+      )
+    );
+  }
+
+  if (excludedSlides.length > 0) {
+    parts.push(formatExcludedSlidesMessage(excludedSlides));
+  }
+
+  const contentOnlySlides = slideSummary.content_only_slide_indices;
+  if (contentOnlySlides.length > 0) {
+    parts.push(`Content-only delivery: slides ${formatSlideList(contentOnlySlides)}.`);
+  }
+
+  const notesOnlySlides = slideSummary.notes_only_slide_indices;
+  if (notesOnlySlides.length > 0) {
+    parts.push(`Notes-only fallback: slides ${formatSlideList(notesOnlySlides)}.`);
+  }
+
+  if (slideSummary.body_partial_slide_indices.length > 0) {
+    parts.push(
+      `Partially translated slides: ${formatSlideList(slideSummary.body_partial_slide_indices)}, not billed.`
+    );
+  }
+
+  const truncatedNotesSlides = listNotesTruncatedSlides(slideResults);
+  if (truncatedNotesSlides.length > 0) {
+    parts.push(`Speaker notes were truncated to 5000 characters on slides ${formatSlideList(truncatedNotesSlides)} before translation.`);
+  }
+
+  if (reviewContainerCount > 0) {
+    const noun = reviewContainerCount === 1 ? "container" : "containers";
+    parts.push(`Review ${reviewContainerCount} ${noun} for layout fidelity.`);
+  }
+
+  if (parts.length > 0) {
+    return `Translation completed with warnings. ${parts.join(" ")}`.trim();
+  }
+
+  return "Translation completed successfully.";
+}
+
+function buildFailedMessage(
+  baseMessage: string,
+  warnings: readonly JobWarning[],
+  slideSummary: TerminalSlideSummary,
+  slideResults: readonly JobSlideResult[]
+): string {
+  const parts = [baseMessage];
+  if (slideSummary.refunded_slide_indices.length > 0) {
+    parts.push(`Refunded slides: ${formatSlideList(slideSummary.refunded_slide_indices)}.`);
+  }
+
+  const excludedSlides = listExcludedSlides(warnings);
+  if (excludedSlides.length > 0) {
+    parts.push(formatExcludedSlidesMessage(excludedSlides));
+  }
+
+  const contentOnlySlides = slideSummary.content_only_slide_indices;
+  if (contentOnlySlides.length > 0) {
+    parts.push(`Content-only delivery: slides ${formatSlideList(contentOnlySlides)}.`);
+  }
+
+  const notesOnlySlides = slideSummary.notes_only_slide_indices;
+  if (notesOnlySlides.length > 0) {
+    parts.push(`Notes-only fallback: slides ${formatSlideList(notesOnlySlides)}.`);
+  }
+
+  if (slideSummary.body_partial_slide_indices.length > 0) {
+    parts.push(
+      `Partially translated slides: ${formatSlideList(slideSummary.body_partial_slide_indices)}, not billed.`
+    );
+  }
+
+  return parts.join(" ");
+}
+
+function buildSynthesizedProgress(job: JobRow): {
+  progress_percent: number;
+  current_step?: string;
+  details?: string;
+} {
+  switch (job.current_stage) {
+    case "extract":
+      return {
+        progress_percent: job.stage_status === "queued" ? 0 : 5,
+        current_step: "extracting_content",
+        details:
+          job.stage_status === "queued"
+            ? "Queued extraction stage."
+            : "Extracting presentation content.",
+      };
+    case "layout_semantics": {
+      const completed = toNumber((job.stage_cursor as Record<string, unknown>).completed_slide_count);
+      const total = Math.max(
+        1,
+        toNumber((job.stage_cursor as Record<string, unknown>).total_slide_count) ||
+          toNumber((job.stage_payload as Record<string, unknown>).total_selected_slides)
+      );
+      return {
+        progress_percent:
+          job.stage_status === "queued"
+            ? 15
+            : 20 + Math.round((Math.min(completed, total) / total) * 20),
+        current_step: "layout_semantics",
+        details:
+          job.stage_status === "queued"
+            ? "Queued layout analysis stage."
+            : `Analyzing layout semantics for ${completed}/${total} safe slide(s).`,
+      };
+    }
+    case "authority":
+      return {
+        progress_percent: job.status === "writing" ? 80 : 45,
+        current_step: job.status === "writing" ? "writing_back" : "authority_pass",
+        details:
+          job.stage_status === "queued"
+            ? "Queued deck-level authority translation."
+            : "Running deck-level authority translation and downstream delivery.",
+      };
+    case "finalize":
+      return {
+        progress_percent: 95,
+        current_step: "finalize",
+        details: "Finalizing translation results.",
+      };
+    default:
+      return {
+        progress_percent: 0,
+        current_step: job.status,
+        details: undefined,
+      };
+  }
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+}
+
 function buildJobStatusResponse(
   job: JobRow,
+  slideResults: readonly JobSlideResult[] = [],
   progress?: Record<string, string>
 ): JobStatusResponse {
   if (job.status === "completed" || job.status === "completed_with_warnings") {
-    const normalizedWarnings = normalizeWarnings(job.warnings);
+    const normalizedWarnings = mergeWarningsWithSlideResults(
+      normalizeWarnings(job.warnings),
+      slideResults
+    );
+    const slideSummary = summarizeTerminalSlideResults(slideResults);
     const response: JobCompletedResponse = {
       job_id: job.id,
       status: job.status,
       progress_percent: 100,
       output_document_url: job.output_document_url ?? "",
-      message: buildCompletedMessage(normalizedWarnings),
+      message: buildCompletedMessage(normalizedWarnings, slideSummary, slideResults),
+      fully_delivered_body_slide_indices: slideSummary.fully_delivered_body_slide_indices,
+      content_only_slide_indices: slideSummary.content_only_slide_indices,
+      notes_only_slide_indices: slideSummary.notes_only_slide_indices,
+      body_partial_slide_indices: slideSummary.body_partial_slide_indices,
+      skipped_slide_indices: slideSummary.skipped_slide_indices,
+      refunded_slide_indices: slideSummary.refunded_slide_indices,
+      total_billed_units: job.total_units_billed,
+      gross_billed_slides: job.gross_billed_slides,
+      refunded_slides: job.refunded_slides,
+      net_billed_slides: job.net_billed_slides,
       ...(normalizedWarnings.length > 0 ? { warnings: normalizedWarnings } : {}),
     };
     return response;
   }
 
   if (job.status === "failed") {
-    const normalizedWarnings = normalizeWarnings(job.warnings);
+    const normalizedWarnings = mergeWarningsWithSlideResults(
+      normalizeWarnings(job.warnings),
+      slideResults
+    );
+    const slideSummary = summarizeTerminalSlideResults(slideResults);
     const response: JobFailedResponse = {
       job_id: job.id,
       status: "failed",
       error: job.error_code ?? "JOB_INTERNAL_ERROR",
-      message: buildFailedMessage(job.error_message ?? "Translation failed.", normalizedWarnings),
+      message: buildFailedMessage(job.error_message ?? "Translation failed.", normalizedWarnings, slideSummary, slideResults),
+      output_document_url: job.output_document_url ?? undefined,
+      total_billed_units: job.total_units_billed,
+      gross_billed_slides: job.gross_billed_slides,
+      refunded_slides: job.refunded_slides,
+      net_billed_slides: job.net_billed_slides,
+      ...(slideSummary.fully_delivered_body_slide_indices.length > 0
+        ? { fully_delivered_body_slide_indices: slideSummary.fully_delivered_body_slide_indices }
+        : {}),
+      ...(slideSummary.content_only_slide_indices.length > 0
+        ? { content_only_slide_indices: slideSummary.content_only_slide_indices }
+        : {}),
+      ...(slideSummary.notes_only_slide_indices.length > 0
+        ? { notes_only_slide_indices: slideSummary.notes_only_slide_indices }
+        : {}),
+      ...(slideSummary.body_partial_slide_indices.length > 0
+        ? { body_partial_slide_indices: slideSummary.body_partial_slide_indices }
+        : {}),
+      ...(slideSummary.skipped_slide_indices.length > 0
+        ? { skipped_slide_indices: slideSummary.skipped_slide_indices }
+        : {}),
+      ...(slideSummary.refunded_slide_indices.length > 0
+        ? { refunded_slide_indices: slideSummary.refunded_slide_indices }
+        : {}),
       ...(normalizedWarnings.length > 0 ? { warnings: normalizedWarnings } : {}),
     };
     return response;
@@ -180,14 +577,24 @@ function buildJobStatusResponse(
   const resolvedStatus: JobStatus = (redisStatus && isValidJobStatus(redisStatus))
     ? redisStatus
     : job.status;
+  const synthesizedProgress = buildSynthesizedProgress(job);
 
   const response: JobProgressResponse = {
     job_id: job.id,
     status: resolvedStatus as JobInProgressStatus,
-    progress_percent: progress?.progress_percent ? parseInt(progress.progress_percent, 10) : 0,
-    current_step: progress?.current_step,
-    details: progress?.details,
+    progress_percent: progress?.progress_percent
+      ? parseInt(progress.progress_percent, 10)
+      : synthesizedProgress.progress_percent,
     translated_units_billed: job.provisionally_billed_units,
+    ...(job.current_stage ? { current_stage: job.current_stage } : {}),
+    ...(job.stage_status ? { stage_status: job.stage_status } : {}),
+    ...(job.stage_attempt > 0 ? { stage_attempt: job.stage_attempt } : {}),
+    ...((progress?.current_step ?? synthesizedProgress.current_step)
+      ? { current_step: progress?.current_step ?? synthesizedProgress.current_step }
+      : {}),
+    ...((progress?.details ?? synthesizedProgress.details)
+      ? { details: progress?.details ?? synthesizedProgress.details }
+      : {}),
   };
 
   return response;
@@ -195,9 +602,10 @@ function buildJobStatusResponse(
 
 export function __buildJobStatusResponseForTests(
   job: JobRow,
+  slideResults: readonly JobSlideResult[] = [],
   progress?: Record<string, string>
 ): JobStatusResponse {
-  return buildJobStatusResponse(job, progress);
+  return buildJobStatusResponse(job, slideResults, progress);
 }
 
 // I10: Exhaustive host-type usage lookup
@@ -341,7 +749,16 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
 
     const progressKey = `job_progress:${jobId}`;
     try {
-      await enqueueJob(config, jobId);
+      await updateJobStatus(pool, jobId, "queued", {
+        currentStage: "extract",
+        stageStatus: "queued",
+        stageAttempt: 1,
+        queuedTaskName: null,
+      });
+      const queuedTaskName = await enqueueJob(config, jobId, "extract", 1);
+      await updateJobStatus(pool, jobId, "queued", {
+        queuedTaskName,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown enqueue error";
       console.error("Failed to enqueue job to Cloud Tasks:", message);
@@ -426,12 +843,13 @@ export function getJobHandler(pool: Pool, redis: Redis) {
       job.status === "failed" ||
       job.status === "canceled"
     ) {
-      res.json(buildJobStatusResponse(job));
+      const slideResults = await listJobSlideResults(pool, job.id, auth.user_id);
+      res.json(buildJobStatusResponse(job, slideResults));
       return;
     }
 
     const progress = await redis.hgetall(`job_progress:${job.id}`);
-    res.json(buildJobStatusResponse(job, progress));
+    res.json(buildJobStatusResponse(job, [], progress));
   };
 }
 
@@ -486,8 +904,14 @@ export function cancelJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
     }
 
     if (job.status === "pending" || job.status === "queued") {
-      await deleteQueuedJob(config, job.id);
-      await updateJobStatus(pool, job.id, "canceled");
+      await deleteQueuedJob(config, job.queued_task_name);
+      await updateJobStatus(pool, job.id, "canceled", {
+        currentStage: null,
+        stageStatus: null,
+        stageLeaseExpiresAt: null,
+        stageLastHeartbeatAt: null,
+        queuedTaskName: null,
+      });
       const progressKey = `job_progress:${job.id}`;
       const results = await redis
         .multi()

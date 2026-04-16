@@ -44,6 +44,7 @@ test("translated slide that later fails materialization becomes refundable", () 
       provisionally_billed: true,
       final_billable: false,
       refund_required: true,
+      refunded: false,
       output_visible: false,
     },
   ]);
@@ -63,6 +64,7 @@ test("excluded unsafe slide keeps exclusion status even if later failure is reco
       provisionally_billed: false,
       final_billable: false,
       refund_required: false,
+      refunded: false,
       output_visible: false,
     },
   ]);
@@ -84,6 +86,7 @@ test("markSlideTranslated does not revive a previously failed slide", () => {
       provisionally_billed: false,
       final_billable: false,
       refund_required: false,
+      refunded: false,
       output_visible: false,
     },
   ]);
@@ -105,6 +108,7 @@ test("markSlideTranslated is idempotent for an already translated slide", () => 
       provisionally_billed: true,
       final_billable: false,
       refund_required: false,
+      refunded: false,
       output_visible: false,
     },
   ]);

@@ -12,9 +12,15 @@ import {
   type TranslationResponse,
 } from "@translay/shared-contracts";
 import { buildOpaqueJsonDataSection } from "./llm-prompt-safety";
+import {
+  emitLlmDebugCapture,
+  type LlmDebugCaptureFn,
+  type LlmDebugCaptureStage,
+} from "./llm-debug";
 
 const MAX_NODES_PER_BATCH = 50;
 const ACCESS_TOKEN_REFRESH_BUFFER_MS = 2 * 60 * 1000;
+const DEFAULT_VERTEX_REQUEST_TIMEOUT_MS = 180_000;
 export const VERTEX_MAX_OUTPUT_TOKENS = 65_535;
 export const VERTEX_SAFETY_SETTINGS_OFF = [
   {
@@ -46,6 +52,23 @@ export function __resetAccessTokenCacheForTests(): void {
   cachedAccessToken = null;
 }
 
+export async function fetchWithTimeout(
+  input: string | URL | Request,
+  init: RequestInit,
+  timeoutMs = DEFAULT_VERTEX_REQUEST_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const TRANSLATION_SYSTEM_INSTRUCTION = `
 You are a professional translator for presentation and document content.
 
@@ -65,6 +88,7 @@ Follow these rules for every request:
 - Make translated_full_text equal the paragraph translations joined with "\\n".
 - Make each paragraph's translated_text equal the concatenation of that paragraph's segment translations in output order.
 - For metric cards, preserve semantic roles instead of copying source character positions mechanically.
+- For titles, subtitles, headings, and short banner text, prefer concise phrasing that preserves the core meaning over verbose literal translation. Slides have limited space.
 - Return only JSON that matches the provided response schema.
 `.trim();
 
@@ -173,16 +197,25 @@ export function buildResponseSchema(nodeCount: number) {
  */
 export async function translateWithVertexGemini(
   config: WorkerConfig,
-  request: TranslationRequest
+  request: TranslationRequest,
+  options?: {
+    readonly debugCapture?: LlmDebugCaptureFn;
+    readonly stage?: LlmDebugCaptureStage;
+    readonly callLabel?: string;
+    readonly slideIndex?: number;
+  }
 ): Promise<TranslationResponse> {
   const { nodes, source_language, target_language, model } = request;
+  const providerRequestId = `vertex_${Date.now()}`;
+  const stage = options?.stage ?? "translation";
+  const callLabel = options?.callLabel ?? "translation";
 
   if (nodes.length === 0) {
     return { provider_request_id: "empty", nodes: [] };
   }
 
   if (nodes.length > MAX_NODES_PER_BATCH) {
-    return translateInBatches(config, request);
+    return translateInBatches(config, request, options);
   }
 
   const prompt = buildPrompt(
@@ -214,7 +247,7 @@ export async function translateWithVertexGemini(
     },
   };
 
-  const res = await fetch(endpoint, {
+  const res = await fetchWithTimeout(endpoint, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -224,7 +257,19 @@ export async function translateWithVertexGemini(
   });
 
   if (!res.ok) {
-    const errorSummary = await summarizeVertexErrorResponse(res);
+    const rawErrorText = (await res.text()).trim();
+    const errorSummary = summarizeVertexErrorText(rawErrorText);
+    await emitLlmDebugCapture(options?.debugCapture, {
+      provider: "vertex_gemini",
+      model,
+      stage,
+      call_label: callLabel,
+      slide_index: options?.slideIndex,
+      node_ids: nodes.map((node) => node.node_id),
+      capture_status: "http_error",
+      http_status: res.status,
+      error_summary: errorSummary,
+    });
     throw new Error(
       errorSummary
         ? `Vertex AI request failed with status ${res.status}: ${errorSummary}`
@@ -235,13 +280,51 @@ export async function translateWithVertexGemini(
   const data = (await res.json()) as VertexResponse;
   const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!responseText) {
+    await emitLlmDebugCapture(options?.debugCapture, {
+      provider: "vertex_gemini",
+      model,
+      stage,
+      call_label: callLabel,
+      slide_index: options?.slideIndex,
+      node_ids: nodes.map((node) => node.node_id),
+      provider_request_id: providerRequestId,
+      capture_status: "empty_response",
+      error_summary: "Vertex AI returned empty response",
+    });
     throw new Error("Vertex AI returned empty response");
   }
 
-  const parsed = parseTranslationResponse(responseText, request);
+  let parsed: TranslatedNode[];
+  try {
+    parsed = parseTranslationResponse(responseText, request);
+  } catch (error) {
+    await emitLlmDebugCapture(options?.debugCapture, {
+      provider: "vertex_gemini",
+      model,
+      stage,
+      call_label: callLabel,
+      slide_index: options?.slideIndex,
+      node_ids: nodes.map((node) => node.node_id),
+      provider_request_id: providerRequestId,
+      capture_status: "parse_error",
+      error_summary: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+
+  await emitLlmDebugCapture(options?.debugCapture, {
+    provider: "vertex_gemini",
+    model,
+    stage,
+    call_label: callLabel,
+    slide_index: options?.slideIndex,
+    node_ids: nodes.map((node) => node.node_id),
+    provider_request_id: providerRequestId,
+    capture_status: "success",
+  });
 
   return {
-    provider_request_id: `vertex_${Date.now()}`,
+    provider_request_id: providerRequestId,
     nodes: parsed,
   };
 }
@@ -261,6 +344,10 @@ export function buildVertexGenerateContentEndpoint(
 
 export async function summarizeVertexErrorResponse(res: Response): Promise<string> {
   const raw = (await res.text()).trim();
+  return summarizeVertexErrorText(raw);
+}
+
+export function summarizeVertexErrorText(raw: string): string {
   if (!raw) {
     return "";
   }
@@ -290,7 +377,13 @@ export function truncateErrorSummary(message: string): string {
 
 async function translateInBatches(
   config: WorkerConfig,
-  request: TranslationRequest
+  request: TranslationRequest,
+  options?: {
+    readonly debugCapture?: LlmDebugCaptureFn;
+    readonly stage?: LlmDebugCaptureStage;
+    readonly callLabel?: string;
+    readonly slideIndex?: number;
+  }
 ): Promise<TranslationResponse> {
   const allNodes = request.nodes;
   const results: TranslatedNode[] = [];
@@ -299,7 +392,12 @@ async function translateInBatches(
     const batch = allNodes.slice(i, i + MAX_NODES_PER_BATCH);
     // Each batch shares the same full-document context for consistency
     const batchRequest: TranslationRequest = { ...request, nodes: batch };
-    const batchResponse = await translateWithVertexGemini(config, batchRequest);
+    const batchResponse = await translateWithVertexGemini(config, batchRequest, {
+      ...options,
+      callLabel: options?.callLabel
+        ? `${options.callLabel}:batch_${Math.floor(i / MAX_NODES_PER_BATCH) + 1}`
+        : `translation:batch_${Math.floor(i / MAX_NODES_PER_BATCH) + 1}`,
+    });
     results.push(...batchResponse.nodes);
   }
 
@@ -345,6 +443,7 @@ TRANSLATION PRIORITIES:
 11. For metric_card nodes, translate according to semantic role, not source character positions.
 12. Preserve line breaks, punctuation, and non-translatable content when possible.
 13. If a node contains only numbers, punctuation, or other non-translatable content, return it unchanged.
+14. For slide titles, subtitles, headings, and short banner-style text, prefer concise phrasing that preserves the core meaning. Avoid verbose or overly literal translations that significantly increase text length.
 
 ${contextBlock}
 
@@ -515,8 +614,7 @@ export function parseTranslationResponse(
       risk_flags: parseRiskFlags(item.risk_flags, nodeId),
     };
 
-    validateStructuredNode(translatedNode, sourceNodeById.get(nodeId));
-    result.push(translatedNode);
+    result.push(validateStructuredNode(translatedNode, sourceNodeById.get(nodeId)));
   }
 
   return result;
@@ -657,76 +755,81 @@ function parseRiskFlags(
 function validateStructuredNode(
   node: TranslatedNode,
   sourceNode?: TranslationContextNodeSummary
-): void {
-  const paragraphText = node.paragraphs.map((paragraph) => paragraph.translated_text).join("\n");
-  if (paragraphText !== node.translated_full_text) {
+): TranslatedNode {
+  const normalizedNode = normalizeTranslatedNodeForValidation(node, sourceNode);
+  const paragraphText = normalizedNode.paragraphs
+    .map((paragraph) => paragraph.translated_text)
+    .join("\n");
+  if (paragraphText !== normalizedNode.translated_full_text) {
     throw new Error(
-      `Node "${node.node_id}" translated_full_text must equal paragraph translations joined by newline`
+      `Node "${normalizedNode.node_id}" translated_full_text must equal paragraph translations joined by newline`
     );
   }
 
   if (!sourceNode) {
-    return;
+    return normalizedNode;
   }
 
-  if (node.paragraphs.length !== sourceNode.paragraphs.length) {
+  if (normalizedNode.paragraphs.length !== sourceNode.paragraphs.length) {
     if (sourceNode.archetype === "bullet_list") {
-      throw new Error(`Node "${node.node_id}" has bullet_list paragraph count mismatch`);
+      throw new Error(`Node "${normalizedNode.node_id}" has bullet_list paragraph count mismatch`);
     }
-    throw new Error(`Node "${node.node_id}" paragraph count does not match source structure`);
+    throw new Error(`Node "${normalizedNode.node_id}" paragraph count does not match source structure`);
   }
 
   const seenSegmentIds = new Set<string>();
-  for (const segment of node.segments) {
+  for (const segment of normalizedNode.segments) {
     if (seenSegmentIds.has(segment.segment_id)) {
-      throw new Error(`Node "${node.node_id}" contains duplicate segment_id "${segment.segment_id}"`);
+      throw new Error(
+        `Node "${normalizedNode.node_id}" contains duplicate segment_id "${segment.segment_id}"`
+      );
     }
     seenSegmentIds.add(segment.segment_id);
   }
 
   const translatedSegmentById = new Map(
-    node.segments.map((segment) => [segment.segment_id, segment] as const)
+    normalizedNode.segments.map((segment) => [segment.segment_id, segment] as const)
   );
   const expectedSegmentCount = sourceNode.paragraphs.reduce(
     (sum, paragraph) => sum + paragraph.segments.length,
     0
   );
-  if (node.segments.length !== expectedSegmentCount) {
-    throw new Error(`Node "${node.node_id}" segment count does not match source structure`);
+  if (normalizedNode.segments.length !== expectedSegmentCount) {
+    throw new Error(`Node "${normalizedNode.node_id}" segment count does not match source structure`);
   }
 
   for (let index = 0; index < sourceNode.paragraphs.length; index += 1) {
     const sourceParagraph = sourceNode.paragraphs[index];
-    const translatedParagraph = node.paragraphs[index];
+    const translatedParagraph = normalizedNode.paragraphs[index];
 
     if (!sourceParagraph || !translatedParagraph) {
-      throw new Error(`Node "${node.node_id}" is missing paragraph data at index ${index}`);
+      throw new Error(`Node "${normalizedNode.node_id}" is missing paragraph data at index ${index}`);
     }
 
     if (translatedParagraph.paragraph_id !== sourceParagraph.paragraph_id) {
       throw new Error(
-        `Node "${node.node_id}" paragraph_id mismatch at index ${index}: expected "${sourceParagraph.paragraph_id}", got "${translatedParagraph.paragraph_id}"`
+        `Node "${normalizedNode.node_id}" paragraph_id mismatch at index ${index}: expected "${sourceParagraph.paragraph_id}", got "${translatedParagraph.paragraph_id}"`
       );
     }
 
     const expectedBulletBehavior = sourceParagraph.bullet ? "preserve" : "none";
     if (translatedParagraph.bullet_behavior !== expectedBulletBehavior) {
       throw new Error(
-        `Node "${node.node_id}" paragraph "${translatedParagraph.paragraph_id}" must use bullet_behavior "${expectedBulletBehavior}"`
+        `Node "${normalizedNode.node_id}" paragraph "${translatedParagraph.paragraph_id}" must use bullet_behavior "${expectedBulletBehavior}"`
       );
     }
 
     const paragraphSegmentIds = new Set(
       sourceParagraph.segments.map((segment) => segment.segment_id)
     );
-    const translatedParagraphText = node.segments
+    const translatedParagraphText = normalizedNode.segments
       .filter((segment) => paragraphSegmentIds.has(segment.segment_id))
       .map((segment) => segment.translated_text)
       .join("");
 
     if (translatedParagraphText !== translatedParagraph.translated_text) {
       throw new Error(
-        `Node "${node.node_id}" paragraph "${translatedParagraph.paragraph_id}" must equal the concatenation of its segment translations`
+        `Node "${normalizedNode.node_id}" paragraph "${translatedParagraph.paragraph_id}" must equal the concatenation of its segment translations`
       );
     }
 
@@ -734,16 +837,95 @@ function validateStructuredNode(
       const translatedSegment = translatedSegmentById.get(sourceSegment.segment_id);
       if (!translatedSegment) {
         throw new Error(
-          `Node "${node.node_id}" is missing segment "${sourceSegment.segment_id}"`
+          `Node "${normalizedNode.node_id}" is missing segment "${sourceSegment.segment_id}"`
         );
       }
       if (translatedSegment.style_role !== sourceSegment.style_role) {
         throw new Error(
-          `Node "${node.node_id}" segment "${sourceSegment.segment_id}" must preserve style_role "${sourceSegment.style_role}"`
+          `Node "${normalizedNode.node_id}" segment "${sourceSegment.segment_id}" must preserve style_role "${sourceSegment.style_role}"`
         );
       }
     }
   }
+
+  return normalizedNode;
+}
+
+function normalizeTranslatedNodeForValidation(
+  node: TranslatedNode,
+  sourceNode?: TranslationContextNodeSummary
+): TranslatedNode {
+  if (!sourceNode) {
+    return node;
+  }
+
+  const sourceSegmentById = new Map(
+    sourceNode.paragraphs.flatMap((paragraph) =>
+      paragraph.segments.map((segment) => [segment.segment_id, segment] as const)
+    )
+  );
+  const normalizedSegments = node.segments.map((segment) => {
+    const sourceSegment = sourceSegmentById.get(segment.segment_id);
+    if (!sourceSegment) {
+      return segment;
+    }
+
+    return {
+      ...segment,
+      translated_text: preserveSourceBoundaryWhitespace(
+        sourceSegment.text,
+        segment.translated_text
+      ),
+    };
+  });
+
+  const normalizedSegmentById = new Map(
+    normalizedSegments.map((segment) => [segment.segment_id, segment] as const)
+  );
+  const normalizedParagraphs = node.paragraphs.map((paragraph) => {
+    const sourceParagraph = sourceNode.paragraphs.find(
+      (candidate) => candidate.paragraph_id === paragraph.paragraph_id
+    );
+    if (!sourceParagraph) {
+      return paragraph;
+    }
+
+    const translatedText = sourceParagraph.segments
+      .map((segment) => normalizedSegmentById.get(segment.segment_id)?.translated_text ?? "")
+      .join("");
+
+    return {
+      ...paragraph,
+      translated_text: translatedText,
+    };
+  });
+
+  return {
+    ...node,
+    segments: normalizedSegments,
+    paragraphs: normalizedParagraphs,
+    translated_full_text: normalizedParagraphs
+      .map((paragraph) => paragraph.translated_text)
+      .join("\n"),
+  };
+}
+
+function preserveSourceBoundaryWhitespace(
+  sourceText: string,
+  translatedText: string
+): string {
+  if (sourceText.length === 0) {
+    return translatedText;
+  }
+
+  if (sourceText.trim().length === 0) {
+    return sourceText;
+  }
+
+  const sourceLeading = sourceText.match(/^\s*/)?.[0] ?? "";
+  const sourceTrailing = sourceText.match(/\s*$/)?.[0] ?? "";
+  const translatedCore = translatedText.trim();
+  return `${sourceLeading}${translatedCore}${sourceTrailing}`;
 }
 
 function asRecord(value: unknown, label: string): Record<string, unknown> {
@@ -788,9 +970,10 @@ export async function getAccessToken(): Promise<string> {
   }
 
   // Cloud Run: use metadata server
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
-    { headers: { "Metadata-Flavor": "Google" } }
+    { headers: { "Metadata-Flavor": "Google" } },
+    10_000
   );
 
   if (res.ok) {

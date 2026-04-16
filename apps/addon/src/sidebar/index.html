@@ -520,6 +520,7 @@
       submissionSeq: 0,
       pollTimer: null,
       pollStartedAt: 0,
+      lastPollActivityAt: 0,
       presetLanguages: []
     };
 
@@ -648,16 +649,23 @@
       badge.className = 'plan-badge ' + (isPro ? 'pro' : 'free');
       badge.textContent = isPro ? 'PRO' : 'FREE';
 
+      function formatUsageNumber(value) {
+        if (typeof value !== 'number' || !isFinite(value)) return '0';
+        return Number.isInteger(value)
+          ? value.toLocaleString()
+          : value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      }
+
       // Usage display
       var usage = ent.usage;
       if (usage && !usage.unlimited) {
         document.getElementById('usageSlides').style.display = 'flex';
         document.getElementById('usageSlidesText').textContent =
-          usage.slides_used + ' / ' + usage.slides_limit;
+          formatUsageNumber(usage.slides_used) + ' / ' + formatUsageNumber(usage.slides_limit);
 
         document.getElementById('usageDocs').style.display = 'flex';
         document.getElementById('usageDocsText').textContent =
-          usage.docs_pages_used + ' / ' + usage.docs_pages_limit;
+          formatUsageNumber(usage.docs_pages_used) + ' / ' + formatUsageNumber(usage.docs_pages_limit);
 
         document.getElementById('usageSheets').style.display = 'flex';
         document.getElementById('usageSheetsText').textContent =
@@ -917,17 +925,18 @@
     }
 
     // ── Job polling ──
-    var POLL_TIMEOUT_MS = 10 * 60 * 1000; // I4: 10 minute polling timeout, but for testing, we set it to 10 seconds
+    var POLL_IDLE_TIMEOUT_MS = 20 * 60 * 1000;
 
     function startPolling(jobId) {
       if (state.pollTimer) clearInterval(state.pollTimer);
       state.pollStartedAt = Date.now();
+      state.lastPollActivityAt = state.pollStartedAt;
       state.pollTimer = setInterval(function() {
-        if (Date.now() - state.pollStartedAt > POLL_TIMEOUT_MS) {
+        if (Date.now() - state.lastPollActivityAt > POLL_IDLE_TIMEOUT_MS) {
           stopPolling();
           setTranslating(false);
           hideProgress();
-          showResult(false, 'Translation timed out. Please check your document or try again.', null, []);
+          showResult(false, 'Translation stopped reporting progress for too long. Please check the job status and try again if needed.', null, [], null);
           return;
         }
         pollJob(jobId);
@@ -944,12 +953,14 @@
       state.cancelRequested = false;
       state.cancelRequestInFlight = false;
       state.translatedUnitsBilled = 0;
+      state.lastPollActivityAt = 0;
       state.activeSubmission = null;
     }
 
     function pollJob(jobId) {
       google.script.run
         .withSuccessHandler(function(resp) {
+          state.lastPollActivityAt = Date.now();
           if (resp.status === 'completed' || resp.status === 'completed_with_warnings') {
             stopPolling();
             setTranslating(false);
@@ -962,7 +973,8 @@
               true,
               resp.message || 'Translation completed successfully.',
               resolveOutputDocumentUrl(resp),
-              resp.warnings || []
+              resp.warnings || [],
+              resp
             );
             // Refresh entitlement after job completion (usage changed)
             refreshEntitlement(true);
@@ -976,12 +988,18 @@
             stopPolling();
             setTranslating(false);
             hideProgress();
-            showResult(false, resp.message || 'Translation failed.', null, resp.warnings || []);
+            showResult(
+              false,
+              resp.message || 'Translation failed.',
+              resolveOutputDocumentUrl(resp),
+              resp.warnings || [],
+              resp
+            );
           } else {
             // In progress
             state.translatedUnitsBilled = resp.translated_units_billed || 0;
             var pct = resp.progress_percent || 0;
-            var step = formatStep(resp.current_step || resp.status);
+            var step = formatStep(resp.current_step || resp.current_stage || resp.status);
             var detail = resp.details || '';
             showProgress(pct, step, detail);
           }
@@ -1268,11 +1286,11 @@
       updateCancelButton();
     }
 
-    function showResult(success, message, url, warnings) {
+    function showResult(success, message, url, warnings, resultMeta) {
       var area = document.getElementById('resultArea');
       area.className = 'result-area visible ' + (success ? 'success' : 'error');
       document.getElementById('resultMessage').textContent = message;
-      renderResultWarnings(Array.isArray(warnings) ? warnings : []);
+      renderResultWarnings(Array.isArray(warnings) ? warnings : [], resultMeta || null);
       var link = document.getElementById('resultLink');
       if (url) {
         link.href = url;
@@ -1292,7 +1310,7 @@
       ) {
         message += ' The generated file was kept, and the generated slides were counted toward your quota.';
       }
-      showResult(false, message, resolveOutputDocumentUrl(resp), []);
+      showResult(false, message, resolveOutputDocumentUrl(resp), [], resp);
     }
 
     function hideResult() {
@@ -1301,16 +1319,33 @@
       renderResultWarnings([]);
     }
 
-    function renderResultWarnings(warnings) {
+    function renderResultWarnings(warnings, resultMeta) {
       var list = document.getElementById('resultWarnings');
       list.innerHTML = '';
       if (!warnings || warnings.length === 0) {
-        list.classList.remove('visible');
-        return;
+        warnings = [];
       }
 
       var excludedSlides = [];
       var layoutReviewSlides = [];
+      var fullyDeliveredSlides = Array.isArray(resultMeta && resultMeta.fully_delivered_body_slide_indices)
+        ? resultMeta.fully_delivered_body_slide_indices.slice()
+        : [];
+      var contentOnlySlides = Array.isArray(resultMeta && resultMeta.content_only_slide_indices)
+        ? resultMeta.content_only_slide_indices.slice()
+        : [];
+      var notesOnlySlides = Array.isArray(resultMeta && resultMeta.notes_only_slide_indices)
+        ? resultMeta.notes_only_slide_indices.slice()
+        : [];
+      var bodyPartialSlides = Array.isArray(resultMeta && resultMeta.body_partial_slide_indices)
+        ? resultMeta.body_partial_slide_indices.slice()
+        : [];
+      var skippedSlides = Array.isArray(resultMeta && resultMeta.skipped_slide_indices)
+        ? resultMeta.skipped_slide_indices.slice()
+        : [];
+      var refundedSlides = Array.isArray(resultMeta && resultMeta.refunded_slide_indices)
+        ? resultMeta.refunded_slide_indices.slice()
+        : [];
 
       warnings.forEach(function(warning) {
         if (!warning || typeof warning.slide_index !== 'number') {
@@ -1321,12 +1356,47 @@
           if (excludedSlides.indexOf(pageNumber) === -1) excludedSlides.push(pageNumber);
           return;
         }
+        if (
+          warning.risk_reason === 'slide_translation_failed' ||
+          warning.risk_reason === 'slide_materialization_failed' ||
+          warning.risk_reason === 'slide_write_failed' ||
+          warning.risk_reason === 'slide_charge_refunded'
+        ) {
+          return;
+        }
         if (layoutReviewSlides.indexOf(pageNumber) === -1) layoutReviewSlides.push(pageNumber);
       });
 
+      fullyDeliveredSlides.sort(function(a, b) { return a - b; });
+      contentOnlySlides.sort(function(a, b) { return a - b; });
+      notesOnlySlides.sort(function(a, b) { return a - b; });
+      bodyPartialSlides.sort(function(a, b) { return a - b; });
+      skippedSlides.sort(function(a, b) { return a - b; });
+      refundedSlides.sort(function(a, b) { return a - b; });
       excludedSlides.sort(function(a, b) { return a - b; });
       layoutReviewSlides.sort(function(a, b) { return a - b; });
 
+      if (fullyDeliveredSlides.length > 0) {
+        appendResultWarning(list, 'Fully delivered translated slides: ' + fullyDeliveredSlides.length + '.');
+      }
+      if (contentOnlySlides.length > 0) {
+        appendResultWarning(list, 'Content-only delivery: slide ' + contentOnlySlides.join(', ') + '.');
+      }
+      if (notesOnlySlides.length > 0) {
+        appendResultWarning(list, 'Notes-only fallback: slide ' + notesOnlySlides.join(', ') + '.');
+      }
+      if (bodyPartialSlides.length > 0) {
+        appendResultWarning(list, 'Partially translated slides: slide ' + bodyPartialSlides.join(', ') + ', not billed.');
+      }
+      if (skippedSlides.length > 0) {
+        appendResultWarning(list, 'Undelivered slides: ' + skippedSlides.join(', ') + '.');
+      }
+      if (refundedSlides.length > 0) {
+        appendResultWarning(list, 'Refunded slides: ' + refundedSlides.join(', ') + '.');
+      }
+      if (resultMeta && typeof resultMeta.total_billed_units === 'number') {
+        appendResultWarning(list, 'Total billed: ' + resultMeta.total_billed_units + ' slides.');
+      }
       if (excludedSlides.length > 0) {
         appendResultWarning(list, 'Skipped for safety review: slide ' + excludedSlides.join(', ') + '.');
       }

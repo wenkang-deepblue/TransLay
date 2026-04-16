@@ -7,6 +7,7 @@ import {
   extractTableCellVisibleStyleSummary,
   extractVisibleStyleSummary,
 } from "./rich-text";
+import { buildPlaceholderFontSizeLookup } from "./extractor";
 
 test("buildRichTextNode preserves bullet paragraphs, styles, and box geometry", () => {
   const element = {
@@ -83,7 +84,7 @@ test("buildRichTextNode preserves bullet paragraphs, styles, and box geometry", 
   assert.equal(node.paragraphs[0]?.bullet?.list_id, "list-1");
   assert.equal(node.paragraphs[0]?.runs[0]?.text, "Hello");
   assert.equal(node.paragraphs[0]?.runs[0]?.text_style?.bold, true);
-  assert.equal(node.box.width_emu, 120 * 12700);
+  assert.equal(node.box.width_emu, 120 * 12700); // scaleX=1 → unchanged
   assert.equal(node.box.translate_y_emu, 72 * 12700);
 });
 
@@ -527,7 +528,7 @@ test("buildRichTextNode returns null for non-translatable autoText-only or newli
   );
 });
 
-test("extractBoxGeometry preserves EMU units and computes rotation sign correctly", () => {
+test("extractBoxGeometry preserves EMU units across pure rotation and computes rotation", () => {
   const element = {
     size: {
       width: { magnitude: 914400, unit: "EMU" },
@@ -546,9 +547,302 @@ test("extractBoxGeometry preserves EMU units and computes rotation sign correctl
 
   const box = extractBoxGeometry(element);
 
-  assert.equal(box.width_emu, 914400);
-  assert.equal(box.height_emu, 457200);
+  assert.ok(Math.abs(box.width_emu - 914400) < 1);
+  assert.ok(Math.abs(box.height_emu - 457200) < 1);
   assert.equal(box.translate_x_emu, 1000);
   assert.equal(box.translate_y_emu, 2000);
   assert.ok(Math.abs(box.rotation_deg - 30) < 0.0001);
+});
+
+test("extractBoxGeometry applies non-uniform scaleX/scaleY to compute effective dimensions", () => {
+  const element = {
+    size: {
+      width: { magnitude: 3000000, unit: "EMU" },
+      height: { magnitude: 3000000, unit: "EMU" },
+    },
+    transform: {
+      scaleX: 2.8402,
+      scaleY: 0.1909,
+      translateX: 311700,
+      translateY: 445025,
+      unit: "EMU",
+    },
+  } as unknown as slides_v1.Schema$PageElement;
+
+  const box = extractBoxGeometry(element);
+
+  assert.ok(Math.abs(box.width_emu - 3000000 * 2.8402) < 1);
+  assert.ok(Math.abs(box.height_emu - 3000000 * 0.1909) < 1);
+});
+
+test("extractBoxGeometry preserves mirrored element dimensions", () => {
+  const element = {
+    size: {
+      width: { magnitude: 100000, unit: "EMU" },
+      height: { magnitude: 200000, unit: "EMU" },
+    },
+    transform: {
+      scaleX: -1.5,
+      scaleY: -0.8,
+      translateX: 0,
+      translateY: 0,
+      unit: "EMU",
+    },
+  } as unknown as slides_v1.Schema$PageElement;
+
+  const box = extractBoxGeometry(element);
+
+  assert.ok(Math.abs(box.width_emu - 100000 * 1.5) < 1);
+  assert.ok(Math.abs(box.height_emu - 200000 * 0.8) < 1);
+});
+
+test("extractBoxGeometry combines scale and rotation without shrinking by cos(theta)", () => {
+  const element = {
+    size: {
+      width: { magnitude: 100000, unit: "EMU" },
+      height: { magnitude: 50000, unit: "EMU" },
+    },
+    transform: {
+      scaleX: Math.cos(Math.PI / 4) * 2,
+      scaleY: Math.cos(Math.PI / 4) * 3,
+      shearX: -Math.sin(Math.PI / 4) * 3,
+      shearY: Math.sin(Math.PI / 4) * 2,
+      translateX: 0,
+      translateY: 0,
+      unit: "EMU",
+    },
+  } as unknown as slides_v1.Schema$PageElement;
+
+  const box = extractBoxGeometry(element);
+
+  assert.ok(Math.abs(box.width_emu - 200000) < 1);
+  assert.ok(Math.abs(box.height_emu - 150000) < 1);
+});
+
+test("buildRichTextNode injects inheritedFontSizePt into runs lacking explicit fontSize", () => {
+  const textContent = {
+    textElements: [
+      {
+        startIndex: 0,
+        paragraphMarker: {
+          style: { alignment: "CENTER" },
+        },
+      },
+      {
+        startIndex: 0,
+        endIndex: 14,
+        textRun: {
+          content: "Agenda Title\n",
+          style: {
+            weightedFontFamily: { fontFamily: "Roboto" },
+            bold: true,
+          },
+        },
+      },
+    ],
+  } as slides_v1.Schema$TextContent;
+
+  const node = buildRichTextNode({
+    nodeId: "inherited-1",
+    objectId: "shape_placeholder",
+    slideIndex: 0,
+    elementType: "shape",
+    textContent,
+    box: {
+      width_emu: 240 * 12700,
+      height_emu: 36 * 12700,
+      translate_x_emu: 0,
+      translate_y_emu: 0,
+      rotation_deg: 0,
+    },
+    inheritedFontSizePt: 28,
+  });
+
+  assert.ok(node);
+  assert.equal(node.paragraphs[0]?.runs[0]?.text_style?.fontSize?.magnitude, 28);
+  assert.equal(node.paragraphs[0]?.runs[0]?.text_style?.fontSize?.unit, "PT");
+  assert.equal(node.visible_style?.max_font_size_pt, 28);
+  assert.equal(node.visible_style?.min_font_size_pt, 28);
+});
+
+test("buildRichTextNode does NOT override existing explicit fontSize with inheritedFontSizePt", () => {
+  const textContent = {
+    textElements: [
+      {
+        startIndex: 0,
+        paragraphMarker: {
+          style: { alignment: "START" },
+        },
+      },
+      {
+        startIndex: 0,
+        endIndex: 6,
+        textRun: {
+          content: "Hello\n",
+          style: {
+            fontSize: { magnitude: 18, unit: "PT" },
+            bold: true,
+          },
+        },
+      },
+    ],
+  } as slides_v1.Schema$TextContent;
+
+  const node = buildRichTextNode({
+    nodeId: "no-override-1",
+    objectId: "shape_explicit",
+    slideIndex: 0,
+    elementType: "shape",
+    textContent,
+    box: {
+      width_emu: 120 * 12700,
+      height_emu: 36 * 12700,
+      translate_x_emu: 0,
+      translate_y_emu: 0,
+      rotation_deg: 0,
+    },
+    inheritedFontSizePt: 28,
+  });
+
+  assert.ok(node);
+  assert.equal(node.paragraphs[0]?.runs[0]?.text_style?.fontSize?.magnitude, 18);
+});
+
+test("buildPlaceholderFontSizeLookup extracts font sizes from masters and layouts", () => {
+  const masters = [
+    {
+      pageElements: [
+        {
+          shape: {
+            placeholder: { type: "TITLE", index: 0 },
+            text: {
+              textElements: [
+                {
+                  textRun: {
+                    content: "Master Title\n",
+                    style: { fontSize: { magnitude: 36, unit: "PT" } },
+                  },
+                },
+              ],
+            },
+          },
+        },
+        {
+          shape: {
+            placeholder: { type: "BODY", index: 1 },
+            text: {
+              textElements: [
+                {
+                  textRun: {
+                    content: "Master Body\n",
+                    style: { fontSize: { magnitude: 18, unit: "PT" } },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ],
+    },
+  ] as unknown as slides_v1.Schema$Page[];
+
+  const layouts = [
+    {
+      pageElements: [
+        {
+          shape: {
+            placeholder: { type: "TITLE", index: 0 },
+            text: {
+              textElements: [
+                {
+                  textRun: {
+                    content: "Layout Title\n",
+                    style: { fontSize: { magnitude: 28, unit: "PT" } },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ],
+    },
+  ] as unknown as slides_v1.Schema$Page[];
+
+  const lookup = buildPlaceholderFontSizeLookup(masters, layouts);
+
+  assert.equal(lookup.get("TITLE|0"), 28);
+  assert.equal(lookup.get("BODY|1"), 18);
+});
+
+test("buildPlaceholderFontSizeLookup layout takes precedence over master", () => {
+  const masters = [
+    {
+      pageElements: [
+        {
+          shape: {
+            placeholder: { type: "SUBTITLE" },
+            text: {
+              textElements: [
+                {
+                  textRun: {
+                    content: "Master Sub\n",
+                    style: { fontSize: { magnitude: 24, unit: "PT" } },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ],
+    },
+  ] as unknown as slides_v1.Schema$Page[];
+
+  const layouts = [
+    {
+      pageElements: [
+        {
+          shape: {
+            placeholder: { type: "SUBTITLE" },
+            text: {
+              textElements: [
+                {
+                  textRun: {
+                    content: "Layout Sub\n",
+                    style: { fontSize: { magnitude: 20, unit: "PT" } },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ],
+    },
+  ] as unknown as slides_v1.Schema$Page[];
+
+  const lookup = buildPlaceholderFontSizeLookup(masters, layouts);
+
+  assert.equal(lookup.get("SUBTITLE|-1"), 20);
+});
+
+test("extractBoxGeometry applies parentGroupScale to child element dimensions", () => {
+  const childElement = {
+    size: {
+      width: { magnitude: 3000000, unit: "EMU" },
+      height: { magnitude: 3000000, unit: "EMU" },
+    },
+    transform: {
+      scaleX: 2.1998,
+      scaleY: 0.1458,
+      translateX: 842598,
+      translateY: 4112325,
+      unit: "EMU",
+    },
+  } as unknown as slides_v1.Schema$PageElement;
+
+  const boxWithoutGroup = extractBoxGeometry(childElement);
+  const boxWithGroup = extractBoxGeometry(childElement, 1.0515, 1.0);
+
+  assert.ok(Math.abs(boxWithoutGroup.width_emu - 3000000 * 2.1998) < 1);
+  assert.ok(Math.abs(boxWithGroup.width_emu - 3000000 * 2.1998 * 1.0515) < 1);
+  assert.ok(Math.abs(boxWithGroup.height_emu - 3000000 * 0.1458 * 1.0) < 1);
 });

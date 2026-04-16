@@ -217,3 +217,25 @@ test("regression baseline covers inherited-theme German title shrink with explic
     (textStyleRequest?.updateTextStyle?.style?.fontSize?.magnitude ?? 0) < 28
   );
 });
+
+test("regression baseline retains paragraph styles for spaced bullet samples", () => {
+  const sample = SLIDES_FIDELITY_REGRESSION_SAMPLES.find(
+    (candidate) => candidate.sample_id === "de-bullet-spaced"
+  );
+  assert.ok(sample);
+  assert.equal(sample.source_node.paragraphs[0]?.paragraph_style.lineSpacing, 126);
+  assert.equal(sample.source_node.paragraphs[0]?.paragraph_style.spaceAbove?.magnitude, 4);
+  assert.equal(sample.source_node.paragraphs[1]?.paragraph_style.spaceBelow?.magnitude, 4);
+});
+
+test("regression group baseline ignores scale mismatch when cluster sync is explicitly rejected", () => {
+  const scenario = SLIDES_FIDELITY_REGRESSION_GROUP_SCENARIOS.find(
+    (candidate) => candidate.scenario_id === "de-reject-invalid-cluster-sync"
+  );
+  assert.ok(scenario);
+
+  const baseline = evaluateRegressionGroupBaseline([scenario]);
+
+  assert.equal(baseline.cluster_sync_case_count, 0);
+  assert.equal(baseline.cluster_scale_mismatch_rate, 0);
+});

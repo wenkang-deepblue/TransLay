@@ -32,8 +32,15 @@ function createConfig(): WorkerConfig {
       url: "",
     },
     cloudTasks: {
+      queueName: "YOUR_CLOUD_TASKS_QUEUE",
+      location: "us-central1",
+      workerUrl: "https://worker.example.com",
       audience: "",
       invokerServiceAccount: "",
+    },
+    debug: {
+      captureLlmOutputs: false,
+      llmOutputRetentionHours: 72,
     },
   };
 }
@@ -85,6 +92,7 @@ test("buildLayoutSemanticContentParts includes a visual reference frame", () => 
 test("requestSlideLayoutSemanticsWithVertexGemini sends multimodal prompt and parses raw JSON response", async () => {
   __resetAccessTokenCacheForTests();
   const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+  const debugEvents: unknown[] = [];
   const originalFetch = globalThis.fetch;
 
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -161,6 +169,10 @@ test("requestSlideLayoutSemanticsWithVertexGemini sends multimodal prompt and pa
           },
         },
       ],
+      debugCapture: async (event) => {
+        debugEvents.push(event);
+      },
+      debugLabel: "layout_test",
     });
 
     assert.deepEqual(result, [
@@ -179,7 +191,34 @@ test("requestSlideLayoutSemanticsWithVertexGemini sends multimodal prompt and pa
     const parts = body.contents?.[0]?.parts as Array<Record<string, unknown>>;
     assert.equal(parts.length, 3);
     assert.match(String(parts[0]?.text ?? ""), /Infer best-effort layout semantics/);
+    assert.match(String(body.systemInstruction?.parts?.[0]?.text ?? ""), /VISUAL FIDELITY PRINCIPLE:/);
+    assert.match(
+      String(body.systemInstruction?.parts?.[0]?.text ?? ""),
+      /If a node is visually presented as a single-line high-salience text/
+    );
+    assert.match(
+      String(body.systemInstruction?.parts?.[0]?.text ?? ""),
+      /When uncertain between "prefer_single_line" and "allow_wrap"/
+    );
+    assert.match(
+      String(body.systemInstruction?.parts?.[0]?.text ?? ""),
+      /Agenda rows, summary \/ takeaways cards, next-step lists/
+    );
+    assert.match(
+      String(body.systemInstruction?.parts?.[0]?.text ?? ""),
+      /already visibly wrapped, stacked, or split\s+across lines/
+    );
+    assert.match(
+      String(parts[0]?.text ?? ""),
+      /Agenda items should usually share one cluster_id/
+    );
+    assert.match(
+      String(parts[0]?.text ?? ""),
+      /do not force "prefer_single_line" just because it is short/
+    );
     assert.match(String(parts[0]?.text ?? ""), /PROMPT SAFETY RULES:/);
+    assert.match(String(parts[0]?.text ?? ""), /Preserve source line treatment as a strong prior/);
+    assert.match(String(parts[0]?.text ?? ""), /Use "fixed_multiline" only for intentionally multiline source nodes/);
     assert.equal(parts[1]?.text, "Visual reference for slide 2");
     assert.deepEqual(parts[2]?.inlineData, {
       mimeType: "image/png",
@@ -187,6 +226,9 @@ test("requestSlideLayoutSemanticsWithVertexGemini sends multimodal prompt and pa
     });
     assert.equal(body.generationConfig?.responseSchema?.minItems, 0);
     assert.equal(body.generationConfig?.responseSchema?.maxItems, 1);
+    assert.equal(debugEvents.length, 1);
+    assert.match(JSON.stringify(debugEvents[0]), /layout_test/);
+    assert.match(JSON.stringify(debugEvents[0]), /"capture_status":"success"/);
   } finally {
     globalThis.fetch = originalFetch;
   }
