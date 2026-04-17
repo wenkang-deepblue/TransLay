@@ -17,6 +17,7 @@ import {
   type LlmDebugCaptureFn,
   type LlmDebugCaptureStage,
 } from "./llm-debug";
+import { getVertexCallBudget } from "./vertex-call-budget";
 
 const MAX_NODES_PER_BATCH = 50;
 const ACCESS_TOKEN_REFRESH_BUFFER_MS = 2 * 60 * 1000;
@@ -67,6 +68,39 @@ export async function fetchWithTimeout(
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function fetchVertexGenerateContentWithBudget(
+  endpoint: string,
+  init: RequestInit,
+  timeoutMs: number,
+  metadata: {
+    readonly opName: string;
+    readonly model?: string;
+  }
+): Promise<Response> {
+  const budget = getVertexCallBudget();
+  return budget.generateContent(async () => {
+    const res = await fetchWithTimeout(endpoint, init, timeoutMs);
+    if (isRetryableVertexStatus(res.status)) {
+      const rawErrorText = (await res.clone().text()).trim();
+      const errorSummary = summarizeVertexErrorText(rawErrorText);
+      const error = new Error(
+        errorSummary
+          ? `Vertex AI request failed with status ${res.status}: ${errorSummary}`
+          : `Vertex AI request failed with status ${res.status}`
+      );
+      Object.assign(error, {
+        status: res.status,
+        response: {
+          status: res.status,
+          headers: res.headers,
+        },
+      });
+      throw error;
+    }
+    return res;
+  }, metadata);
 }
 
 const TRANSLATION_SYSTEM_INSTRUCTION = `
@@ -247,14 +281,22 @@ export async function translateWithVertexGemini(
     },
   };
 
-  const res = await fetchWithTimeout(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
+  const res = await fetchVertexGenerateContentWithBudget(
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+    DEFAULT_VERTEX_REQUEST_TIMEOUT_MS,
+    {
+      opName: callLabel,
+      model,
+    }
+  );
 
   if (!res.ok) {
     const rawErrorText = (await res.text()).trim();
@@ -372,6 +414,10 @@ export function summarizeVertexErrorText(raw: string): string {
   } catch {
     return truncateErrorSummary(raw);
   }
+}
+
+function isRetryableVertexStatus(status: number): boolean {
+  return status === 408 || status === 429 || status === 503 || status >= 500;
 }
 
 export function truncateErrorSummary(message: string): string {

@@ -1,4 +1,5 @@
 import { getSlidesAuth, getSlidesClient } from "./auth";
+import { getSlidesCallBudget, type SlidesCallBudget } from "./call-budget";
 import type { SlideExtractionResult } from "./types";
 
 export interface SlideThumbnail {
@@ -8,6 +9,8 @@ export interface SlideThumbnail {
   /** @internal MUST NOT be persisted, logged, or cached — zero-content-persistence rule. */
   readonly base64_data: string;
 }
+
+export type SlideThumbnailCache = Map<string, Promise<SlideThumbnail>>;
 
 const DEFAULT_THUMBNAIL_MIME_TYPE = "PNG";
 const DEFAULT_THUMBNAIL_SIZE = "LARGE";
@@ -49,12 +52,20 @@ export async function fetchSlideThumbnails(
   slides: readonly SlideExtractionResult[],
   options: {
     readonly size?: ThumbnailSize;
+    readonly cache?: SlideThumbnailCache;
+    readonly budget?: SlidesCallBudget;
+    readonly jobId?: string;
   } = {}
 ): Promise<SlideThumbnail[]> {
   const size = options.size ?? DEFAULT_THUMBNAIL_SIZE;
   const thumbnails: SlideThumbnail[] = [];
   for (const slide of slides) {
-    thumbnails.push(await fetchSlideThumbnail(presentationId, slide, { size }));
+    thumbnails.push(await fetchSlideThumbnail(presentationId, slide, {
+      size,
+      cache: options.cache,
+      budget: options.budget,
+      jobId: options.jobId,
+    }));
   }
   return thumbnails;
 }
@@ -64,7 +75,36 @@ export async function fetchSlideThumbnail(
   slide: SlideExtractionResult,
   options: {
     readonly size?: ThumbnailSize;
+    readonly cache?: SlideThumbnailCache;
+    readonly budget?: SlidesCallBudget;
+    readonly jobId?: string;
   } = {}
+): Promise<SlideThumbnail> {
+  const cacheKey = `${presentationId}:${slide.slide_object_id}:${options.size ?? DEFAULT_THUMBNAIL_SIZE}`;
+  if (options.cache?.has(cacheKey)) {
+    return options.cache.get(cacheKey)!;
+  }
+
+  const pending = fetchSlideThumbnailUncached(presentationId, slide, options);
+  if (options.cache) {
+    options.cache.set(cacheKey, pending);
+  }
+  try {
+    return await pending;
+  } catch (error) {
+    options.cache?.delete(cacheKey);
+    throw error;
+  }
+}
+
+async function fetchSlideThumbnailUncached(
+  presentationId: string,
+  slide: SlideExtractionResult,
+  options: {
+    readonly size?: ThumbnailSize;
+    readonly budget?: SlidesCallBudget;
+    readonly jobId?: string;
+  }
 ): Promise<SlideThumbnail> {
   const { slides: slidesClient } = getSlidesClient();
   const auth = getSlidesAuth();
@@ -72,16 +112,24 @@ export async function fetchSlideThumbnail(
   const accessToken = await authClient.getAccessToken();
   const bearerToken =
     typeof accessToken === "string" ? accessToken : accessToken?.token ?? undefined;
-  const response = await (slidesClient.presentations.pages as unknown as {
-    getThumbnail(args: Record<string, unknown>): Promise<{
-      data?: { contentUrl?: string; mimeType?: string };
-    }>;
-  }).getThumbnail({
-    presentationId,
-    pageObjectId: slide.slide_object_id,
-    "thumbnailProperties.mimeType": DEFAULT_THUMBNAIL_MIME_TYPE,
-    "thumbnailProperties.thumbnailSize": options.size ?? DEFAULT_THUMBNAIL_SIZE,
-  });
+  const budget = options.budget ?? getSlidesCallBudget();
+  const response = await budget.expensiveRead(
+    () =>
+      (slidesClient.presentations.pages as unknown as {
+        getThumbnail(args: Record<string, unknown>): Promise<{
+          data?: { contentUrl?: string; mimeType?: string };
+        }>;
+      }).getThumbnail({
+        presentationId,
+        pageObjectId: slide.slide_object_id,
+        "thumbnailProperties.mimeType": DEFAULT_THUMBNAIL_MIME_TYPE,
+        "thumbnailProperties.thumbnailSize": options.size ?? DEFAULT_THUMBNAIL_SIZE,
+      }),
+    {
+      jobId: options.jobId,
+      opName: "slides.presentations.pages.getThumbnail",
+    }
+  );
 
   const contentUrl = response.data?.contentUrl;
   const mimeType = normalizeThumbnailMimeType(response.data?.mimeType);

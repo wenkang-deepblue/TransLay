@@ -172,6 +172,7 @@ export interface PresentationExtractionResult {
   readonly total_slides: number;
   readonly extracted_slides: SlideExtractionResult[];
   readonly all_nodes: SlideTextNode[];
+  readonly presentation?: slides_v1.Schema$Presentation;
   /** Plain text summary of the entire presentation (all slides), for translation context. */
   readonly full_context_text: string;
 }

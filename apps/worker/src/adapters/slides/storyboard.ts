@@ -1,9 +1,12 @@
+import type { slides_v1 } from "googleapis";
 import { getSlidesClient } from "./auth";
+import { getSlidesCallBudget, type SlidesCallBudget } from "./call-budget";
 import type { SlideExtractionResult } from "./types";
 import {
   fetchSlideThumbnail,
   fetchSlideThumbnails,
   type SlideThumbnail,
+  type SlideThumbnailCache,
   type ThumbnailSize,
 } from "./thumbnails";
 
@@ -24,6 +27,9 @@ export async function buildDeckStoryboard(
   slides: readonly SlideExtractionResult[],
   options: {
     readonly size?: ThumbnailSize;
+    readonly cache?: SlideThumbnailCache;
+    readonly budget?: SlidesCallBudget;
+    readonly jobId?: string;
   } = {}
 ): Promise<DeckStoryboard> {
   const thumbnails = await fetchSlideThumbnails(presentationId, slides, options);
@@ -36,11 +42,12 @@ export async function buildPresentationStoryboard(
   presentationId: string,
   options: {
     readonly size?: ThumbnailSize;
+    readonly presentation?: slides_v1.Schema$Presentation;
+    readonly budget?: SlidesCallBudget;
+    readonly jobId?: string;
   } = {}
 ): Promise<DeckStoryboard> {
-  const { slides } = getSlidesClient();
-  const presentation = await slides.presentations.get({ presentationId });
-  const allSlides = presentation.data.slides ?? [];
+  const allSlides = await loadSlidesForStoryboard(presentationId, options);
   const slideRefs: SlideExtractionResult[] = allSlides.map((slide, index) => ({
     slide_index: index,
     slide_object_id: slide.objectId ?? `slide_${index}`,
@@ -54,6 +61,9 @@ export async function buildSingleSlideStoryboardFrame(
   slide: SlideExtractionResult,
   options: {
     readonly size?: ThumbnailSize;
+    readonly cache?: SlideThumbnailCache;
+    readonly budget?: SlidesCallBudget;
+    readonly jobId?: string;
   } = {}
 ): Promise<StoryboardFrame> {
   return projectThumbnailToFrame(await fetchSlideThumbnail(presentationId, slide, options));
@@ -106,4 +116,28 @@ function projectThumbnailToFrame(thumbnail: SlideThumbnail): StoryboardFrame {
     mime_type: thumbnail.mime_type,
     base64_data: thumbnail.base64_data,
   };
+}
+
+async function loadSlidesForStoryboard(
+  presentationId: string,
+  options: {
+    readonly presentation?: slides_v1.Schema$Presentation;
+    readonly budget?: SlidesCallBudget;
+    readonly jobId?: string;
+  }
+): Promise<readonly slides_v1.Schema$Page[]> {
+  if (options.presentation?.slides) {
+    return options.presentation.slides;
+  }
+
+  const { slides } = getSlidesClient();
+  const budget = options.budget ?? getSlidesCallBudget();
+  const presentation = await budget.expensiveRead(
+    () => slides.presentations.get({ presentationId }),
+    {
+      jobId: options.jobId,
+      opName: "slides.presentations.get",
+    }
+  );
+  return presentation.data.slides ?? [];
 }

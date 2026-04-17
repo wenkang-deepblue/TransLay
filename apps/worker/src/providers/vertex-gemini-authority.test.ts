@@ -7,6 +7,10 @@ import type {
 } from "@translay/shared-contracts";
 import { __resetAccessTokenCacheForTests } from "./vertex-gemini";
 import {
+  __resetVertexCallBudgetForTests,
+  __setVertexBudgetSleepForTests,
+} from "./vertex-call-budget";
+import {
   fillMissingAuthorityWithVertexGemini,
   materializeTranslatedNodesWithVertexGemini,
   translateDeckAuthorityWithVertexGemini,
@@ -72,6 +76,8 @@ function createMaterializationNodeSummary(
 
 test("translateDeckAuthorityWithVertexGemini sends deck overview and local window frames and parses authority nodes", async () => {
   __resetAccessTokenCacheForTests();
+  __resetVertexCallBudgetForTests();
+  __setVertexBudgetSleepForTests(async () => {});
   const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
   const debugEvents: Array<{ raw_output_text?: string }> = [];
   const lifecycleNodeBatches: string[][] = [];
@@ -213,6 +219,8 @@ test("translateDeckAuthorityWithVertexGemini sends deck overview and local windo
 
 test("fillMissingAuthorityWithVertexGemini includes deck-wide authority context for terminology alignment", async () => {
   __resetAccessTokenCacheForTests();
+  __resetVertexCallBudgetForTests();
+  __setVertexBudgetSleepForTests(async () => {});
   const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
   const originalFetch = globalThis.fetch;
 
@@ -301,6 +309,191 @@ test("fillMissingAuthorityWithVertexGemini includes deck-wide authority context 
     assert.match(prompt, /PROMPT SAFETY RULES:/);
     assert.match(prompt, /"slide_index": 1/);
     assert.match(prompt, /"slide_index": 5/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("translateDeckAuthorityWithVertexGemini splits a failed mixed-slide chunk into smaller retries", async () => {
+  __resetAccessTokenCacheForTests();
+  __resetVertexCallBudgetForTests();
+  __setVertexBudgetSleepForTests(async () => {});
+  const originalMaxAttempts = process.env.VERTEX_CALL_BUDGET_MAX_ATTEMPTS;
+  process.env.VERTEX_CALL_BUDGET_MAX_ATTEMPTS = "1";
+  const originalFetch = globalThis.fetch;
+  let modelAttempts = 0;
+
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("metadata.google.internal")) {
+      return new Response(JSON.stringify({ access_token: "test-token" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    modelAttempts += 1;
+    const body = JSON.parse(String(init?.body ?? "{}"));
+    const promptText = String(body.contents?.[0]?.parts?.[0]?.text ?? "");
+    const sourceSection = promptText.slice(promptText.lastIndexOf("SOURCE NODE INDEX"));
+    const includesFirstSlide = sourceSection.includes('"node_id": "n1"');
+    const includesSecondSlide = sourceSection.includes('"node_id": "n2"');
+
+    if (includesFirstSlide && includesSecondSlide) {
+      return new Response(JSON.stringify({ error: { message: "layout too large" } }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify(
+                    includesFirstSlide
+                      ? [
+                          {
+                            node_id: "n1",
+                            slide_index: 0,
+                            translated_full_text: "第一页",
+                          },
+                        ]
+                      : [
+                          {
+                            node_id: "n2",
+                            slide_index: 1,
+                            translated_full_text: "第二页",
+                          },
+                        ]
+                  ),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const result = await translateDeckAuthorityWithVertexGemini(createConfig(), {
+      model: "gemini-3.1-flash-lite-preview",
+      source_language: "English",
+      target_language: "Chinese",
+      deck_title: "Q3 Product Presentation",
+      deck_plaintext_context: "[Slide 1] Intro\n[Slide 2] Metrics",
+      glossary_candidates: [],
+      nodes: [
+        {
+          node_id: "n1",
+          slide_index: 0,
+          object_id: "shape_1",
+          element_type: "shape",
+          archetype: "plain_text",
+          full_text: "Intro",
+        },
+        {
+          node_id: "n2",
+          slide_index: 1,
+          object_id: "shape_2",
+          element_type: "shape",
+          archetype: "plain_text",
+          full_text: "Metrics",
+        },
+      ],
+      visual_context: {
+        deck_overview_frames: [],
+      },
+    });
+
+    assert.deepEqual(
+      result.nodes.map((node) => node.node_id).sort(),
+      ["n1", "n2"]
+    );
+    assert.equal(modelAttempts, 3);
+  } finally {
+    if (originalMaxAttempts === undefined) {
+      delete process.env.VERTEX_CALL_BUDGET_MAX_ATTEMPTS;
+    } else {
+      process.env.VERTEX_CALL_BUDGET_MAX_ATTEMPTS = originalMaxAttempts;
+    }
+    __resetVertexCallBudgetForTests();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("translateDeckAuthorityWithVertexGemini surfaces quota exhaustion instead of downgrading to partial success", async () => {
+  __resetAccessTokenCacheForTests();
+  __resetVertexCallBudgetForTests();
+  __setVertexBudgetSleepForTests(async () => {});
+  const originalFetch = globalThis.fetch;
+  let modelAttempts = 0;
+
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("metadata.google.internal")) {
+      return new Response(JSON.stringify({ access_token: "test-token" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    modelAttempts += 1;
+    return new Response(JSON.stringify({ error: { message: "resource exhausted" } }), {
+      status: 429,
+      headers: {
+        "Content-Type": "application/json",
+        "Retry-After": "1",
+      },
+    });
+  }) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () =>
+        translateDeckAuthorityWithVertexGemini(createConfig(), {
+          model: "gemini-3.1-flash-lite-preview",
+          source_language: "English",
+          target_language: "Chinese",
+          deck_title: "Q3 Product Presentation",
+          deck_plaintext_context: "[Slide 1] Intro\n[Slide 2] Metrics",
+          glossary_candidates: [],
+          nodes: [
+            {
+              node_id: "n1",
+              slide_index: 0,
+              object_id: "shape_1",
+              element_type: "shape",
+              archetype: "plain_text",
+              full_text: "Intro",
+            },
+            {
+              node_id: "n2",
+              slide_index: 1,
+              object_id: "shape_2",
+              element_type: "shape",
+              archetype: "plain_text",
+              full_text: "Metrics",
+            },
+          ],
+          visual_context: {
+            deck_overview_frames: [],
+          },
+        }),
+      (error: unknown) => {
+        assert.equal((error as Error & { code?: unknown }).code, "VERTEX_QUOTA_EXHAUSTED");
+        return true;
+      }
+    );
+    assert.equal(modelAttempts, 6);
   } finally {
     globalThis.fetch = originalFetch;
   }

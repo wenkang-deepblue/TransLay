@@ -4,11 +4,15 @@ import {
   __applyWriteResultToSlideResultsForTests,
   __buildSlideBillingSettlementForTests,
   __computeProviderRetryDelayMsForTests,
+  __hasPartialDeliveryForTests,
   __hasSlideExecutionWarningsForTests,
+  __isRetryableProviderErrorForTests,
   __orderTranslatedNodesForWriteForTests,
   __selectSlidesReadyForMaterializationForTests,
   __selectSlidesReadyForWriteForTests,
+  __shouldFinalizeAsPartialSuccessForTests,
   __summarizeSlideExecutionForTests,
+  __toSafePipelineMessageForTests,
 } from "./job-pipeline";
 import {
   initializeJobSlideResults,
@@ -227,4 +231,76 @@ test("provider retry delays use exponential backoff with jitter", () => {
   assert.equal(__computeProviderRetryDelayMsForTests(2, 0.5), 1000);
   assert.equal(__computeProviderRetryDelayMsForTests(3, 0.5), 2000);
   assert.equal(__computeProviderRetryDelayMsForTests(4, 1), 2600);
+});
+
+test("provider retry loop does not retry Vertex quota exhausted errors", () => {
+  const error = Object.assign(new Error("vertex quota exhausted"), {
+    code: "VERTEX_QUOTA_EXHAUSTED",
+    status: 429,
+  });
+
+  assert.equal(__isRetryableProviderErrorForTests(error), false);
+});
+
+test("safe pipeline message surfaces quota exhausted codes from non-pipeline errors", () => {
+  const slidesQuotaError = Object.assign(new Error("slides quota exhausted"), {
+    code: "SLIDES_QUOTA_EXHAUSTED",
+  });
+  const vertexQuotaError = Object.assign(new Error("vertex quota exhausted"), {
+    code: "VERTEX_QUOTA_EXHAUSTED",
+  });
+
+  assert.equal(
+    __toSafePipelineMessageForTests(slidesQuotaError, "fallback"),
+    "Google Slides™ API quota was temporarily exhausted. Please retry shortly."
+  );
+  assert.equal(
+    __toSafePipelineMessageForTests(vertexQuotaError, "fallback"),
+    "Vertex AI quota was temporarily exhausted. Please retry shortly."
+  );
+});
+
+test("partial delivery detects notes-only and body-partial outputs", () => {
+  const slideResults = initializeJobSlideResults([1, 2]);
+  markSlideCommitted(slideResults, 1);
+  slideResults.set(1, {
+    ...slideResults.get(1)!,
+    output_visible: true,
+    notes_present: true,
+    content_output_visible: false,
+    notes_output_visible: true,
+    body_failed_node_count: 0,
+  });
+
+  markSlideCommitted(slideResults, 2);
+  slideResults.set(2, {
+    ...slideResults.get(2)!,
+    output_visible: true,
+    notes_present: false,
+    content_output_visible: true,
+    notes_output_visible: false,
+    body_failed_node_count: 1,
+  });
+
+  assert.equal(__hasPartialDeliveryForTests(slideResults), true);
+});
+
+test("quota exhausted finalizes as partial success only after visible delivery exists", () => {
+  const slideResults = initializeJobSlideResults([1, 2]);
+  markSlideCommitted(slideResults, 1);
+  slideResults.set(1, {
+    ...slideResults.get(1)!,
+    output_visible: true,
+    content_output_visible: true,
+    notes_output_visible: false,
+  });
+
+  assert.equal(
+    __shouldFinalizeAsPartialSuccessForTests("VERTEX_QUOTA_EXHAUSTED", slideResults),
+    true
+  );
+  assert.equal(
+    __shouldFinalizeAsPartialSuccessForTests("SLIDES_QUOTA_EXHAUSTED", initializeJobSlideResults([1])),
+    false
+  );
 });

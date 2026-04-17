@@ -98,6 +98,22 @@ type TerminalSlideSummary = {
   refunded_slide_indices: number[];
 };
 
+function hasPartialSuccess(
+  summary: TerminalSlideSummary,
+  warnings: readonly JobWarning[]
+): boolean {
+  const excludedSlides = new Set(listExcludedSlides(warnings));
+  const deliveryFailureSlides = summary.skipped_slide_indices.filter(
+    (slideNumber) => !excludedSlides.has(slideNumber)
+  );
+  return (
+    summary.content_only_slide_indices.length > 0 ||
+    summary.notes_only_slide_indices.length > 0 ||
+    summary.body_partial_slide_indices.length > 0 ||
+    deliveryFailureSlides.length > 0
+  );
+}
+
 function normalizeWarnings(warnings: JobRow["warnings"] | null | undefined): JobRow["warnings"] {
   return Array.isArray(warnings) ? warnings : [];
 }
@@ -514,12 +530,16 @@ function buildJobStatusResponse(
       slideResults
     );
     const slideSummary = summarizeTerminalSlideResults(slideResults);
+    const completionCode = hasPartialSuccess(slideSummary, normalizedWarnings)
+      ? "PARTIAL_SUCCESS"
+      : undefined;
     const response: JobCompletedResponse = {
       job_id: job.id,
-      status: job.status,
+      status: completionCode ? "completed_with_warnings" : job.status,
       progress_percent: 100,
       output_document_url: job.output_document_url ?? "",
       message: buildCompletedMessage(normalizedWarnings, slideSummary, slideResults),
+      ...(completionCode ? { completion_code: completionCode } : {}),
       fully_delivered_body_slide_indices: slideSummary.fully_delivered_body_slide_indices,
       content_only_slide_indices: slideSummary.content_only_slide_indices,
       notes_only_slide_indices: slideSummary.notes_only_slide_indices,

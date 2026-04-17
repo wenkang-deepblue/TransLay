@@ -966,7 +966,9 @@
             setTranslating(false);
             showProgress(
               100,
-              resp.status === 'completed_with_warnings' ? 'Completed with warnings' : 'Completed',
+              resp.completion_code === 'PARTIAL_SUCCESS'
+                ? 'Partial success'
+                : (resp.status === 'completed_with_warnings' ? 'Completed with warnings' : 'Completed'),
               ''
             );
             showResult(

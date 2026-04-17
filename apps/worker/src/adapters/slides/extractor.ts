@@ -6,6 +6,7 @@ import type {
   PresentationExtractionResult,
 } from "./types";
 import { getSlidesClient } from "./auth";
+import { getSlidesCallBudget, type SlidesCallBudget } from "./call-budget";
 import {
   buildRichTextNode,
   extractBoxGeometry,
@@ -116,12 +117,14 @@ function resolveInheritedFontSize(
  */
 export async function extractSlides(
   presentationId: string,
-  pageIndices: number[] | null
+  pageIndices: number[] | null,
+  options: {
+    readonly presentation?: slides_v1.Schema$Presentation;
+    readonly budget?: SlidesCallBudget;
+    readonly jobId?: string;
+  } = {}
 ): Promise<PresentationExtractionResult> {
-  const { slides } = getSlidesClient();
-
-  const pres = await slides.presentations.get({ presentationId });
-  const presData = pres.data;
+  const presData = options.presentation ?? (await loadPresentation(presentationId, options)).data;
   const allSlides = presData.slides ?? [];
   const title = presData.title ?? "Untitled";
   const sourceSlides = allSlides.filter((slide) => !isGeneratedTranslationSlide(slide.objectId));
@@ -192,8 +195,27 @@ export async function extractSlides(
     total_slides: sourceSlides.length,
     extracted_slides: extracted,
     all_nodes: allNodes,
+    presentation: presData,
     full_context_text: fullContextText,
   };
+}
+
+async function loadPresentation(
+  presentationId: string,
+  options: {
+    readonly budget?: SlidesCallBudget;
+    readonly jobId?: string;
+  }
+): Promise<{ data: slides_v1.Schema$Presentation }> {
+  const { slides } = getSlidesClient();
+  const budget = options.budget ?? getSlidesCallBudget();
+  return budget.expensiveRead(
+    () => slides.presentations.get({ presentationId }),
+    {
+      jobId: options.jobId,
+      opName: "slides.presentations.get",
+    }
+  );
 }
 
 function isGeneratedTranslationSlide(objectId: string | null | undefined): boolean {

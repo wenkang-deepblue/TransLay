@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import type { WorkerConfig } from "@translay/shared-config";
 import { __resetAccessTokenCacheForTests } from "./vertex-gemini";
 import {
+  __resetVertexCallBudgetForTests,
+  __setVertexBudgetSleepForTests,
+} from "./vertex-call-budget";
+import {
   buildLayoutSemanticContentParts,
   requestSlideLayoutSemanticsWithVertexGemini,
 } from "./vertex-gemini-layout";
@@ -92,6 +96,8 @@ test("buildLayoutSemanticContentParts includes a visual reference frame", () => 
 
 test("requestSlideLayoutSemanticsWithVertexGemini sends multimodal prompt and parses raw JSON response", async () => {
   __resetAccessTokenCacheForTests();
+  __resetVertexCallBudgetForTests();
+  __setVertexBudgetSleepForTests(async () => {});
   const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
   const debugEvents: Array<{ raw_output_text?: string }> = [];
   const originalFetch = globalThis.fetch;

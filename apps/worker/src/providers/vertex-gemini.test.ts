@@ -6,6 +6,10 @@ import {
   __resetAccessTokenCacheForTests,
   translateWithVertexGemini,
 } from "./vertex-gemini";
+import {
+  __resetVertexCallBudgetForTests,
+  __setVertexBudgetSleepForTests,
+} from "./vertex-call-budget";
 
 function createConfig(): WorkerConfig {
   return {
@@ -48,6 +52,8 @@ function createConfig(): WorkerConfig {
 
 test("translateWithVertexGemini sends system instructions and a constrained JSON schema", async () => {
   __resetAccessTokenCacheForTests();
+  __resetVertexCallBudgetForTests();
+  __setVertexBudgetSleepForTests(async () => {});
   const request: TranslationRequest = {
     provider: "vertex_gemini",
     model: "gemini-3.1-flash-lite-preview",
@@ -230,8 +236,122 @@ test("translateWithVertexGemini sends system instructions and a constrained JSON
   }
 });
 
+test("translateWithVertexGemini retries retryable Vertex responses before succeeding", async () => {
+  __resetAccessTokenCacheForTests();
+  __resetVertexCallBudgetForTests();
+  __setVertexBudgetSleepForTests(async () => {});
+  const request: TranslationRequest = {
+    provider: "vertex_gemini",
+    model: "gemini-3.1-flash-lite-preview",
+    source_language: "English",
+    target_language: "Chinese",
+    context_pack: {
+      deck_title: "Q3 Product Presentation",
+      source_language: "English",
+      target_language: "Chinese",
+      deck_plaintext_context: "[Slide 1] Product presentation",
+      glossary_candidates: [],
+      nodes: [
+        {
+          node_id: "n1",
+          archetype: "plain_text",
+          slide_index: 1,
+          full_text: "Presentation overview",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "Presentation overview",
+              style_roles: ["default"],
+              segments: [
+                {
+                  segment_id: "r0",
+                  text: "Presentation overview",
+                  style_role: "default",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    nodes: [{ node_id: "n1", text: "Presentation overview" }],
+  };
+
+  const originalFetch = globalThis.fetch;
+  let modelAttempts = 0;
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("metadata.google.internal")) {
+      return new Response(JSON.stringify({ access_token: "test-token" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    modelAttempts += 1;
+    if (modelAttempts === 1) {
+      return new Response(JSON.stringify({ error: { message: "rate limited" } }), {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": "1",
+        },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify([
+                    {
+                      node_id: "n1",
+                      translated_full_text: "演示概览",
+                      paragraphs: [
+                        {
+                          paragraph_id: "p0",
+                          translated_text: "演示概览",
+                          bullet_behavior: "none",
+                        },
+                      ],
+                      segments: [
+                        {
+                          segment_id: "r0",
+                          translated_text: "演示概览",
+                          style_role: "default",
+                        },
+                      ],
+                    },
+                  ]),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const result = await translateWithVertexGemini(createConfig(), request);
+    assert.equal(result.nodes[0]?.translated_full_text, "演示概览");
+    assert.equal(modelAttempts, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("translateWithVertexGemini rejects empty bullet paragraphs in structured output", async () => {
   __resetAccessTokenCacheForTests();
+  __resetVertexCallBudgetForTests();
+  __setVertexBudgetSleepForTests(async () => {});
   const request: TranslationRequest = {
     provider: "vertex_gemini",
     model: "gemini-3.1-flash-lite-preview",

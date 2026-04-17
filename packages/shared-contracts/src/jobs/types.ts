@@ -188,6 +188,7 @@ export interface JobProgressResponse {
 export interface JobCompletedResponse {
   readonly job_id: string;
   readonly status: "completed" | "completed_with_warnings";
+  readonly completion_code?: "PARTIAL_SUCCESS";
   readonly progress_percent: 100;
   readonly output_document_url: string;
   readonly message: string;

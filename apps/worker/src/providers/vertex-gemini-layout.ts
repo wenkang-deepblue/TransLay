@@ -7,7 +7,7 @@ import {
 } from "../adapters/slides/types";
 import {
   buildVertexGenerateContentEndpoint,
-  fetchWithTimeout,
+  fetchVertexGenerateContentWithBudget,
   getAccessToken,
   summarizeVertexErrorText,
   VERTEX_MAX_OUTPUT_TOKENS,
@@ -221,14 +221,22 @@ export async function requestSlideLayoutSemanticsWithVertexGemini(
     },
   };
 
-  const res = await fetchWithTimeout(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
+  const res = await fetchVertexGenerateContentWithBudget(
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  }, VERTEX_LAYOUT_TIMEOUT_MS);
+    VERTEX_LAYOUT_TIMEOUT_MS,
+    {
+      opName: request.debugLabel ?? `layout_semantics:slide_${request.slide_index + 1}`,
+      model: request.model,
+    }
+  );
 
   if (!res.ok) {
     const rawErrorText = (await res.text()).trim();

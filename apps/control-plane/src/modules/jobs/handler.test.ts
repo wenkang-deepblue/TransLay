@@ -415,7 +415,8 @@ test("job handler exposes notes-only and partial not billed slide indices", () =
 
   assert.deepEqual(response, {
     job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
-    status: "completed",
+    status: "completed_with_warnings",
+    completion_code: "PARTIAL_SUCCESS",
     progress_percent: 100,
     output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
     message: "Translation completed with warnings. Notes-only fallback: slide 11. Partially translated slides: 12, not billed.",
@@ -455,6 +456,7 @@ test("job handler tolerates null warnings on historical rows without crashing", 
   assert.deepEqual(response, {
     job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
     status: "completed_with_warnings",
+    completion_code: "PARTIAL_SUCCESS",
     progress_percent: 100,
     output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
     message: "Translation completed with warnings. Slide 3 could not be delivered due to translation or write-back issues and was refunded.",

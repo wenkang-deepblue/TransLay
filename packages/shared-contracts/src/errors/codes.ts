@@ -29,11 +29,16 @@ export const ERROR_CODES = {
   INTERNAL_ERROR: { status: 500, message: "Internal server error" },
   LLM_PROVIDER_ERROR: { status: 500, message: "Translation provider error" },
   GOOGLE_API_RATE_LIMIT: { status: 500, message: "Google Workspace™ API rate limit" },
+  SLIDES_QUOTA_EXHAUSTED: { status: 500, message: "Google Slides™ API quota exhausted" },
+  VERTEX_QUOTA_EXHAUSTED: { status: 500, message: "Vertex AI quota exhausted" },
   JOB_INTERNAL_ERROR: { status: 500, message: "Internal job processing error" },
 
   // 502
   HOST_ADAPTER_ERROR: { status: 502, message: "Document extraction or write-back error" },
   WEBHOOK_SIGNATURE_INVALID: { status: 502, message: "Webhook signature verification failed" },
+
+  // 200 semantic non-error status
+  PARTIAL_SUCCESS: { status: 200, message: "Job completed with partial success" },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

@@ -7,6 +7,7 @@ import {
 } from "@translay/shared-contracts";
 import type { SlideTextNode, SlideExtractionResult } from "./types";
 import { getSlidesClient } from "./auth";
+import { getSlidesCallBudget } from "./call-budget";
 import {
   type FitPassResult,
   applyFitToParagraphStyle,
@@ -166,6 +167,7 @@ export async function writeBackAppend(
   onProgress?: (result: WriteBackResult) => Promise<void>
 ): Promise<WriteBackResult> {
   const { slides } = getSlidesClient();
+  const budget = getSlidesCallBudget();
   const translationMap = buildTranslationMap(translatedNodes);
   const outputUrl = `https://docs.google.com/presentation/d/${presentationId}/edit`;
   let writeResult = createEmptyWriteBackResult(outputUrl);
@@ -174,7 +176,12 @@ export async function writeBackAppend(
     return writeResult;
   }
 
-  const pres = await slides.presentations.get({ presentationId });
+  const pres = await budget.expensiveRead(
+    () => slides.presentations.get({ presentationId }),
+    {
+      opName: "slides.presentations.get",
+    }
+  );
   const allSlides = pres.data.slides ?? [];
   const slideByObjectId = new Map(
     allSlides
@@ -353,6 +360,7 @@ export async function writeBackNewFile(
   onProgress?: (result: WriteBackResult) => Promise<void>
 ): Promise<WriteBackResult> {
   const { slides } = getSlidesClient();
+  const budget = getSlidesCallBudget();
   const translationMap = buildTranslationMap(translatedNodes);
   const outputUrl = `https://docs.google.com/presentation/d/${targetPresentationId}/edit`;
   let writeResult = createEmptyWriteBackResult(outputUrl);
@@ -360,9 +368,15 @@ export async function writeBackNewFile(
     return writeResult;
   }
 
-  const newPres = await slides.presentations.get({
-    presentationId: targetPresentationId,
-  });
+  const newPres = await budget.expensiveRead(
+    () =>
+      slides.presentations.get({
+        presentationId: targetPresentationId,
+      }),
+    {
+      opName: "slides.presentations.get",
+    }
+  );
   const newSlides = newPres.data.slides ?? [];
   let breakerState: WriteCircuitBreakerState = {
     category: null,
@@ -480,6 +494,7 @@ export async function writeBackExistingSlides(
   onProgress?: (result: WriteBackResult) => Promise<void>
 ): Promise<WriteBackResult> {
   const { slides } = getSlidesClient();
+  const budget = getSlidesCallBudget();
   const translationMap = buildTranslationMap(translatedNodes);
   const outputUrl = `https://docs.google.com/presentation/d/${presentationId}/edit`;
   let writeResult = createEmptyWriteBackResult(outputUrl);
@@ -489,7 +504,12 @@ export async function writeBackExistingSlides(
   }
 
   const targetBySlideIndex = new Map(existingTargets.map((target) => [target.slide_index, target]));
-  const pres = await slides.presentations.get({ presentationId });
+  const pres = await budget.expensiveRead(
+    () => slides.presentations.get({ presentationId }),
+    {
+      opName: "slides.presentations.get",
+    }
+  );
   const allSlides = pres.data.slides ?? [];
   const slideByObjectId = new Map(
     allSlides
@@ -846,14 +866,17 @@ async function executeBatchUpdateWithRetry(
     return context;
   }
 
+  const budget = getSlidesCallBudget();
   let nextContext = context;
   for (let attempt = 0; attempt <= RATE_LIMIT_RETRY_BASE_DELAYS_MS.length; attempt += 1) {
     nextContext = await maybeApplyGlobalSlowModeDelay(nextContext);
     try {
-      await slides.presentations.batchUpdate({
-        presentationId,
-        requestBody: { requests: [...requests] },
-      });
+      await budget.batchUpdateOnce(() =>
+        slides.presentations.batchUpdate({
+          presentationId,
+          requestBody: { requests: [...requests] },
+        })
+      );
       return noteWriteSuccess(nextContext);
     } catch (error) {
       const classifiedError = classifyWriteError(error);

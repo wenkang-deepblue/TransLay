@@ -272,7 +272,7 @@ async function runExtractStage(
     }
 
     const pageIndices = resolvePageIndices(job);
-    const extraction = await extractSlides(job.source_doc_id, pageIndices);
+    const extraction = await extractSlides(job.source_doc_id, pageIndices, { jobId });
     if (extraction.all_nodes.length === 0) {
       throw new PipelineError(
         "HOST_ADAPTER_ERROR",
@@ -394,7 +394,8 @@ async function runLayoutStage(
     const pageIndices = asNumberArray(job.stage_payload.selected_slide_indices);
     const extraction = await extractSlides(
       job.source_doc_id,
-      pageIndices.length > 0 ? pageIndices : resolvePageIndices(job)
+      pageIndices.length > 0 ? pageIndices : resolvePageIndices(job),
+      { jobId }
     );
     const notesPresentSlideIndices = asNumberArray(job.stage_payload.notes_present_slide_indices);
     slideResults = initializeJobSlideResults(
@@ -410,6 +411,7 @@ async function runLayoutStage(
     const completedSlideIndices = new Set(asNumberArray(job.stage_cursor.completed_slide_indices));
     const pendingSlides = safeSlides.filter((slide) => !completedSlideIndices.has(slide.slide_index));
     const route = selectRoute(config, job.user_id as string);
+    const thumbnailCache = new Map();
 
     for (let offset = 0; offset < pendingSlides.length; offset += 3) {
       const batch = pendingSlides.slice(offset, offset + 3);
@@ -417,6 +419,8 @@ async function runLayoutStage(
         batch.map(async (slide) => {
           const thumbnail = await buildSingleSlideStoryboardFrame(job.source_doc_id, slide, {
             size: "LARGE",
+            cache: thumbnailCache,
+            jobId,
           });
           const [input] = buildLayoutSemanticInputs(slide ? [slide] : [], {
             frames: [thumbnail],
@@ -660,6 +664,10 @@ async function runAuthorityStage(
   }
 
   const route = selectRoute(config, job.user_id as string);
+  const targetLangCode =
+    job.target_language_code ??
+    matchPresetLanguage(job.target_language_input) ??
+    job.target_language_input;
   console.log(`Job ${job_id} route selected: ${route.provider}/${route.model}`);
   const llmDebugCapture = createLlmDebugCapture(pool, config, job_id);
   if (config.debug.captureLlmOutputs) {
@@ -718,7 +726,7 @@ async function runAuthorityStage(
     }
     // range_mode === "entire" → pageIndices stays null (all slides)
 
-    const extraction = await extractSlides(job.source_doc_id, pageIndices);
+    const extraction = await extractSlides(job.source_doc_id, pageIndices, { jobId: job_id });
     console.log(
       `Job ${job_id} extraction completed: ${extraction.extracted_slides.length} slides, ${extraction.all_nodes.length} nodes`
     );
@@ -804,13 +812,9 @@ async function runAuthorityStage(
     });
 
     // Resolve target language code
-    const targetLangCode =
-      job.target_language_code ??
-      matchPresetLanguage(job.target_language_input) ??
-      job.target_language_input;
-
     const deckPlaintextContext = extractionForTranslation.full_context_text;
     const providerRequestIds: string[] = [];
+    const thumbnailCache = new Map();
     await heartbeatJobStage(pool, job_id, "authority", job.stage_attempt, getStageLeaseSeconds("authority"));
     const persistedLayoutHints = await listJobLayoutSemanticHints(pool, job_id);
     const slidesWithLayoutHints = persistedLayoutHints.length > 0
@@ -823,6 +827,8 @@ async function runAuthorityStage(
           (slide) =>
             buildSingleSlideStoryboardFrame(job.source_doc_id, slide, {
               size: "LARGE",
+              cache: thumbnailCache,
+              jobId: job_id,
             }),
           async (input) =>
             runProviderCallWithRetry(
@@ -859,7 +865,11 @@ async function runAuthorityStage(
         const deckOverviewStoryboard = await buildDeckStoryboard(
           job.source_doc_id,
           extractionWithLayoutHints.extracted_slides,
-          { size: "MEDIUM" }
+          {
+            size: "MEDIUM",
+            cache: thumbnailCache,
+            jobId: job_id,
+          }
         );
         authorityResult = await runProviderCallWithRetry("authority_batch_1", () =>
           translateDeckAuthorityWithVertexGemini(config, {
@@ -883,6 +893,8 @@ async function runAuthorityStage(
                 localSlides.map((slide) =>
                   buildSingleSlideStoryboardFrame(job.source_doc_id, slide, {
                     size: "LARGE",
+                    cache: thumbnailCache,
+                    jobId: job_id,
                   })
                 )
               );
@@ -900,6 +912,9 @@ async function runAuthorityStage(
           })
         );
       } catch (error) {
+        if (toSlideFailureReasonCode(error) === "VERTEX_QUOTA_EXHAUSTED") {
+          throw error;
+        }
         console.warn(
           `Authority batch failed; falling back to slide-level recovery: ${
             error instanceof Error ? error.message : String(error)
@@ -944,7 +959,11 @@ async function runAuthorityStage(
             const storyboardFrame = await buildSingleSlideStoryboardFrame(
               job.source_doc_id,
               slide,
-              { size: "LARGE" }
+              {
+                size: "LARGE",
+                cache: thumbnailCache,
+                jobId: job_id,
+              }
             );
             gapFillResult = await runProviderCallWithRetry(
               `gap_fill_slide_${slideIndex + 1}`,
@@ -1474,8 +1493,7 @@ async function runAuthorityStage(
     }
 
     const error = err as PipelineError | Error;
-    const errorCode =
-      error instanceof PipelineError ? error.code : "JOB_INTERNAL_ERROR";
+    const errorCode = toSlideFailureReasonCode(error);
     const safeMessage = toSafeErrorMessage(errorCode);
     console.error(
       `Job ${job_id} internal failure metadata:`,
@@ -1489,6 +1507,23 @@ async function runAuthorityStage(
     console.error(`Job ${job_id} failed [${errorCode}]:`, safeMessage);
 
     try {
+      if (shouldFinalizeAsPartialSuccess(errorCode, slideResults)) {
+        markUndeliveredSlidesFailedForTerminalError(slideResults, errorCode);
+        await finalizeSuccessfulJob(
+          pool,
+          redis,
+          job,
+          job_id,
+          targetLangCode,
+          writeResult,
+          pipelineWarnings,
+          slideResults,
+          provisionallyBilledUnits,
+          nodeResults
+        );
+        return;
+      }
+
       await finalizeFailedJob(
         pool,
         redis,
@@ -1567,7 +1602,7 @@ async function finalizeSuccessfulJob(
 ): Promise<void> {
   const client = await pool.connect();
   const finalWarnings = [...pipelineWarnings, ...writeResult.warnings];
-  const completedStatus = finalWarnings.length > 0 || hasSlideExecutionWarnings(slideResults)
+  const completedStatus = finalWarnings.length > 0 || hasSlideExecutionWarnings(slideResults) || hasPartialDelivery(slideResults)
     ? "completed_with_warnings"
     : "completed";
   const completionDetail = buildSuccessfulCompletionDetail(finalWarnings.length, slideResults);
@@ -2064,7 +2099,18 @@ function materializeSettledSlideResults(
 }
 
 function toSlideFailureReasonCode(error: unknown): string {
-  return error instanceof PipelineError ? error.code : "JOB_INTERNAL_ERROR";
+  if (error instanceof PipelineError) {
+    return error.code;
+  }
+
+  if (error instanceof Error) {
+    const code = (error as Error & { code?: unknown }).code;
+    if (code === "SLIDES_QUOTA_EXHAUSTED" || code === "VERTEX_QUOTA_EXHAUSTED") {
+      return code;
+    }
+  }
+
+  return "JOB_INTERNAL_ERROR";
 }
 
 function hasSlideExecutionWarnings(
@@ -2079,6 +2125,28 @@ function hasSlideExecutionWarnings(
       slideResult.refund_required
     );
   });
+}
+
+function hasPartialDelivery(
+  slideResults: ReturnType<typeof initializeJobSlideResults>
+): boolean {
+  for (const slideResult of listJobSlideResults(slideResults)) {
+    if (!slideResult.output_visible) {
+      continue;
+    }
+
+    if (slideResult.notes_present) {
+      if (Boolean(slideResult.content_output_visible) !== Boolean(slideResult.notes_output_visible)) {
+        return true;
+      }
+    }
+
+    if ((slideResult.body_failed_node_count ?? 0) > 0) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function summarizeSlideExecution(
@@ -2254,7 +2322,35 @@ export function __computeProviderRetryDelayMsForTests(
   return computeProviderRetryDelayMs(attempt, () => randomValue);
 }
 
+export function __hasPartialDeliveryForTests(
+  slideResults: ReturnType<typeof initializeJobSlideResults>
+): boolean {
+  return hasPartialDelivery(slideResults);
+}
+
+export function __isRetryableProviderErrorForTests(error: unknown): boolean {
+  return isRetryableProviderError(error);
+}
+
+export function __toSafePipelineMessageForTests(
+  error: unknown,
+  fallback: string
+): string {
+  return toSafePipelineMessage(error, fallback);
+}
+
+export function __shouldFinalizeAsPartialSuccessForTests(
+  errorCode: string,
+  slideResults: ReturnType<typeof initializeJobSlideResults>
+): boolean {
+  return shouldFinalizeAsPartialSuccess(errorCode, slideResults);
+}
+
 function isRetryableProviderError(error: unknown): boolean {
+  if (toSlideFailureReasonCode(error) === "VERTEX_QUOTA_EXHAUSTED") {
+    return false;
+  }
+
   const status = extractProviderHttpStatus(error);
   if (status !== null) {
     return status === 408 || status === 429 || status >= 500;
@@ -2311,8 +2407,12 @@ function toSafeErrorMessage(code: string): string {
       return "The selected slide range is invalid.";
     case "HOST_ADAPTER_ERROR":
       return "Failed to access or update the Google Slides™ document.";
+    case "SLIDES_QUOTA_EXHAUSTED":
+      return "Google Slides™ API quota was temporarily exhausted. Please retry shortly.";
     case "LLM_PROVIDER_ERROR":
       return "The translation provider returned an invalid response.";
+    case "VERTEX_QUOTA_EXHAUSTED":
+      return "Vertex AI quota was temporarily exhausted. Please retry shortly.";
     case "UNSAFE_LLM_INPUT":
       return "All selected slides were excluded due to prompt-injection risk. Remove the risky slide from the translation range and try again.";
     case "JOB_INTERNAL_ERROR":
@@ -2322,8 +2422,9 @@ function toSafeErrorMessage(code: string): string {
 }
 
 function toSafePipelineMessage(error: unknown, fallback: string): string {
-  if (error instanceof PipelineError) {
-    return toSafeErrorMessage(error.code);
+  const code = toSlideFailureReasonCode(error);
+  if (code !== "JOB_INTERNAL_ERROR") {
+    return toSafeErrorMessage(code);
   }
 
   if (error instanceof CancellationRequestedError) {
@@ -2331,6 +2432,30 @@ function toSafePipelineMessage(error: unknown, fallback: string): string {
   }
 
   return fallback;
+}
+
+function shouldFinalizeAsPartialSuccess(
+  errorCode: string,
+  slideResults: ReturnType<typeof initializeJobSlideResults>
+): boolean {
+  return (
+    (errorCode === "SLIDES_QUOTA_EXHAUSTED" || errorCode === "VERTEX_QUOTA_EXHAUSTED") &&
+    listJobSlideResults(slideResults).some((slideResult) => slideResult.output_visible)
+  );
+}
+
+function markUndeliveredSlidesFailedForTerminalError(
+  slideResults: ReturnType<typeof initializeJobSlideResults>,
+  errorCode: string
+): void {
+  for (const slideResult of listJobSlideResults(slideResults)) {
+    if (slideResult.status === "excluded_unsafe" || slideResult.output_visible) {
+      continue;
+    }
+    if (slideResult.status === "pending" || slideResult.status === "translated") {
+      markSlideFailure(slideResults, slideResult.slide_index, "write", errorCode);
+    }
+  }
 }
 
 function getErrorMetadata(error: unknown): Record<string, unknown> {

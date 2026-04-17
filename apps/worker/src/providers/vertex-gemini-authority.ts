@@ -15,7 +15,7 @@ import type { StoryboardFrame } from "../adapters/slides/storyboard";
 import {
   buildResponseSchema,
   buildVertexGenerateContentEndpoint,
-  fetchWithTimeout,
+  fetchVertexGenerateContentWithBudget,
   getAccessToken,
   parseTranslationResponse,
   summarizeVertexErrorText,
@@ -24,6 +24,7 @@ import {
 } from "./vertex-gemini";
 import { buildOpaqueJsonDataSection } from "./llm-prompt-safety";
 import { emitLlmDebugCapture, type LlmDebugCaptureFn } from "./llm-debug";
+import { VertexQuotaExhausted } from "./vertex-call-budget";
 
 const MAX_AUTHORITY_NODES_PER_REQUEST = 20;
 const VERTEX_AUTHORITY_TIMEOUT_MS = 300_000;
@@ -178,7 +179,24 @@ export async function translateDeckAuthorityWithVertexGemini(
     return translateDeckAuthorityInChunks(config, request);
   }
 
-  return executeAuthorityRequest(config, request);
+  try {
+    return await executeAuthorityRequest(config, request);
+  } catch (error) {
+    if (isVertexQuotaExhaustedError(error)) {
+      throw error;
+    }
+    const recoveredNodes = await recoverAuthorityChunkAfterFailure(
+      config,
+      request,
+      request.nodes,
+      request.existing_authority_nodes ?? [],
+      error
+    );
+    return {
+      provider_request_id: `vertex_authority_recovered_${Date.now()}`,
+      nodes: recoveredNodes,
+    };
+  }
 }
 
 async function translateDeckAuthorityInChunks(
@@ -193,6 +211,28 @@ async function translateDeckAuthorityInChunks(
     offset += MAX_AUTHORITY_NODES_PER_REQUEST
   ) {
     const chunkNodes = request.nodes.slice(offset, offset + MAX_AUTHORITY_NODES_PER_REQUEST);
+    const chunkRecoveredNodes = await executeAuthorityChunkWithFallback(
+      config,
+      request,
+      chunkNodes,
+      mergedNodes
+    );
+    mergedNodes.push(...chunkRecoveredNodes);
+  }
+
+  return {
+    provider_request_id: `vertex_authority_batch_${Date.now()}`,
+    nodes: mergedNodes,
+  };
+}
+
+async function executeAuthorityChunkWithFallback(
+  config: WorkerConfig,
+  request: AuthorityTranslationRequestInput,
+  chunkNodes: readonly AuthoritySourceNode[],
+  existingAuthorityNodes: readonly AuthorityTranslationNode[]
+): Promise<AuthorityTranslationNode[]> {
+  try {
     const localWindowFrames = await resolveLocalWindowFrames(request, chunkNodes);
     const chunkResponse = await executeAuthorityRequest(config, {
       ...request,
@@ -200,16 +240,121 @@ async function translateDeckAuthorityInChunks(
         ...request.visual_context,
         local_window_frames: localWindowFrames,
       },
-      existing_authority_nodes: mergedNodes,
+      existing_authority_nodes: existingAuthorityNodes,
       nodes: chunkNodes,
     });
-    mergedNodes.push(...chunkResponse.nodes);
+    return [...chunkResponse.nodes];
+  } catch (error) {
+    return recoverAuthorityChunkAfterFailure(
+      config,
+      request,
+      chunkNodes,
+      existingAuthorityNodes,
+      error
+    );
+  }
+}
+
+async function recoverAuthorityChunkAfterFailure(
+  config: WorkerConfig,
+  request: AuthorityTranslationRequestInput,
+  chunkNodes: readonly AuthoritySourceNode[],
+  existingAuthorityNodes: readonly AuthorityTranslationNode[],
+  error: unknown
+): Promise<AuthorityTranslationNode[]> {
+  if (isVertexQuotaExhaustedError(error)) {
+    throw error;
   }
 
-  return {
-    provider_request_id: `vertex_authority_batch_${Date.now()}`,
-    nodes: mergedNodes,
-  };
+  const splitGroups = splitAuthorityNodesForRetry(chunkNodes);
+  if (splitGroups === null) {
+    throw error;
+  }
+
+  const recoveredNodes: AuthorityTranslationNode[] = [];
+  for (const group of splitGroups) {
+    try {
+      const nestedNodes = await executeAuthorityChunkWithFallback(
+        config,
+        request,
+        group,
+        [...existingAuthorityNodes, ...recoveredNodes]
+      );
+      recoveredNodes.push(...nestedNodes);
+    } catch (nestedError) {
+      if (isVertexQuotaExhaustedError(nestedError)) {
+        throw nestedError;
+      }
+      console.warn(
+        "Authority chunk subgroup failed after split; preserving partial success",
+        JSON.stringify({
+          node_count: group.length,
+          slide_indices: [...new Set(group.map((node) => node.slide_index))],
+          error_message: nestedError instanceof Error ? nestedError.message : String(nestedError),
+        })
+      );
+    }
+  }
+
+  if (recoveredNodes.length === 0) {
+    throw error;
+  }
+
+  return recoveredNodes;
+}
+
+function splitAuthorityNodesForRetry(
+  nodes: readonly AuthoritySourceNode[]
+): readonly AuthoritySourceNode[][] | null {
+  if (nodes.length <= 1) {
+    return null;
+  }
+
+  const nodesBySlide = new Map<number, AuthoritySourceNode[]>();
+  for (const node of nodes) {
+    const existing = nodesBySlide.get(node.slide_index);
+    if (existing) {
+      existing.push(node);
+    } else {
+      nodesBySlide.set(node.slide_index, [node]);
+    }
+  }
+
+  if (nodesBySlide.size > 1) {
+    return [...nodesBySlide.values()];
+  }
+
+  const midpoint = Math.ceil(nodes.length / 2);
+  return [nodes.slice(0, midpoint), nodes.slice(midpoint)].filter(
+    (group) => group.length > 0
+  );
+}
+
+function isVertexQuotaExhaustedError(error: unknown): boolean {
+  if (error instanceof VertexQuotaExhausted) {
+    return isVertexQuotaSignal((error as Error & { cause?: unknown }).cause ?? error);
+  }
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  if ((error as Error & { code?: unknown }).code !== "VERTEX_QUOTA_EXHAUSTED") {
+    return false;
+  }
+  return isVertexQuotaSignal(error);
+}
+
+function isVertexQuotaSignal(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const status = (error as Error & { status?: unknown; response?: { status?: unknown } }).status;
+  if (status === 429) {
+    return true;
+  }
+  if ((error as Error & { response?: { status?: unknown } }).response?.status === 429) {
+    return true;
+  }
+  return /quota|rate limit|resource exhausted|too many requests/i.test(error.message);
 }
 
 async function executeAuthorityRequest(
@@ -225,37 +370,45 @@ async function executeAuthorityRequest(
   );
   const accessToken = await getAccessToken();
   const localWindowFrames = await resolveLocalWindowFrames(request, request.nodes);
-  const res = await fetchWithTimeout(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: AUTHORITY_SYSTEM_INSTRUCTION }],
+  const res = await fetchVertexGenerateContentWithBudget(
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-      contents: [
-        {
-          role: "user",
-          parts: buildAuthorityContentParts({
-            ...request,
-            visual_context: {
-              ...request.visual_context,
-              local_window_frames: localWindowFrames,
-            },
-          }),
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: AUTHORITY_SYSTEM_INSTRUCTION }],
         },
-      ],
-      safetySettings: VERTEX_SAFETY_SETTINGS_OFF,
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: VERTEX_MAX_OUTPUT_TOKENS,
-        responseMimeType: "application/json",
-        responseSchema: buildAuthorityResponseSchema(request.nodes.length),
-      },
-    }),
-  }, VERTEX_AUTHORITY_TIMEOUT_MS);
+        contents: [
+          {
+            role: "user",
+            parts: buildAuthorityContentParts({
+              ...request,
+              visual_context: {
+                ...request.visual_context,
+                local_window_frames: localWindowFrames,
+              },
+            }),
+          },
+        ],
+        safetySettings: VERTEX_SAFETY_SETTINGS_OFF,
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: VERTEX_MAX_OUTPUT_TOKENS,
+          responseMimeType: "application/json",
+          responseSchema: buildAuthorityResponseSchema(request.nodes.length),
+        },
+      }),
+    },
+    VERTEX_AUTHORITY_TIMEOUT_MS,
+    {
+      opName: request.debugLabel ?? "authority",
+      model: request.model,
+    }
+  );
 
   if (!res.ok) {
     const rawErrorText = (await res.text()).trim();
@@ -352,31 +505,39 @@ export async function fillMissingAuthorityWithVertexGemini(
     request.model
   );
   const accessToken = await getAccessToken();
-  const res = await fetchWithTimeout(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: AUTHORITY_SYSTEM_INSTRUCTION }],
+  const res = await fetchVertexGenerateContentWithBudget(
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-      contents: [
-        {
-          role: "user",
-          parts: buildGapFillContentParts(request),
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: AUTHORITY_SYSTEM_INSTRUCTION }],
         },
-      ],
-      safetySettings: VERTEX_SAFETY_SETTINGS_OFF,
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: VERTEX_MAX_OUTPUT_TOKENS,
-        responseMimeType: "application/json",
-        responseSchema: buildAuthorityResponseSchema(request.missing_nodes.length),
-      },
-    }),
-  }, VERTEX_GAP_FILL_TIMEOUT_MS);
+        contents: [
+          {
+            role: "user",
+            parts: buildGapFillContentParts(request),
+          },
+        ],
+        safetySettings: VERTEX_SAFETY_SETTINGS_OFF,
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: VERTEX_MAX_OUTPUT_TOKENS,
+          responseMimeType: "application/json",
+          responseSchema: buildAuthorityResponseSchema(request.missing_nodes.length),
+        },
+      }),
+    },
+    VERTEX_GAP_FILL_TIMEOUT_MS,
+    {
+      opName: request.debugLabel ?? `authority_gap_fill:slide_${request.slide_index + 1}`,
+      model: request.model,
+    }
+  );
 
   if (!res.ok) {
     const rawErrorText = (await res.text()).trim();
@@ -492,31 +653,39 @@ export async function materializeTranslatedNodesWithVertexGemini(
     request.model
   );
   const accessToken = await getAccessToken();
-  const res = await fetchWithTimeout(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: MATERIALIZATION_SYSTEM_INSTRUCTION }],
+  const res = await fetchVertexGenerateContentWithBudget(
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: buildMaterializationPrompt(request) }],
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: MATERIALIZATION_SYSTEM_INSTRUCTION }],
         },
-      ],
-      safetySettings: VERTEX_SAFETY_SETTINGS_OFF,
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: VERTEX_MAX_OUTPUT_TOKENS,
-        responseMimeType: "application/json",
-        responseSchema: buildResponseSchema(request.node_summaries.length),
-      },
-    }),
-  }, VERTEX_MATERIALIZATION_TIMEOUT_MS);
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: buildMaterializationPrompt(request) }],
+          },
+        ],
+        safetySettings: VERTEX_SAFETY_SETTINGS_OFF,
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: VERTEX_MAX_OUTPUT_TOKENS,
+          responseMimeType: "application/json",
+          responseSchema: buildResponseSchema(request.node_summaries.length),
+        },
+      }),
+    },
+    VERTEX_MATERIALIZATION_TIMEOUT_MS,
+    {
+      opName: request.debugLabel ?? "materialization",
+      model: request.model,
+    }
+  );
 
   if (!res.ok) {
     const rawErrorText = (await res.text()).trim();
@@ -626,31 +795,39 @@ export async function translateSpeakerNotesWithVertexGemini(
     request.model
   );
   const accessToken = await getAccessToken();
-  const res = await fetchWithTimeout(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: NOTES_TRANSLATION_SYSTEM_INSTRUCTION }],
+  const res = await fetchVertexGenerateContentWithBudget(
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: buildSpeakerNotesPrompt(request) }],
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: NOTES_TRANSLATION_SYSTEM_INSTRUCTION }],
         },
-      ],
-      safetySettings: VERTEX_SAFETY_SETTINGS_OFF,
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: VERTEX_MAX_OUTPUT_TOKENS,
-        responseMimeType: "application/json",
-        responseSchema: buildResponseSchema(request.note_node_summaries.length),
-      },
-    }),
-  }, VERTEX_NOTES_TIMEOUT_MS);
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: buildSpeakerNotesPrompt(request) }],
+          },
+        ],
+        safetySettings: VERTEX_SAFETY_SETTINGS_OFF,
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: VERTEX_MAX_OUTPUT_TOKENS,
+          responseMimeType: "application/json",
+          responseSchema: buildResponseSchema(request.note_node_summaries.length),
+        },
+      }),
+    },
+    VERTEX_NOTES_TIMEOUT_MS,
+    {
+      opName: request.debugLabel ?? `speaker_notes:slide_${request.slide_index + 1}`,
+      model: request.model,
+    }
+  );
 
   if (!res.ok) {
     const rawErrorText = (await res.text()).trim();
