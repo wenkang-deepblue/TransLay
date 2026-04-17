@@ -788,6 +788,122 @@ test("writer handles empty translated nodes by issuing only deleteText", () => {
   assert.ok(requests[0]?.deleteText);
 });
 
+test("writer rebuilds preserved hard-break spacing for body-like paragraphs", () => {
+  const sourceNode = createNode({
+    node_id: "shape_spacing",
+    text: "Heading\nBody line\n\nNext heading\nNext body",
+    full_text: "Heading\nBody line\n\nNext heading\nNext body",
+    slide_index: 2,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_spacing",
+    paragraphs: [
+      {
+        paragraph_id: "p0",
+        text: "Heading",
+        line_breaks_before: 0,
+        start_index: 0,
+        end_index: 7,
+        paragraph_style: {},
+        runs: [
+          {
+            run_id: "r0",
+            text: "Heading",
+            start_index: 0,
+            end_index: 7,
+            style_role: "default",
+            text_style: {},
+          },
+        ],
+      },
+      {
+        paragraph_id: "p1",
+        text: "Body line",
+        line_breaks_before: 1,
+        start_index: 8,
+        end_index: 17,
+        paragraph_style: {},
+        runs: [
+          {
+            run_id: "r1",
+            text: "Body line",
+            start_index: 8,
+            end_index: 17,
+            style_role: "default",
+            text_style: {},
+          },
+        ],
+      },
+      {
+        paragraph_id: "p2",
+        text: "Next heading",
+        line_breaks_before: 2,
+        start_index: 19,
+        end_index: 31,
+        paragraph_style: {},
+        runs: [
+          {
+            run_id: "r2",
+            text: "Next heading",
+            start_index: 19,
+            end_index: 31,
+            style_role: "default",
+            text_style: {},
+          },
+        ],
+      },
+      {
+        paragraph_id: "p3",
+        text: "Next body",
+        line_breaks_before: 1,
+        start_index: 32,
+        end_index: 41,
+        paragraph_style: {},
+        runs: [
+          {
+            run_id: "r3",
+            text: "Next body",
+            start_index: 32,
+            end_index: 41,
+            style_role: "default",
+            text_style: {},
+          },
+        ],
+      },
+    ],
+  });
+
+  const translatedNode: TranslatedNode = {
+    node_id: "shape_spacing",
+    translated_full_text:
+      "Invisible Watermarking\nDigital watermarking\nTamper-resistant Watermarking\nVertex AI watermarking",
+    paragraphs: [
+      { paragraph_id: "p0", translated_text: "Invisible Watermarking", bullet_behavior: "none" },
+      { paragraph_id: "p1", translated_text: "Digital watermarking", bullet_behavior: "none" },
+      { paragraph_id: "p2", translated_text: "Tamper-resistant Watermarking", bullet_behavior: "none" },
+      { paragraph_id: "p3", translated_text: "Vertex AI watermarking", bullet_behavior: "none" },
+    ],
+    segments: [
+      { segment_id: "r0", translated_text: "Invisible Watermarking", style_role: "default" },
+      { segment_id: "r1", translated_text: "Digital watermarking", style_role: "default" },
+      { segment_id: "r2", translated_text: "Tamper-resistant Watermarking", style_role: "default" },
+      { segment_id: "r3", translated_text: "Vertex AI watermarking", style_role: "default" },
+    ],
+  };
+
+  const requests = __buildNodeWriteRequestsForTests({
+    sourceNode,
+    translatedNode,
+    objectId: "shape_spacing_copy",
+  });
+
+  const insertTextRequest = requests.find((request) => Boolean(request.insertText));
+  assert.equal(
+    insertTextRequest?.insertText?.text,
+    "Invisible Watermarking\nDigital watermarking\n\nTamper-resistant Watermarking\nVertex AI watermarking"
+  );
+});
+
 test("writer keeps table cell location on every rich-text rebuild request", () => {
   const sourceNode = createNode({
     node_id: "cell_1_2",

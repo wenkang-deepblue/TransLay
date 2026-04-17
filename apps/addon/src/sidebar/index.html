@@ -1380,19 +1380,19 @@
         appendResultWarning(list, 'Fully delivered translated slides: ' + fullyDeliveredSlides.length + '.');
       }
       if (contentOnlySlides.length > 0) {
-        appendResultWarning(list, 'Content-only delivery: slide ' + contentOnlySlides.join(', ') + '.');
+        appendResultWarning(list, 'Content-only delivery: ' + formatSlideReference(contentOnlySlides) + '.');
       }
       if (notesOnlySlides.length > 0) {
-        appendResultWarning(list, 'Notes-only fallback: slide ' + notesOnlySlides.join(', ') + '.');
+        appendResultWarning(list, 'Notes-only fallback: ' + formatSlideReference(notesOnlySlides) + '.');
       }
       if (bodyPartialSlides.length > 0) {
-        appendResultWarning(list, 'Partially translated slides: slide ' + bodyPartialSlides.join(', ') + ', not billed.');
+        appendResultWarning(list, 'Partially translated slides: ' + formatSlideReference(bodyPartialSlides) + ', not billed.');
       }
       if (skippedSlides.length > 0) {
         appendResultWarning(list, 'Undelivered slides: ' + skippedSlides.join(', ') + '.');
       }
       if (refundedSlides.length > 0) {
-        appendResultWarning(list, 'Refunded slides: ' + refundedSlides.join(', ') + '.');
+        appendResultWarning(list, 'Refunded: ' + formatSlideReference(refundedSlides) + '.');
       }
       if (resultMeta && typeof resultMeta.total_billed_units === 'number') {
         appendResultWarning(list, 'Total billed: ' + resultMeta.total_billed_units + ' slides.');
@@ -1415,6 +1415,10 @@
       var item = document.createElement('li');
       item.textContent = text;
       list.appendChild(item);
+    }
+
+    function formatSlideReference(slides) {
+      return (slides.length === 1 ? 'slide ' : 'slides ') + slides.join(', ');
     }
 
     function resolveOutputDocumentUrl(resp) {

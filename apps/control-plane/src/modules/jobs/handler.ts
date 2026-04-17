@@ -268,6 +268,19 @@ function formatSlideList(slides: readonly number[]): string {
   return slides.join(", ");
 }
 
+function formatRefundedSlideList(slides: readonly number[]): string {
+  return slides.map((slide) => `slide ${slide}`).join(", ");
+}
+
+function formatSlideReference(
+  slides: readonly number[],
+  singularLabel = "slide",
+  pluralLabel = "slides"
+): string {
+  const label = slides.length === 1 ? singularLabel : pluralLabel;
+  return `${label} ${formatSlideList(slides)}`;
+}
+
 function listPartialContentOnlySlides(slideResults: readonly JobSlideResult[]): number[] {
   return slideResults
     .filter((slideResult) =>
@@ -317,7 +330,7 @@ function buildSlideDeliveryFailureMessage(
     return `${slideNoun} ${formatSlideList(skippedSlides)} could not be delivered due to translation or write-back issues and ${refundVerb} refunded.`;
   }
 
-  return `${slideNoun} ${formatSlideList(skippedSlides)} could not be delivered. Refunded slides: ${formatSlideList(refundedSlides)}.`;
+  return `${slideNoun} ${formatSlideList(skippedSlides)} could not be delivered. Refunded: ${formatRefundedSlideList(refundedSlides)}.`;
 }
 
 function buildCompletedMessage(
@@ -353,12 +366,12 @@ function buildCompletedMessage(
 
   const contentOnlySlides = slideSummary.content_only_slide_indices;
   if (contentOnlySlides.length > 0) {
-    parts.push(`Content-only delivery: slides ${formatSlideList(contentOnlySlides)}.`);
+    parts.push(`Content-only delivery: ${formatSlideReference(contentOnlySlides)}.`);
   }
 
   const notesOnlySlides = slideSummary.notes_only_slide_indices;
   if (notesOnlySlides.length > 0) {
-    parts.push(`Notes-only fallback: slides ${formatSlideList(notesOnlySlides)}.`);
+    parts.push(`Notes-only fallback: ${formatSlideReference(notesOnlySlides)}.`);
   }
 
   if (slideSummary.body_partial_slide_indices.length > 0) {
@@ -392,7 +405,7 @@ function buildFailedMessage(
 ): string {
   const parts = [baseMessage];
   if (slideSummary.refunded_slide_indices.length > 0) {
-    parts.push(`Refunded slides: ${formatSlideList(slideSummary.refunded_slide_indices)}.`);
+    parts.push(`Refunded: ${formatRefundedSlideList(slideSummary.refunded_slide_indices)}.`);
   }
 
   const excludedSlides = listExcludedSlides(warnings);
@@ -402,12 +415,12 @@ function buildFailedMessage(
 
   const contentOnlySlides = slideSummary.content_only_slide_indices;
   if (contentOnlySlides.length > 0) {
-    parts.push(`Content-only delivery: slides ${formatSlideList(contentOnlySlides)}.`);
+    parts.push(`Content-only delivery: ${formatSlideReference(contentOnlySlides)}.`);
   }
 
   const notesOnlySlides = slideSummary.notes_only_slide_indices;
   if (notesOnlySlides.length > 0) {
-    parts.push(`Notes-only fallback: slides ${formatSlideList(notesOnlySlides)}.`);
+    parts.push(`Notes-only fallback: ${formatSlideReference(notesOnlySlides)}.`);
   }
 
   if (slideSummary.body_partial_slide_indices.length > 0) {

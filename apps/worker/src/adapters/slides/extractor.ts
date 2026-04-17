@@ -257,6 +257,7 @@ function extractFromElement(
       objectId,
       slideIndex,
       elementType: "shape",
+      placeholderType: element.shape.placeholder?.type ?? undefined,
       textContent: element.shape.text,
       box,
       visibleStyle: extractVisibleStyleSummary(element, element.shape.text),

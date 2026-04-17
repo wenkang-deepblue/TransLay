@@ -111,6 +111,10 @@ export function loadWorkerConfig() {
     ""
   );
   const captureLlmOutputs = optionalBooleanEnv("DEBUG_CAPTURE_LLM_OUTPUTS", false);
+  const allowDevTestRawOutputPersistence = optionalBooleanEnv(
+    "DEBUG_ALLOW_DEV_TEST_RAW_OUTPUT_PERSISTENCE",
+    false
+  );
 
   if (nodeEnv === "production" && !cloudTasksAudience) {
     throw new Error("CLOUD_TASKS_AUDIENCE is required in production");
@@ -124,9 +128,13 @@ export function loadWorkerConfig() {
     throw new Error("WORKER_URL is required in production");
   }
 
-  if (nodeEnv === "production" && captureLlmOutputs) {
+  if (
+    nodeEnv === "production" &&
+    captureLlmOutputs &&
+    !allowDevTestRawOutputPersistence
+  ) {
     throw new Error(
-      "DEBUG_CAPTURE_LLM_OUTPUTS must remain disabled in production to enforce zero-content retention."
+      "DEBUG_CAPTURE_LLM_OUTPUTS must remain disabled in production unless DEBUG_ALLOW_DEV_TEST_RAW_OUTPUT_PERSISTENCE is explicitly enabled for temporary development testing."
     );
   }
 
@@ -167,9 +175,12 @@ export function loadWorkerConfig() {
       invokerServiceAccount: cloudTasksInvokerServiceAccount,
     },
 
-    // Development-only debugging toggle. Must stay disabled by default.
+    // Development-only debugging toggle. raw model output capture is a temporary
+    // development/testing escape hatch and must be removed or disabled before
+    // production hardening is finalized.
     debug: {
       captureLlmOutputs,
+      allowDevTestRawOutputPersistence,
       llmOutputRetentionHours: requireIntEnv(
         "DEBUG_LLM_OUTPUT_RETENTION_HOURS",
         optionalEnv("DEBUG_LLM_OUTPUT_RETENTION_HOURS", "72")

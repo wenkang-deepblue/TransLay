@@ -45,6 +45,7 @@ function createConfig(): WorkerConfig {
     },
     debug: {
       captureLlmOutputs: false,
+      allowDevTestRawOutputPersistence: false,
       llmOutputRetentionHours: 72,
     },
   };
@@ -72,7 +73,7 @@ function createMaterializationNodeSummary(
 test("translateDeckAuthorityWithVertexGemini sends deck overview and local window frames and parses authority nodes", async () => {
   __resetAccessTokenCacheForTests();
   const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
-  const debugEvents: unknown[] = [];
+  const debugEvents: Array<{ raw_output_text?: string }> = [];
   const lifecycleNodeBatches: string[][] = [];
   const originalFetch = globalThis.fetch;
 
@@ -203,6 +204,7 @@ test("translateDeckAuthorityWithVertexGemini sends deck overview and local windo
     assert.equal(debugEvents.length, 1);
     assert.match(JSON.stringify(debugEvents[0]), /authority_test/);
     assert.match(JSON.stringify(debugEvents[0]), /"capture_status":"success"/);
+    assert.match(String(debugEvents[0]?.raw_output_text ?? ""), /"node_id":"n1"/);
     assert.deepEqual(lifecycleNodeBatches, [["n1"]]);
   } finally {
     globalThis.fetch = originalFetch;
@@ -576,6 +578,254 @@ test("materializeTranslatedNodesWithVertexGemini structures authority text into 
     assert.match(prompt, /translated_full_text/);
     assert.match(prompt, /SOURCE STRUCTURE/);
     assert.match(prompt, /PROMPT SAFETY RULES:/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("materializeTranslatedNodesWithVertexGemini repairs bullet behavior from source paragraph structure", async () => {
+  __resetAccessTokenCacheForTests();
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+
+    if (url.includes("metadata.google.internal")) {
+      return new Response(JSON.stringify({ access_token: "test-token" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify([
+                    {
+                      node_id: "mixed-bullets",
+                      translated_full_text:
+                        "Intro paragraph\nPrimary item A\nPrimary item B\nNested detail A\nNested detail B\nPrimary item C\nClosing paragraph",
+                      paragraphs: [
+                        {
+                          paragraph_id: "p0",
+                          translated_text: "Intro paragraph",
+                          bullet_behavior: "none",
+                        },
+                        {
+                          paragraph_id: "p1",
+                          translated_text: "Primary item A",
+                          bullet_behavior: "none",
+                        },
+                        {
+                          paragraph_id: "p2",
+                          translated_text: "Primary item B",
+                          bullet_behavior: "preserve",
+                        },
+                        {
+                          paragraph_id: "p3",
+                          translated_text: "Nested detail A",
+                          bullet_behavior: "none",
+                        },
+                        {
+                          paragraph_id: "p4",
+                          translated_text: "Nested detail B",
+                          bullet_behavior: "preserve",
+                        },
+                        {
+                          paragraph_id: "p5",
+                          translated_text: "Primary item C",
+                          bullet_behavior: "none",
+                        },
+                        {
+                          paragraph_id: "p6",
+                          translated_text: "Closing paragraph",
+                          bullet_behavior: "preserve",
+                        },
+                      ],
+                      segments: [
+                        {
+                          segment_id: "r0",
+                          translated_text: "Intro paragraph",
+                          style_role: "default",
+                        },
+                        {
+                          segment_id: "r1",
+                          translated_text: "Primary item A",
+                          style_role: "default",
+                        },
+                        {
+                          segment_id: "r2",
+                          translated_text: "Primary item B",
+                          style_role: "default",
+                        },
+                        {
+                          segment_id: "r3",
+                          translated_text: "Nested detail A",
+                          style_role: "default",
+                        },
+                        {
+                          segment_id: "r4",
+                          translated_text: "Nested detail B",
+                          style_role: "default",
+                        },
+                        {
+                          segment_id: "r5",
+                          translated_text: "Primary item C",
+                          style_role: "default",
+                        },
+                        {
+                          segment_id: "r6",
+                          translated_text: "Closing paragraph",
+                          style_role: "default",
+                        },
+                      ],
+                    },
+                  ]),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const result = await materializeTranslatedNodesWithVertexGemini(createConfig(), {
+      model: "gemini-3.1-flash-lite-preview",
+      source_language: "Chinese",
+      target_language: "English",
+      deck_title: "Knowledge Graph Deck",
+      glossary_candidates: [],
+      node_summaries: [
+        createMaterializationNodeSummary({
+          node_id: "mixed-bullets",
+          archetype: "plain_text",
+          slide_index: 49,
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "介绍段",
+              style_roles: ["default"],
+              segments: [
+                {
+                  segment_id: "r0",
+                  text: "介绍段",
+                  style_role: "default",
+                },
+              ],
+            },
+            {
+              paragraph_id: "p1",
+              text: "一级要点 A",
+              bullet: { nesting_level: 0 },
+              style_roles: ["default"],
+              segments: [
+                {
+                  segment_id: "r1",
+                  text: "一级要点 A",
+                  style_role: "default",
+                },
+              ],
+            },
+            {
+              paragraph_id: "p2",
+              text: "一级要点 B",
+              bullet: { nesting_level: 0 },
+              style_roles: ["default"],
+              segments: [
+                {
+                  segment_id: "r2",
+                  text: "一级要点 B",
+                  style_role: "default",
+                },
+              ],
+            },
+            {
+              paragraph_id: "p3",
+              text: "二级细节 A",
+              bullet: { nesting_level: 1 },
+              style_roles: ["default"],
+              segments: [
+                {
+                  segment_id: "r3",
+                  text: "二级细节 A",
+                  style_role: "default",
+                },
+              ],
+            },
+            {
+              paragraph_id: "p4",
+              text: "二级细节 B",
+              bullet: { nesting_level: 1 },
+              style_roles: ["default"],
+              segments: [
+                {
+                  segment_id: "r4",
+                  text: "二级细节 B",
+                  style_role: "default",
+                },
+              ],
+            },
+            {
+              paragraph_id: "p5",
+              text: "一级要点 C",
+              bullet: { nesting_level: 0 },
+              style_roles: ["default"],
+              segments: [
+                {
+                  segment_id: "r5",
+                  text: "一级要点 C",
+                  style_role: "default",
+                },
+              ],
+            },
+            {
+              paragraph_id: "p6",
+              text: "结束段",
+              style_roles: ["default"],
+              segments: [
+                {
+                  segment_id: "r6",
+                  text: "结束段",
+                  style_role: "default",
+                },
+              ],
+            },
+          ],
+        }),
+      ],
+      authority_nodes: [
+        {
+          node_id: "mixed-bullets",
+          slide_index: 49,
+          translated_full_text:
+            "Intro paragraph\nPrimary item A\nPrimary item B\nNested detail A\nNested detail B\nPrimary item C\nClosing paragraph",
+        },
+      ],
+    });
+
+    assert.deepEqual(result.nodes[0]?.paragraphs, [
+      { paragraph_id: "p0", translated_text: "Intro paragraph", bullet_behavior: "none" },
+      { paragraph_id: "p1", translated_text: "Primary item A", bullet_behavior: "preserve" },
+      { paragraph_id: "p2", translated_text: "Primary item B", bullet_behavior: "preserve" },
+      { paragraph_id: "p3", translated_text: "Nested detail A", bullet_behavior: "preserve" },
+      { paragraph_id: "p4", translated_text: "Nested detail B", bullet_behavior: "preserve" },
+      { paragraph_id: "p5", translated_text: "Primary item C", bullet_behavior: "preserve" },
+      { paragraph_id: "p6", translated_text: "Closing paragraph", bullet_behavior: "none" },
+    ]);
+    assert.equal(
+      result.nodes[0]?.translated_full_text,
+      "Intro paragraph\nPrimary item A\nPrimary item B\nNested detail A\nNested detail B\nPrimary item C\nClosing paragraph"
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

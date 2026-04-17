@@ -261,6 +261,63 @@ test("extractTableCellVisibleStyleSummary captures table cell background fill", 
   });
 });
 
+test("buildRichTextNode records preserved hard-break counts for body-like shapes", () => {
+  const textContent = {
+    textElements: [
+      {
+        startIndex: 0,
+        paragraphMarker: {
+          style: { alignment: "START" },
+        },
+      },
+      {
+        startIndex: 0,
+        endIndex: 15,
+        textRun: {
+          content: "Heading\nBody line\n\nNext heading\nNext body\n",
+          style: {
+            fontSize: { magnitude: 16, unit: "PT" },
+          },
+        },
+      },
+    ],
+  } as unknown as slides_v1.Schema$TextContent;
+
+  const node = buildRichTextNode({
+    nodeId: "body_like_spacing",
+    objectId: "shape_body_like_spacing",
+    slideIndex: 0,
+    elementType: "shape",
+    textContent,
+    box: {
+      width_emu: 320 * 12700,
+      height_emu: 120 * 12700,
+      translate_x_emu: 0,
+      translate_y_emu: 0,
+      rotation_deg: 0,
+    },
+    visibleStyle: {
+      alignment: "START",
+      min_font_size_pt: 16,
+      max_font_size_pt: 16,
+    },
+  });
+
+  assert.ok(node);
+  assert.deepEqual(
+    node.paragraphs.map((paragraph) => ({
+      text: paragraph.text,
+      line_breaks_before: paragraph.line_breaks_before,
+    })),
+    [
+      { text: "Heading", line_breaks_before: 0 },
+      { text: "Body line", line_breaks_before: 1 },
+      { text: "Next heading", line_breaks_before: 2 },
+      { text: "Next body", line_breaks_before: 1 },
+    ]
+  );
+});
+
 test("buildRichTextNode classifies metric cards and assigns metric style roles", () => {
   const textContent = {
     textElements: [
@@ -448,6 +505,95 @@ test("buildRichTextNode classifies table cells and speaker notes correctly", () 
 
   assert.ok(notesNode);
   assert.equal(notesNode.archetype, "speaker_notes");
+});
+
+test("buildRichTextNode preserves hard breaks and repeated spaces for body placeholders", () => {
+  const textContent = {
+    textElements: [
+      {
+        startIndex: 0,
+        paragraphMarker: {
+          style: { alignment: "START" },
+        },
+      },
+      {
+        startIndex: 0,
+        endIndex: 28,
+        textRun: {
+          content: "First line\n  second  line\nThird",
+          style: {
+            fontSize: { magnitude: 18, unit: "PT" },
+          },
+        },
+      },
+    ],
+  } as slides_v1.Schema$TextContent;
+
+  const node = buildRichTextNode({
+    nodeId: "body-whitespace-1",
+    objectId: "shape_body",
+    slideIndex: 4,
+    elementType: "shape",
+    placeholderType: "BODY",
+    textContent,
+    box: {
+      width_emu: 320 * 12700,
+      height_emu: 72 * 12700,
+      translate_x_emu: 0,
+      translate_y_emu: 0,
+      rotation_deg: 0,
+    },
+  });
+
+  assert.ok(node);
+  assert.equal(node.paragraphs.length, 3);
+  assert.equal(node.paragraphs[0]?.text, "First line");
+  assert.equal(node.paragraphs[1]?.text, "  second  line");
+  assert.equal(node.paragraphs[2]?.text, "Third");
+});
+
+test("buildRichTextNode keeps legacy whitespace handling for non-body placeholder shapes", () => {
+  const textContent = {
+    textElements: [
+      {
+        startIndex: 0,
+        paragraphMarker: {
+          style: { alignment: "CENTER" },
+        },
+      },
+      {
+        startIndex: 0,
+        endIndex: 20,
+        textRun: {
+          content: "Line A\n  Line B",
+          style: {
+            fontSize: { magnitude: 28, unit: "PT" },
+            bold: true,
+          },
+        },
+      },
+    ],
+  } as slides_v1.Schema$TextContent;
+
+  const node = buildRichTextNode({
+    nodeId: "title-whitespace-1",
+    objectId: "shape_title",
+    slideIndex: 4,
+    elementType: "shape",
+    placeholderType: "TITLE",
+    textContent,
+    box: {
+      width_emu: 240 * 12700,
+      height_emu: 36 * 12700,
+      translate_x_emu: 0,
+      translate_y_emu: 0,
+      rotation_deg: 0,
+    },
+  });
+
+  assert.ok(node);
+  assert.equal(node.paragraphs.length, 1);
+  assert.equal(node.paragraphs[0]?.text, "Line A  Line B");
 });
 
 test("buildRichTextNode returns null for non-translatable autoText-only or newline-only content", () => {

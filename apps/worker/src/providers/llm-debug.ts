@@ -23,6 +23,12 @@ export interface LlmDebugCaptureEvent {
   readonly capture_status: LlmDebugCaptureStatus;
   readonly http_status?: number;
   readonly error_summary?: string;
+  /**
+   * DEVELOPMENT / TESTING ONLY:
+   * This can contain raw user-derived model output and must be removed or
+   * disabled before production hardening.
+   */
+  readonly raw_output_text?: string;
 }
 
 export type LlmDebugCaptureFn = (

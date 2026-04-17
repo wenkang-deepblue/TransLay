@@ -40,6 +40,7 @@ function createConfig(): WorkerConfig {
     },
     debug: {
       captureLlmOutputs: false,
+      allowDevTestRawOutputPersistence: false,
       llmOutputRetentionHours: 72,
     },
   };
@@ -406,7 +407,7 @@ test("translateWithVertexGemini preserves source boundary whitespace, rebuilds s
     nodes: [{ node_id: "n1", text: "   Alpha\n  Beta" }],
   };
 
-  const debugEvents: unknown[] = [];
+  const debugEvents: Array<{ raw_output_text?: string }> = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input);
@@ -510,10 +511,36 @@ test("translateWithVertexGemini preserves source boundary whitespace, rebuilds s
       JSON.stringify(debugEvents[0]),
       /"capture_status":"success"/
     );
-    assert.doesNotMatch(
-      JSON.stringify(debugEvents[0]),
-      /raw_output_text|translated_full_text/
-    );
+    assert.equal(debugEvents[0]?.raw_output_text, JSON.stringify([
+      {
+        node_id: "n1",
+        translated_full_text: "wrong",
+        paragraphs: [
+          {
+            paragraph_id: "p0",
+            translated_text: "wrong-1",
+            bullet_behavior: "none",
+          },
+          {
+            paragraph_id: "p1",
+            translated_text: "wrong-2",
+            bullet_behavior: "none",
+          },
+        ],
+        segments: [
+          {
+            segment_id: "r0",
+            translated_text: "甲",
+            style_role: "default",
+          },
+          {
+            segment_id: "r1",
+            translated_text: "乙",
+            style_role: "default",
+          },
+        ],
+      },
+    ]));
   } finally {
     globalThis.fetch = originalFetch;
   }

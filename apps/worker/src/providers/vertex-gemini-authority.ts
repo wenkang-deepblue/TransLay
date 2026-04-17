@@ -6,6 +6,7 @@ import {
   TRANSLATION_SEGMENT_STYLE_ROLES,
   type TranslationContextGlossaryCandidate,
   type TranslationContextNodeSummary,
+  type TranslatedParagraphBulletBehavior,
   type TranslatedNode,
   type TranslationRequest,
   type TranslationResponse,
@@ -268,6 +269,7 @@ async function executeAuthorityRequest(
       capture_status: "http_error",
       http_status: res.status,
       error_summary: errorSummary,
+      raw_output_text: rawErrorText,
     });
     throw new Error(
       errorSummary
@@ -288,6 +290,7 @@ async function executeAuthorityRequest(
       provider_request_id: providerRequestId,
       capture_status: "empty_response",
       error_summary: "Vertex authority pass returned empty response",
+      raw_output_text: JSON.stringify(data),
     });
     throw new Error("Vertex authority pass returned empty response");
   }
@@ -305,6 +308,7 @@ async function executeAuthorityRequest(
       provider_request_id: providerRequestId,
       capture_status: "parse_error",
       error_summary: error instanceof Error ? error.message : String(error),
+      raw_output_text: responseText,
     });
     throw error;
   }
@@ -317,6 +321,7 @@ async function executeAuthorityRequest(
     node_ids: request.nodes.map((node) => node.node_id),
     provider_request_id: providerRequestId,
     capture_status: "success",
+    raw_output_text: responseText,
   });
 
   return {
@@ -386,6 +391,7 @@ export async function fillMissingAuthorityWithVertexGemini(
       capture_status: "http_error",
       http_status: res.status,
       error_summary: errorSummary,
+      raw_output_text: rawErrorText,
     });
     throw new Error(
       errorSummary
@@ -407,6 +413,7 @@ export async function fillMissingAuthorityWithVertexGemini(
       provider_request_id: providerRequestId,
       capture_status: "empty_response",
       error_summary: "Vertex gap-fill returned empty response",
+      raw_output_text: JSON.stringify(data),
     });
     throw new Error("Vertex gap-fill returned empty response");
   }
@@ -425,6 +432,7 @@ export async function fillMissingAuthorityWithVertexGemini(
       provider_request_id: providerRequestId,
       capture_status: "parse_error",
       error_summary: error instanceof Error ? error.message : String(error),
+      raw_output_text: responseText,
     });
     throw error;
   }
@@ -438,6 +446,7 @@ export async function fillMissingAuthorityWithVertexGemini(
     node_ids: request.missing_nodes.map((node) => node.node_id),
     provider_request_id: providerRequestId,
     capture_status: "success",
+    raw_output_text: responseText,
   });
 
   return {
@@ -521,6 +530,7 @@ export async function materializeTranslatedNodesWithVertexGemini(
       capture_status: "http_error",
       http_status: res.status,
       error_summary: errorSummary,
+      raw_output_text: rawErrorText,
     });
     throw new Error(
       errorSummary
@@ -541,6 +551,7 @@ export async function materializeTranslatedNodesWithVertexGemini(
       provider_request_id: providerRequestId,
       capture_status: "empty_response",
       error_summary: "Vertex materialization returned empty response",
+      raw_output_text: JSON.stringify(data),
     });
     throw new Error("Vertex materialization returned empty response");
   }
@@ -562,6 +573,7 @@ export async function materializeTranslatedNodesWithVertexGemini(
       provider_request_id: providerRequestId,
       capture_status: "parse_error",
       error_summary: error instanceof Error ? error.message : String(error),
+      raw_output_text: responseText,
     });
     throw error;
   }
@@ -574,6 +586,7 @@ export async function materializeTranslatedNodesWithVertexGemini(
     node_ids: request.node_summaries.map((node) => node.node_id),
     provider_request_id: providerRequestId,
     capture_status: "success",
+    raw_output_text: responseText,
   });
 
   return {
@@ -652,6 +665,7 @@ export async function translateSpeakerNotesWithVertexGemini(
       capture_status: "http_error",
       http_status: res.status,
       error_summary: errorSummary,
+      raw_output_text: rawErrorText,
     });
     throw new Error(
       errorSummary
@@ -673,6 +687,7 @@ export async function translateSpeakerNotesWithVertexGemini(
       provider_request_id: providerRequestId,
       capture_status: "empty_response",
       error_summary: "Vertex speaker notes translation returned empty response",
+      raw_output_text: JSON.stringify(data),
     });
     throw new Error("Vertex speaker notes translation returned empty response");
   }
@@ -691,6 +706,7 @@ export async function translateSpeakerNotesWithVertexGemini(
       provider_request_id: providerRequestId,
       capture_status: "parse_error",
       error_summary: error instanceof Error ? error.message : String(error),
+      raw_output_text: responseText,
     });
     throw error;
   }
@@ -704,6 +720,7 @@ export async function translateSpeakerNotesWithVertexGemini(
     node_ids: request.note_source_nodes.map((node) => node.node_id),
     provider_request_id: providerRequestId,
     capture_status: "success",
+    raw_output_text: responseText,
   });
 
   return {
@@ -956,7 +973,10 @@ function validateMaterializationNodeAllowingTrailingEmptySuffix(
   node: TranslatedNode,
   sourceNode: TranslationContextNodeSummary
 ): TranslatedNode {
-  const normalizedNode = maybeNormalizeMetricCardNode(node, sourceNode);
+  const normalizedNode = normalizeMaterializationBulletBehavior(
+    maybeNormalizeMetricCardNode(node, sourceNode),
+    sourceNode
+  );
 
   if (normalizedNode.paragraphs.length !== sourceNode.paragraphs.length) {
     if (sourceNode.archetype === "bullet_list") {
@@ -1053,6 +1073,34 @@ function validateMaterializationNodeAllowingTrailingEmptySuffix(
         )
       : normalizedNode.risk_flags,
   };
+}
+
+function normalizeMaterializationBulletBehavior(
+  node: TranslatedNode,
+  sourceNode: TranslationContextNodeSummary
+): TranslatedNode {
+  return {
+    ...node,
+    paragraphs: node.paragraphs.map((paragraph) => {
+      const sourceParagraph = sourceNode.paragraphs.find(
+        (candidate) => candidate.paragraph_id === paragraph.paragraph_id
+      );
+      if (!sourceParagraph) {
+        return paragraph;
+      }
+
+      return {
+        ...paragraph,
+        bullet_behavior: getExpectedBulletBehavior(sourceParagraph),
+      };
+    }),
+  };
+}
+
+function getExpectedBulletBehavior(
+  sourceParagraph: TranslationContextNodeSummary["paragraphs"][number]
+): TranslatedParagraphBulletBehavior {
+  return sourceParagraph.bullet ? "preserve" : "none";
 }
 
 function isAcceptedTrailingEmptySuffix(

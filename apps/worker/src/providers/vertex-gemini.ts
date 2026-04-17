@@ -269,6 +269,7 @@ export async function translateWithVertexGemini(
       capture_status: "http_error",
       http_status: res.status,
       error_summary: errorSummary,
+      raw_output_text: rawErrorText,
     });
     throw new Error(
       errorSummary
@@ -290,6 +291,7 @@ export async function translateWithVertexGemini(
       provider_request_id: providerRequestId,
       capture_status: "empty_response",
       error_summary: "Vertex AI returned empty response",
+      raw_output_text: JSON.stringify(data),
     });
     throw new Error("Vertex AI returned empty response");
   }
@@ -308,6 +310,7 @@ export async function translateWithVertexGemini(
       provider_request_id: providerRequestId,
       capture_status: "parse_error",
       error_summary: error instanceof Error ? error.message : String(error),
+      raw_output_text: responseText,
     });
     throw error;
   }
@@ -321,6 +324,7 @@ export async function translateWithVertexGemini(
     node_ids: nodes.map((node) => node.node_id),
     provider_request_id: providerRequestId,
     capture_status: "success",
+    raw_output_text: responseText,
   });
 
   return {
@@ -897,6 +901,7 @@ function normalizeTranslatedNodeForValidation(
     return {
       ...paragraph,
       translated_text: translatedText,
+      bullet_behavior: getExpectedBulletBehavior(sourceParagraph),
     };
   });
 
@@ -908,6 +913,12 @@ function normalizeTranslatedNodeForValidation(
       .map((paragraph) => paragraph.translated_text)
       .join("\n"),
   };
+}
+
+function getExpectedBulletBehavior(
+  sourceParagraph: TranslationContextNodeSummary["paragraphs"][number]
+): TranslatedParagraphBulletBehavior {
+  return sourceParagraph.bullet ? "preserve" : "none";
 }
 
 function preserveSourceBoundaryWhitespace(

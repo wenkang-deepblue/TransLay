@@ -1464,9 +1464,15 @@ function buildRichTextWritePlan(
 
     consumedParagraphIds.add(sourceParagraph.paragraph_id);
 
-    if (index > 0) {
-      insertedText += "\n";
-      insertionCursor += 1;
+    const lineBreaksBefore =
+      typeof sourceParagraph.line_breaks_before === "number"
+        ? sourceParagraph.line_breaks_before
+        : index > 0
+          ? 1
+          : 0;
+    if (lineBreaksBefore > 0) {
+      insertedText += "\n".repeat(lineBreaksBefore);
+      insertionCursor += lineBreaksBefore;
     }
 
     const needsBullet = translatedParagraph.bullet_behavior === "preserve";

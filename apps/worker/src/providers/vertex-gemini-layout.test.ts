@@ -40,6 +40,7 @@ function createConfig(): WorkerConfig {
     },
     debug: {
       captureLlmOutputs: false,
+      allowDevTestRawOutputPersistence: false,
       llmOutputRetentionHours: 72,
     },
   };
@@ -92,7 +93,7 @@ test("buildLayoutSemanticContentParts includes a visual reference frame", () => 
 test("requestSlideLayoutSemanticsWithVertexGemini sends multimodal prompt and parses raw JSON response", async () => {
   __resetAccessTokenCacheForTests();
   const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
-  const debugEvents: unknown[] = [];
+  const debugEvents: Array<{ raw_output_text?: string }> = [];
   const originalFetch = globalThis.fetch;
 
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -229,6 +230,7 @@ test("requestSlideLayoutSemanticsWithVertexGemini sends multimodal prompt and pa
     assert.equal(debugEvents.length, 1);
     assert.match(JSON.stringify(debugEvents[0]), /layout_test/);
     assert.match(JSON.stringify(debugEvents[0]), /"capture_status":"success"/);
+    assert.match(String(debugEvents[0]?.raw_output_text ?? ""), /"node_id":"shape_1"/);
   } finally {
     globalThis.fetch = originalFetch;
   }

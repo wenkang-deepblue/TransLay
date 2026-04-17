@@ -19,6 +19,7 @@ interface BuildRichTextNodeParams {
   readonly objectId: string;
   readonly slideIndex: number;
   readonly elementType: ExtractableElementType;
+  readonly placeholderType?: string;
   readonly textContent: slides_v1.Schema$TextContent;
   readonly box: SlideBoxGeometry;
   readonly visibleStyle?: SlideVisibleStyleSummary;
@@ -30,6 +31,7 @@ interface BuildRichTextNodeParams {
 interface MutableSlideParagraph {
   paragraph_id: string;
   text: string;
+  line_breaks_before: number;
   start_index: number;
   end_index: number;
   bullet?: SlideBulletMetadata;
@@ -46,6 +48,25 @@ export function buildRichTextNode(
   }
 
   let extractedParagraphs = extractParagraphs(params.textContent);
+  const initialArchetype = classifyNodeArchetype(
+    params.elementType,
+    fullText,
+    extractedParagraphs
+  );
+
+  if (shouldPreserveBodySourceFormatting({
+    elementType: params.elementType,
+    placeholderType: params.placeholderType,
+    fullText,
+    box: params.box,
+    visibleStyle: params.visibleStyle,
+    archetype: initialArchetype,
+    paragraphs: extractedParagraphs,
+  })) {
+    extractedParagraphs = extractParagraphsPreservingBodySourceFormatting(
+      params.textContent
+    );
+  }
 
   if (typeof params.inheritedFontSizePt === "number" && params.inheritedFontSizePt > 0) {
     extractedParagraphs = applyInheritedFontSize(extractedParagraphs, params.inheritedFontSizePt);
@@ -89,7 +110,7 @@ export function extractPlainText(
 export function extractParagraphs(
   textContent: slides_v1.Schema$TextContent
 ): SlideParagraph[] {
-  const paragraphs: MutableSlideParagraph[] = [];
+  const paragraphs: SlideParagraph[] = [];
   let current: MutableSlideParagraph | null = null;
 
   for (const element of textContent.textElements ?? []) {
@@ -125,6 +146,60 @@ export function extractParagraphs(
   }
 
   if (current) {
+    paragraphs.push(finalizeParagraph(current));
+  }
+
+  return paragraphs.filter((paragraph) => paragraph.text.length > 0 || paragraph.bullet);
+}
+
+function extractParagraphsPreservingBodySourceFormatting(
+  textContent: slides_v1.Schema$TextContent
+): SlideParagraph[] {
+  const paragraphs: SlideParagraph[] = [];
+  let current: MutableSlideParagraph | null = null;
+  let pendingLineBreaks = 0;
+  let pendingParagraphStyle: slides_v1.Schema$ParagraphStyle | undefined;
+  let pendingBullet: SlideBulletMetadata | undefined;
+  let pendingStartIndex = 0;
+
+  for (const element of textContent.textElements ?? []) {
+    if (element.paragraphMarker) {
+      if (hasParagraphContent(current)) {
+        paragraphs.push(finalizeParagraph(current));
+        pendingLineBreaks = Math.max(pendingLineBreaks, 1);
+      }
+      current = null;
+      pendingParagraphStyle = cloneIfPresent(element.paragraphMarker.style);
+      pendingBullet = extractBulletMetadata(element.paragraphMarker);
+      pendingStartIndex = element.startIndex ?? 0;
+      continue;
+    }
+
+    const rawText = element.textRun?.content ?? "";
+    if (!rawText) {
+      continue;
+    }
+
+    const nextState = appendRunToParagraphPreservingBodySourceFormatting(
+      current,
+      paragraphs,
+      element,
+      rawText,
+      {
+        pendingLineBreaks,
+        pendingParagraphStyle,
+        pendingBullet,
+        pendingStartIndex,
+      }
+    );
+    current = nextState.current;
+    pendingLineBreaks = nextState.pendingLineBreaks;
+    pendingParagraphStyle = nextState.pendingParagraphStyle;
+    pendingBullet = nextState.pendingBullet;
+    pendingStartIndex = nextState.pendingStartIndex;
+  }
+
+  if (hasParagraphContent(current)) {
     paragraphs.push(finalizeParagraph(current));
   }
 
@@ -243,11 +318,13 @@ function createParagraph(
   paragraphIndex: number,
   startIndex: number,
   paragraphStyle?: slides_v1.Schema$ParagraphStyle,
-  bullet?: SlideBulletMetadata
+  bullet?: SlideBulletMetadata,
+  lineBreaksBefore = paragraphIndex === 0 ? 0 : 1
 ): MutableSlideParagraph {
   return {
     paragraph_id: `p${paragraphIndex}`,
     text: "",
+    line_breaks_before: lineBreaksBefore,
     start_index: startIndex,
     end_index: startIndex,
     bullet,
@@ -283,10 +360,103 @@ function appendRunToParagraph(
   paragraph.end_index = Math.max(paragraph.end_index, fallbackEnd);
 }
 
+function appendRunToParagraphPreservingBodySourceFormatting(
+  paragraph: MutableSlideParagraph | null,
+  paragraphs: SlideParagraph[],
+  element: slides_v1.Schema$TextElement,
+  rawText: string,
+  state: {
+    pendingLineBreaks: number;
+    pendingParagraphStyle?: slides_v1.Schema$ParagraphStyle;
+    pendingBullet?: SlideBulletMetadata;
+    pendingStartIndex: number;
+  }
+): {
+  current: MutableSlideParagraph | null;
+  pendingLineBreaks: number;
+  pendingParagraphStyle?: slides_v1.Schema$ParagraphStyle;
+  pendingBullet?: SlideBulletMetadata;
+  pendingStartIndex: number;
+} {
+  let current = paragraph;
+  const style = cloneIfPresent(element.textRun?.style) ?? {};
+  let pendingLineBreaks = state.pendingLineBreaks;
+  let pendingParagraphStyle = state.pendingParagraphStyle;
+  let pendingBullet = state.pendingBullet;
+  let pendingStartIndex = state.pendingStartIndex;
+
+  const ensureCurrent = (startIndexFallback: number) => {
+    if (current) {
+      return current;
+    }
+    current = createParagraph(
+      paragraphs.length,
+      pendingStartIndex || startIndexFallback,
+      pendingParagraphStyle,
+      pendingBullet,
+      pendingLineBreaks
+    );
+    pendingLineBreaks = 0;
+    pendingParagraphStyle = undefined;
+    pendingBullet = undefined;
+    pendingStartIndex = startIndexFallback;
+    return current;
+  };
+
+  const flushChunk = (chunk: string) => {
+    if (!chunk) {
+      return;
+    }
+    const paragraphRef = ensureCurrent(element.startIndex ?? 0);
+    const startIndex = paragraphRef.end_index;
+    const endIndex = startIndex + chunk.length;
+    paragraphRef.runs.push({
+      run_id: `${paragraphRef.paragraph_id}_r${paragraphRef.runs.length}`,
+      text: chunk,
+      start_index: startIndex,
+      end_index: endIndex,
+      style_role: "default",
+      text_style: style,
+    });
+    paragraphRef.text += chunk;
+    paragraphRef.end_index = endIndex;
+  };
+
+  let chunkStart = 0;
+  for (let index = 0; index < rawText.length; index += 1) {
+    if (rawText[index] !== "\n") {
+      continue;
+    }
+
+    flushChunk(rawText.slice(chunkStart, index));
+    if (hasParagraphContent(current)) {
+      paragraphs.push(finalizeParagraph(current));
+    }
+    current = null;
+    pendingLineBreaks += 1;
+    pendingStartIndex = (element.startIndex ?? 0) + index + 1;
+    chunkStart = index + 1;
+  }
+
+  flushChunk(rawText.slice(chunkStart));
+  return {
+    current,
+    pendingLineBreaks,
+    pendingParagraphStyle,
+    pendingBullet,
+    pendingStartIndex: current?.end_index ?? pendingStartIndex,
+  };
+}
+
+function hasParagraphContent(paragraph: MutableSlideParagraph | null): paragraph is MutableSlideParagraph {
+  return Boolean(paragraph && (paragraph.text.length > 0 || paragraph.bullet));
+}
+
 function finalizeParagraph(paragraph: MutableSlideParagraph): SlideParagraph {
   return {
     paragraph_id: paragraph.paragraph_id,
     text: paragraph.text,
+    line_breaks_before: paragraph.line_breaks_before,
     start_index: paragraph.start_index,
     end_index: paragraph.end_index,
     bullet: paragraph.bullet,
@@ -294,6 +464,7 @@ function finalizeParagraph(paragraph: MutableSlideParagraph): SlideParagraph {
     runs: paragraph.runs,
   };
 }
+
 
 function extractBulletMetadata(
   paragraphMarker: slides_v1.Schema$ParagraphMarker
@@ -311,6 +482,46 @@ function extractBulletMetadata(
     glyph: bullet.glyph ?? undefined,
     nesting_level: bullet.nestingLevel ?? undefined,
   };
+}
+
+function shouldPreserveBodySourceFormatting(params: {
+  readonly elementType: ExtractableElementType;
+  readonly placeholderType?: string;
+  readonly fullText: string;
+  readonly box: SlideBoxGeometry;
+  readonly visibleStyle?: SlideVisibleStyleSummary;
+  readonly archetype: SlideNodeArchetype;
+  readonly paragraphs: readonly SlideParagraph[];
+}): boolean {
+  if (params.elementType !== "shape") {
+    return false;
+  }
+
+  if (params.placeholderType && params.placeholderType !== "BODY") {
+    return false;
+  }
+
+  if (params.archetype !== "plain_text" && params.archetype !== "mixed_emphasis") {
+    return false;
+  }
+
+  const hasStructuralWhitespace =
+    params.fullText.includes("\n") || /[ \t]{2,}/.test(params.fullText);
+  if (!hasStructuralWhitespace) {
+    return false;
+  }
+
+  if (params.placeholderType === "BODY") {
+    return true;
+  }
+
+  if (params.paragraphs.length > 1 || params.fullText.trim().length >= 80) {
+    return true;
+  }
+
+  const maxFontSize = params.visibleStyle?.max_font_size_pt ?? 0;
+  const heightPt = params.box.height_emu / PT_TO_EMU;
+  return maxFontSize > 0 && maxFontSize <= 24 && heightPt >= 36;
 }
 
 function applyInheritedFontSize(

@@ -90,6 +90,13 @@ export interface SlideTextRun {
 export interface SlideParagraph {
   readonly paragraph_id: string;
   readonly text: string;
+  /**
+   * Development note:
+   * This preserves the source hard-break template for body-like Slides shapes
+   * without exposing empty paragraphs to the LLM contract. Keep this behavior
+   * only while we still need faithful body spacing reconstruction.
+   */
+  readonly line_breaks_before?: number;
   readonly start_index: number;
   readonly end_index: number;
   readonly bullet?: SlideBulletMetadata;

@@ -243,6 +243,7 @@ export async function requestSlideLayoutSemanticsWithVertexGemini(
       capture_status: "http_error",
       http_status: res.status,
       error_summary: errorSummary,
+      raw_output_text: rawErrorText,
     });
     throw new Error(
       errorSummary
@@ -264,6 +265,7 @@ export async function requestSlideLayoutSemanticsWithVertexGemini(
       provider_request_id: providerRequestId,
       capture_status: "empty_response",
       error_summary: "Vertex AI returned empty layout semantics response",
+      raw_output_text: JSON.stringify(data),
     });
     throw new Error("Vertex AI returned empty layout semantics response");
   }
@@ -279,6 +281,7 @@ export async function requestSlideLayoutSemanticsWithVertexGemini(
       node_ids: request.nodes.map((node) => node.node_id),
       provider_request_id: providerRequestId,
       capture_status: "success",
+      raw_output_text: responseText,
     });
     return parsed;
   } catch (error) {
@@ -292,6 +295,7 @@ export async function requestSlideLayoutSemanticsWithVertexGemini(
       provider_request_id: providerRequestId,
       capture_status: "parse_error",
       error_summary: error instanceof Error ? error.message : String(error),
+      raw_output_text: responseText,
     });
     throw error;
   }

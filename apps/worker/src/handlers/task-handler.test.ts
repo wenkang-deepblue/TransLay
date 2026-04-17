@@ -37,6 +37,7 @@ function createConfig(): WorkerConfig {
     },
     debug: {
       captureLlmOutputs: false,
+      allowDevTestRawOutputPersistence: false,
       llmOutputRetentionHours: 72,
     },
   };
