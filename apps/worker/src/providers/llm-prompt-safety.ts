@@ -47,6 +47,14 @@ const SOFT_SIGNAL_PATTERNS: ReadonlyArray<{
   },
 ];
 
+const OUTPUT_ECHO_PATTERNS: ReadonlyArray<RegExp> = [
+  /<BEGIN_OPAQUE_USER_DATA_JSON>/i,
+  /<END_OPAQUE_USER_DATA_JSON>/i,
+  /PROMPT SAFETY RULES:/i,
+  /\b(system prompt|developer message|hidden instructions?)\b/i,
+  /"role"\s*:\s*"(system|assistant|developer)"/i,
+];
+
 export interface PromptInjectionFinding {
   readonly slide_index: number;
   readonly node_id: string;
@@ -191,8 +199,20 @@ function scanNodeForPromptInjectionRisk(
     : null;
 }
 
+export function assertSafeLlmOutputText(text: string, label = "LLM output"): void {
+  const normalized = normalizeForScanning(text);
+  if (!normalized) {
+    return;
+  }
+  if (OUTPUT_ECHO_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    throw new Error(`${label} echoed prompt-control markers`);
+  }
+}
+
 function normalizeForScanning(text: string): string {
   return text
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }

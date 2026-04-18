@@ -37,7 +37,15 @@ server.on("error", (err) => {
 
 async function shutdown() {
   console.log("Worker shutting down...");
-  server.close();
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
   await Promise.allSettled([shutdownPool(), shutdownRedis()]);
   process.exit(0);
 }

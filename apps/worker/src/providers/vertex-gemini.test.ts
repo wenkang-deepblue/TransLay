@@ -43,6 +43,7 @@ function createConfig(): WorkerConfig {
       workerUrl: "https://worker.example.com",
       audience: "",
       invokerServiceAccount: "",
+      allowUnsignedTasks: false,
     },
     debug: {
       captureLlmOutputs: false,
@@ -644,36 +645,7 @@ test("translateWithVertexGemini preserves source boundary whitespace, rebuilds s
       JSON.stringify(debugEvents[0]),
       /"capture_status":"success"/
     );
-    assert.equal(debugEvents[0]?.raw_output_text, JSON.stringify([
-      {
-        node_id: "n1",
-        translated_full_text: "wrong",
-        paragraphs: [
-          {
-            paragraph_id: "p0",
-            translated_text: "wrong-1",
-            bullet_behavior: "none",
-          },
-          {
-            paragraph_id: "p1",
-            translated_text: "wrong-2",
-            bullet_behavior: "none",
-          },
-        ],
-        segments: [
-          {
-            segment_id: "r0",
-            translated_text: "甲",
-            style_role: "default",
-          },
-          {
-            segment_id: "r1",
-            translated_text: "乙",
-            style_role: "default",
-          },
-        ],
-      },
-    ]));
+    assert.equal(debugEvents[0]?.raw_output_text, undefined);
   } finally {
     globalThis.fetch = originalFetch;
   }

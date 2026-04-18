@@ -7,6 +7,8 @@ export async function insertLlmDebugOutput(
   jobId: JobId | string,
   event: LlmDebugCaptureEvent
 ): Promise<void> {
+  const rawOutputText = isProductionLikeNodeEnv() ? null : event.raw_output_text ?? null;
+
   // DEVELOPMENT / TESTING ONLY:
   // raw_output_text intentionally persists model output for reproducible
   // debugging and must be removed or disabled before production release.
@@ -40,7 +42,7 @@ export async function insertLlmDebugOutput(
       event.capture_status,
       event.http_status ?? null,
       event.error_summary ?? null,
-      event.raw_output_text ?? null,
+      rawOutputText,
     ]
   );
 }
@@ -58,4 +60,8 @@ export async function purgeExpiredLlmDebugOutputs(
       WHERE created_at < NOW() - make_interval(hours => $1::int)`,
     [safeRetentionHours]
   );
+}
+
+function isProductionLikeNodeEnv(): boolean {
+  return process.env.NODE_ENV === "production" || process.env.NODE_ENV === "staging";
 }

@@ -21,6 +21,7 @@ export type SlideThumbnailCache = Map<string, Promise<SlideThumbnail>>;
 const DEFAULT_THUMBNAIL_MIME_TYPE = "PNG";
 const DEFAULT_THUMBNAIL_SIZE = "LARGE";
 const THUMBNAIL_FETCH_TIMEOUT_MS = 45_000;
+const ALLOWED_THUMBNAIL_HOSTS = new Set(["docs.google.com", "googleusercontent.com"]);
 export const THUMBNAIL_SIZES = ["SMALL", "MEDIUM", "LARGE"] as const;
 export type ThumbnailSize = (typeof THUMBNAIL_SIZES)[number];
 
@@ -185,7 +186,10 @@ async function fetchThumbnailContent(
   contentUrl: string,
   bearerToken: string | null | undefined
 ): Promise<Response> {
-  const directResponse = await fetchWithTimeout(contentUrl);
+  const validatedUrl = validateThumbnailContentUrl(contentUrl);
+  const directResponse = await fetchWithTimeout(validatedUrl, {
+    redirect: "manual",
+  });
   if (directResponse.ok) {
     return directResponse;
   }
@@ -196,7 +200,8 @@ async function fetchThumbnailContent(
     });
   }
 
-  const authorizedResponse = await fetchWithTimeout(contentUrl, {
+  const authorizedResponse = await fetchWithTimeout(validatedUrl, {
+    redirect: "manual",
     headers: { Authorization: `Bearer ${bearerToken}` },
   });
   if (!authorizedResponse.ok) {
@@ -209,6 +214,24 @@ async function fetchThumbnailContent(
   }
 
   return authorizedResponse;
+}
+
+function validateThumbnailContentUrl(contentUrl: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(contentUrl);
+  } catch {
+    throw new Error("Slides thumbnail URL is invalid");
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  const allowedHost =
+    ALLOWED_THUMBNAIL_HOSTS.has(hostname) || hostname.endsWith(".googleusercontent.com");
+  if (parsed.protocol !== "https:" || !allowedHost) {
+    throw new Error("Slides thumbnail URL host is not allowed");
+  }
+
+  return parsed.toString();
 }
 
 async function fetchWithTimeout(

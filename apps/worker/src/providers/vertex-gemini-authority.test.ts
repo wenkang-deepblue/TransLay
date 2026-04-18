@@ -47,6 +47,7 @@ function createConfig(): WorkerConfig {
       workerUrl: "https://worker.example.com",
       audience: "",
       invokerServiceAccount: "",
+      allowUnsignedTasks: false,
     },
     debug: {
       captureLlmOutputs: false,
@@ -214,7 +215,7 @@ test("translateDeckAuthorityWithVertexGemini sends deck overview and local windo
     assert.equal(debugEvents.length, 1);
     assert.match(JSON.stringify(debugEvents[0]), /authority_test/);
     assert.match(JSON.stringify(debugEvents[0]), /"capture_status":"success"/);
-    assert.match(String(debugEvents[0]?.raw_output_text ?? ""), /"node_id":"n1"/);
+    assert.equal(debugEvents[0]?.raw_output_text, undefined);
     assert.deepEqual(lifecycleNodeBatches, [["n1"]]);
   } finally {
     globalThis.fetch = originalFetch;

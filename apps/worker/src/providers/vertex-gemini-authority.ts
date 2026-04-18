@@ -22,7 +22,10 @@ import {
   VERTEX_MAX_OUTPUT_TOKENS,
   VERTEX_SAFETY_SETTINGS_OFF,
 } from "./vertex-gemini";
-import { buildOpaqueJsonDataSection } from "./llm-prompt-safety";
+import {
+  assertSafeLlmOutputText,
+  buildOpaqueJsonDataSection,
+} from "./llm-prompt-safety";
 import { emitLlmDebugCapture, type LlmDebugCaptureFn } from "./llm-debug";
 import { VertexQuotaExhausted } from "./vertex-call-budget";
 
@@ -452,6 +455,7 @@ async function executeAuthorityRequest(
 
   let parsed: AuthorityTranslationNode[];
   try {
+    assertSafeLlmOutputText(responseText, request.debugLabel ?? "authority");
     parsed = parseAuthorityResponse(responseText, request.nodes);
   } catch (error) {
     await emitLlmDebugCapture(request.debugCapture, {
@@ -583,6 +587,10 @@ export async function fillMissingAuthorityWithVertexGemini(
 
   let parsed: AuthorityTranslationNode[];
   try {
+    assertSafeLlmOutputText(
+      responseText,
+      request.debugLabel ?? `authority_gap_fill:slide_${request.slide_index + 1}`
+    );
     parsed = parseAuthorityResponse(responseText, request.missing_nodes);
   } catch (error) {
     await emitLlmDebugCapture(request.debugCapture, {
@@ -729,6 +737,7 @@ export async function materializeTranslatedNodesWithVertexGemini(
 
   let parsed: TranslatedNode[];
   try {
+    assertSafeLlmOutputText(responseText, request.debugLabel ?? "materialization");
     parsed = parseMaterializationResponseWithFallback(
       responseText,
       syntheticRequest,
@@ -873,6 +882,10 @@ export async function translateSpeakerNotesWithVertexGemini(
 
   let parsed: TranslatedNode[];
   try {
+    assertSafeLlmOutputText(
+      responseText,
+      request.debugLabel ?? `speaker_notes:slide_${request.slide_index + 1}`
+    );
     parsed = parseTranslationResponse(responseText, syntheticRequest);
   } catch (error) {
     await emitLlmDebugCapture(request.debugCapture, {

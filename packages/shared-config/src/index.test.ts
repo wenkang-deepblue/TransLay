@@ -106,3 +106,32 @@ test("loadWorkerConfig prefers WORKER_DB_POOL_MAX and enforces bounds", () => {
     /WORKER_DB_POOL_MAX must be >= 1/
   );
 });
+
+test("loadWorkerConfig rejects unsigned task bypass outside development", () => {
+  assert.throws(
+    () =>
+      withEnv(
+        {
+          NODE_ENV: "test",
+          ALLOW_UNSIGNED_TASKS: "true",
+        },
+        () => loadWorkerConfig()
+      ),
+    /ALLOW_UNSIGNED_TASKS is only allowed in development/
+  );
+});
+
+test("loadWorkerConfig forces raw LLM output capture off in production", () => {
+  const config = withEnv(
+    {
+      NODE_ENV: "production",
+      CLOUD_TASKS_AUDIENCE: "https://worker.example.com/tasks/translate",
+      CLOUD_TASKS_INVOKER_SA: "worker-invoker@example.com",
+      WORKER_URL: "https://worker.example.com",
+      DEBUG_CAPTURE_LLM_OUTPUTS: "true",
+    },
+    () => loadWorkerConfig()
+  );
+
+  assert.equal(config.debug.captureLlmOutputs, false);
+});

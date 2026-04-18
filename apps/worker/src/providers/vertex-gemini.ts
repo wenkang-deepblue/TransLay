@@ -11,7 +11,10 @@ import {
   type TranslationRequest,
   type TranslationResponse,
 } from "@translay/shared-contracts";
-import { buildOpaqueJsonDataSection } from "./llm-prompt-safety";
+import {
+  assertSafeLlmOutputText,
+  buildOpaqueJsonDataSection,
+} from "./llm-prompt-safety";
 import {
   emitLlmDebugCapture,
   type LlmDebugCaptureFn,
@@ -343,6 +346,7 @@ export async function translateWithVertexGemini(
 
   let parsed: TranslatedNode[];
   try {
+    assertSafeLlmOutputText(responseText, `${callLabel} response`);
     parsed = parseTranslationResponse(responseText, request);
   } catch (error) {
     await emitLlmDebugCapture(options?.debugCapture, {

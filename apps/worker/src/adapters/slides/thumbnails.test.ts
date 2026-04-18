@@ -30,7 +30,7 @@ test("fetchSlideThumbnail reuses an in-memory cache entry for repeated slide req
             thumbnailCalls += 1;
             return {
               data: {
-                contentUrl: "https://example.com/thumb.png",
+                contentUrl: "https://lh3.googleusercontent.com/thumb.png",
                 mimeType: "PNG",
               },
             };
@@ -81,7 +81,7 @@ test("fetchSlideThumbnails forwards cache metadata to batch requests", async () 
             thumbnailCalls += 1;
             return {
               data: {
-                contentUrl: "https://example.com/thumb.png",
+                contentUrl: "https://lh3.googleusercontent.com/thumb.png",
                 mimeType: "PNG",
               },
             };
@@ -137,7 +137,7 @@ test("fetchSlideThumbnails preserves job auth for batch requests and uses fallba
         pages: {
           getThumbnail: async () => ({
             data: {
-              contentUrl: "https://example.com/thumb.png",
+              contentUrl: "https://lh3.googleusercontent.com/thumb.png",
               mimeType: "PNG",
             },
           }),
@@ -228,7 +228,7 @@ test("fetchSlideThumbnail falls back to service account when thumbnail content a
         pages: {
           getThumbnail: async () => ({
             data: {
-              contentUrl: "https://example.com/thumb.png",
+              contentUrl: "https://lh3.googleusercontent.com/thumb.png",
               mimeType: "PNG",
             },
           }),
@@ -249,7 +249,7 @@ test("fetchSlideThumbnail falls back to service account when thumbnail content a
           pages: {
             getThumbnail: async () => ({
               data: {
-                contentUrl: "https://example.com/thumb.png",
+                contentUrl: "https://lh3.googleusercontent.com/thumb.png",
                 mimeType: "PNG",
               },
             }),
@@ -304,4 +304,49 @@ test("normalizeThumbnailMimeType accepts already-normalized mime types and blank
   assert.equal(normalizeThumbnailMimeType(" Image/JPEG "), "image/jpeg");
   assert.equal(normalizeThumbnailMimeType(undefined), "image/png");
   assert.equal(normalizeThumbnailMimeType(""), "image/png");
+});
+
+test("fetchSlideThumbnail rejects non-Google thumbnail hosts before sending bearer tokens", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = (async () => {
+    fetchCalls += 1;
+    return new Response("unexpected", { status: 200 });
+  }) as typeof fetch;
+
+  __setSlidesClientForTests({
+    auth: {
+      getClient: async () => ({
+        getAccessToken: async () => ({ token: "test-token" }),
+      }),
+    } as never,
+    slides: {
+      presentations: {
+        pages: {
+          getThumbnail: async () => ({
+            data: {
+              contentUrl: "https://example.com/thumb.png",
+              mimeType: "PNG",
+            },
+          }),
+        },
+      },
+    } as never,
+  });
+
+  try {
+    await assert.rejects(
+      () =>
+        fetchSlideThumbnail("pres-1", {
+          slide_index: 0,
+          slide_object_id: "slide_0",
+          nodes: [],
+        }),
+      /host is not allowed/
+    );
+    assert.equal(fetchCalls, 0);
+  } finally {
+    __resetSlidesClientForTests();
+    globalThis.fetch = originalFetch;
+  }
 });

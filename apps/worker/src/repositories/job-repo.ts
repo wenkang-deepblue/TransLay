@@ -59,8 +59,7 @@ const JOB_COLUMNS = `id, user_id, host_type, source_doc_id, source_doc_name, tar
   started_at, completed_at`;
 
 export async function getJobById(pool: Pool, jobId: string): Promise<JobRow | null> {
-  // Internal-only worker lookup: the caller is the trusted Cloud Tasks pipeline,
-  // so ownership was already enforced when the control-plane created the task.
+  // Internal worker lookup after control-plane ownership checks have already succeeded.
   const result = await pool.query(
     `SELECT ${JOB_COLUMNS} FROM translation_jobs WHERE id = $1`,
     [jobId]
@@ -114,17 +113,17 @@ export async function updateJobStatus(
   if (status === "extracting") {
     setClauses.push("started_at = NOW()");
   }
-  if (extra?.errorCode) {
+  if (extra?.errorCode !== undefined) {
     setClauses.push(`error_code = $${idx}`);
     params.push(extra.errorCode);
     idx++;
   }
-  if (extra?.errorMessage) {
+  if (extra?.errorMessage !== undefined) {
     setClauses.push(`error_message = $${idx}`);
     params.push(extra.errorMessage);
     idx++;
   }
-  if (extra?.outputDocumentUrl) {
+  if (extra?.outputDocumentUrl !== undefined) {
     setClauses.push(`output_document_url = $${idx}`);
     params.push(extra.outputDocumentUrl);
     idx++;

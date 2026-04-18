@@ -13,7 +13,10 @@ import {
   VERTEX_MAX_OUTPUT_TOKENS,
   VERTEX_SAFETY_SETTINGS_OFF,
 } from "./vertex-gemini";
-import { buildOpaqueJsonDataSection } from "./llm-prompt-safety";
+import {
+  assertSafeLlmOutputText,
+  buildOpaqueJsonDataSection,
+} from "./llm-prompt-safety";
 import { emitLlmDebugCapture, type LlmDebugCaptureFn } from "./llm-debug";
 
 const LAYOUT_SEMANTICS_SYSTEM_INSTRUCTION = `
@@ -279,6 +282,10 @@ export async function requestSlideLayoutSemanticsWithVertexGemini(
   }
 
   try {
+    assertSafeLlmOutputText(
+      responseText,
+      request.debugLabel ?? `layout_semantics:slide_${request.slide_index + 1}`
+    );
     const parsed = JSON.parse(responseText) as unknown;
     await emitLlmDebugCapture(request.debugCapture, {
       provider: "vertex_gemini",

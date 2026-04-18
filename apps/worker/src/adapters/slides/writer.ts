@@ -915,7 +915,7 @@ async function executeBatchUpdateWithRetry(
 
   const budget = getSlidesCallBudget();
   let nextContext = context;
-  for (let attempt = 0; attempt <= RATE_LIMIT_RETRY_BASE_DELAYS_MS.length; attempt += 1) {
+  for (let attempt = 0; ; attempt += 1) {
     nextContext = await maybeApplyGlobalSlowModeDelay(nextContext);
     try {
       await budget.batchUpdateOnce(() =>
@@ -1020,7 +1020,7 @@ function noteWriteSuccess(context: WriteExecutionContext): WriteExecutionContext
 }
 
 function computeRateLimitRetryDelayMs(baseDelayMs: number): number {
-  return Math.max(0, Math.round(writeRandom() * baseDelayMs));
+  return Math.max(1, Math.round(baseDelayMs * (0.7 + 0.6 * writeRandom())));
 }
 
 function computeGlobalSlowModeDelayMs(): number {

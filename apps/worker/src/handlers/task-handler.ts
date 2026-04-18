@@ -85,9 +85,7 @@ async function verifyTaskRequest(
   }
 
   if (!config.cloudTasks.audience) {
-    return allowUnsignedLocalRequest(config)
-      ? null
-      : "Cloud Tasks audience is not configured";
+    return "Cloud Tasks audience is not configured";
   }
 
   try {
@@ -159,7 +157,8 @@ function parseTaskPayload(value: unknown): TaskPayload | null {
 
 function allowUnsignedLocalRequest(config: WorkerConfig): boolean {
   return (
-    config.nodeEnv !== "production" &&
+    config.nodeEnv === "development" &&
+    config.cloudTasks.allowUnsignedTasks &&
     !config.cloudTasks.audience &&
     !config.cloudTasks.invokerServiceAccount
   );

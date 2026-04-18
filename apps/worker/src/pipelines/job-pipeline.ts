@@ -69,7 +69,10 @@ import {
   translateDeckAuthorityWithVertexGemini,
 } from "../providers/vertex-gemini-authority";
 import { requestSlideLayoutSemanticsWithVertexGemini } from "../providers/vertex-gemini-layout";
-import type { LlmDebugCaptureFn } from "../providers/llm-debug";
+import {
+  sanitizeLlmDebugCaptureEvent,
+  type LlmDebugCaptureFn,
+} from "../providers/llm-debug";
 import {
   scanNodesForPromptInjectionRisk,
   scanSlidesForPromptInjectionRisk,
@@ -612,20 +615,28 @@ async function withAuthorityChunkHeartbeat<T>(
     getStageLeaseSeconds("authority")
   );
 
+  let heartbeatInFlight: Promise<void> | null = null;
   const interval = setInterval(() => {
-    void heartbeatJobStage(
+    if (heartbeatInFlight) {
+      return;
+    }
+    heartbeatInFlight = heartbeatJobStage(
       pool,
       jobId,
       "authority",
       stageAttempt,
       getStageLeaseSeconds("authority")
-    ).catch((error) => {
-      console.warn(
-        `Authority heartbeat loop failed for job ${jobId} while processing ${nodes.length} node(s): ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    });
+    )
+      .catch((error) => {
+        console.warn(
+          `Authority heartbeat loop failed for job ${jobId} while processing ${nodes.length} node(s): ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      })
+      .finally(() => {
+        heartbeatInFlight = null;
+      });
   }, AUTHORITY_CHUNK_HEARTBEAT_INTERVAL_MS);
 
   try {
@@ -2845,7 +2856,11 @@ function createLlmDebugCapture(
   }
 
   return async (event) => {
-    await insertLlmDebugOutput(pool, jobId, event);
+    await insertLlmDebugOutput(
+      pool,
+      jobId,
+      sanitizeLlmDebugCaptureEvent(event, config.nodeEnv)
+    );
   };
 }
 

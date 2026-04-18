@@ -42,6 +42,7 @@ function createConfig(): WorkerConfig {
       workerUrl: "https://worker.example.com",
       audience: "",
       invokerServiceAccount: "",
+      allowUnsignedTasks: false,
     },
     debug: {
       captureLlmOutputs: false,

@@ -64,6 +64,8 @@ export function getSlidesClient(): ServiceAccountSlidesClient {
   }
 
   const auth = new google.auth.GoogleAuth({
+    // Service-account writeback needs the Slides REST edit scope; currentonly is
+    // limited to active-container user flows and does not cover worker fallback.
     scopes: ["https://www.googleapis.com/auth/presentations"],
   });
 

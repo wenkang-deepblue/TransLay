@@ -35,6 +35,7 @@ function createConfig(): WorkerConfig {
       workerUrl: "https://worker.example.com",
       audience: "",
       invokerServiceAccount: "",
+      allowUnsignedTasks: false,
     },
     debug: {
       captureLlmOutputs: false,
@@ -55,7 +56,15 @@ test("taskHandler re-enqueues StageLeaseBusy work near lease expiry instead of r
     scheduleTime?: Date;
   }> = [];
 
-  const handler = taskHandler({} as never, {} as never, createConfig(), {
+  const config = {
+    ...createConfig(),
+    nodeEnv: "development" as const,
+    cloudTasks: {
+      ...createConfig().cloudTasks,
+      allowUnsignedTasks: true,
+    },
+  };
+  const handler = taskHandler({} as never, {} as never, config, {
     runJobPipeline: async () => {
       throw new StageLeaseBusyError(
         "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
@@ -115,7 +124,15 @@ test("taskHandler re-enqueues StageLeaseBusy work near lease expiry instead of r
 });
 
 test("taskHandler keeps returning 429 when StageLeaseBusy payload lacks stage attempt", async () => {
-  const handler = taskHandler({} as never, {} as never, createConfig(), {
+  const config = {
+    ...createConfig(),
+    nodeEnv: "development" as const,
+    cloudTasks: {
+      ...createConfig().cloudTasks,
+      allowUnsignedTasks: true,
+    },
+  };
+  const handler = taskHandler({} as never, {} as never, config, {
     runJobPipeline: async () => {
       throw new StageLeaseBusyError(
         "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
@@ -156,4 +173,89 @@ test("taskHandler keeps returning 429 when StageLeaseBusy payload lacks stage at
 
   assert.equal(response.statusCode, 429);
   assert.deepEqual(response.body, { error: "STAGE_LEASE_BUSY" });
+});
+
+test("taskHandler rejects unsigned requests unless explicitly enabled for development", async () => {
+  const handler = taskHandler({} as never, {} as never, createConfig(), {
+    runJobPipeline: async () => {
+      throw new Error("should not run pipeline for unsigned request");
+    },
+  });
+
+  const response = {
+    statusCode: 200,
+    body: undefined as unknown,
+    status(code: number) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload: unknown) {
+      this.body = payload;
+      return this;
+    },
+  };
+
+  await handler(
+    {
+      get: () => undefined,
+      body: {
+        job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+        attempt: 1,
+        requested_at: "2026-04-16T10:00:00.000Z",
+      },
+    } as never,
+    response as never
+  );
+
+  assert.equal(response.statusCode, 401);
+  assert.deepEqual(response.body, { error: "UNAUTHORIZED" });
+});
+
+test("taskHandler allows unsigned requests only in explicit development mode", async () => {
+  const config = {
+    ...createConfig(),
+    nodeEnv: "development" as const,
+    cloudTasks: {
+      ...createConfig().cloudTasks,
+      allowUnsignedTasks: true,
+    },
+  };
+  let pipelineRan = false;
+  const handler = taskHandler({} as never, {} as never, config, {
+    runJobPipeline: async () => {
+      pipelineRan = true;
+    },
+  });
+
+  const response = {
+    statusCode: 200,
+    body: undefined as unknown,
+    status(code: number) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload: unknown) {
+      this.body = payload;
+      return this;
+    },
+  };
+
+  await handler(
+    {
+      get: () => undefined,
+      body: {
+        job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+        attempt: 1,
+        requested_at: "2026-04-16T10:00:00.000Z",
+      },
+    } as never,
+    response as never
+  );
+
+  assert.equal(pipelineRan, true);
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body, {
+    accepted: true,
+    job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+  });
 });

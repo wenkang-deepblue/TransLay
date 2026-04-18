@@ -17,20 +17,42 @@ export async function insertUsageLedger(
   }
 ): Promise<string> {
   const result = await client.query<{ id: string }>(
-    `INSERT INTO usage_ledgers (
-       user_id,
-       job_id,
-       host_type,
-       usage_unit,
-       quantity,
-       billing_period_key,
-       reason,
-       slide_index,
-       ledger_stage,
-       related_usage_id
+    `WITH existing AS (
+       SELECT id
+         FROM usage_ledgers
+        WHERE user_id = $1
+          AND job_id IS NOT DISTINCT FROM $2
+          AND host_type = $3
+          AND usage_unit = $4
+          AND quantity = $5
+          AND billing_period_key = $6
+          AND reason = $7
+          AND slide_index IS NOT DISTINCT FROM $8
+          AND ledger_stage = $9
+          AND related_usage_id IS NOT DISTINCT FROM $10
+        LIMIT 1
+     ),
+     inserted AS (
+       INSERT INTO usage_ledgers (
+         user_id,
+         job_id,
+         host_type,
+         usage_unit,
+         quantity,
+         billing_period_key,
+         reason,
+         slide_index,
+         ledger_stage,
+         related_usage_id
+       )
+       SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+       WHERE NOT EXISTS (SELECT 1 FROM existing)
+       RETURNING id
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-     RETURNING id`,
+     SELECT id FROM inserted
+     UNION ALL
+     SELECT id FROM existing
+     LIMIT 1`,
     [
       params.userId,
       params.jobId,
@@ -44,6 +66,10 @@ export async function insertUsageLedger(
       params.relatedUsageId ?? null,
     ]
   );
+
+  if (!result.rows[0]?.id) {
+    throw new Error("Usage ledger insert did not return an id");
+  }
 
   return result.rows[0].id;
 }
