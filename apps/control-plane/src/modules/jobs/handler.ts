@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 import type { Pool } from "pg";
 import type Redis from "ioredis";
 import type { AppConfig } from "@translay/shared-config";
+import { kmsEncrypt } from "@translay/shared-config/dist/kms";
 import type {
   CreateJobRequest,
   CreateJobResponse,
@@ -35,6 +36,7 @@ import {
   getJobById,
   hasRunningJob,
   hasCompletedEquivalentJob,
+  sweepExpiredHostOauthTokens,
   type JobRow,
   requestJobCancel,
   updateJobStatus,
@@ -50,6 +52,71 @@ import { sendError } from "../../utils/errors";
 import { assertMultiOk } from "../../utils/redis-helpers";
 
 const CANCEL_KEY_TTL_SECONDS = 24 * 60 * 60;
+const HOST_OAUTH_TOKEN_LIFETIME_MS = 55 * 60 * 1000;
+const MAX_HOST_OAUTH_TOKEN_BYTES = 8 * 1024;
+const HOST_OAUTH_SWEEP_GRACE_PERIOD_MINUTES = 60;
+const HOST_OAUTH_SWEEP_BATCH_LIMIT = 500;
+
+type ResolvedHostOauthPersistence = {
+  readonly encryptedHostOauthToken: Buffer | null;
+  readonly hostOauthTokenExpiresAt: Date | null;
+  readonly hostOauthSource: "addon" | "sa_fallback";
+};
+
+function extractBearerToken(authorizationHeader: string | undefined): string | null {
+  if (!authorizationHeader?.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = authorizationHeader.slice("Bearer ".length).trim();
+  if (token.length === 0 || token.length > MAX_HOST_OAUTH_TOKEN_BYTES) {
+    return null;
+  }
+  return token;
+}
+
+async function resolveHostOauthPersistence(
+  authorizationHeader: string | undefined,
+  options: {
+    readonly encrypt?: typeof kmsEncrypt;
+    readonly nowMs?: () => number;
+    readonly onEncryptError?: (error: unknown) => void;
+  } = {}
+): Promise<ResolvedHostOauthPersistence | null> {
+  const rawHostOauthToken = extractBearerToken(authorizationHeader);
+  if (!rawHostOauthToken) {
+    return null;
+  }
+
+  const encrypt = options.encrypt ?? kmsEncrypt;
+  const now = options.nowMs ?? (() => Date.now());
+  try {
+    const encryptedHostOauthToken = await encrypt(rawHostOauthToken);
+    return {
+      encryptedHostOauthToken,
+      hostOauthTokenExpiresAt: new Date(now() + HOST_OAUTH_TOKEN_LIFETIME_MS),
+      hostOauthSource: "addon",
+    };
+  } catch (error) {
+    options.onEncryptError?.(error);
+    return {
+      encryptedHostOauthToken: null,
+      hostOauthTokenExpiresAt: null,
+      hostOauthSource: "sa_fallback",
+    };
+  }
+}
+
+function isInternalCronAuthorized(
+  authorizationHeader: string | undefined,
+  config: AppConfig
+): boolean {
+  const secret = config.security.internalCronSecret;
+  if (!secret) {
+    return false;
+  }
+  return authorizationHeader === `Bearer ${secret}`;
+}
 
 // S8: Validate a string is a known job status
 function isValidJobStatus(s: string): s is JobStatus {
@@ -740,6 +807,22 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
     }
 
     const targetLanguageCode = matchPresetLanguage(body.target_language_input);
+    const hostOauthPersistence = await resolveHostOauthPersistence(req.headers.authorization, {
+      onEncryptError: (error) => {
+        console.warn(
+          "[jobs] failed to persist host OAuth token, falling back to service account",
+          JSON.stringify({
+            user_id: auth.user_id,
+            document_id: body.document_id,
+            error_message: error instanceof Error ? error.message : String(error),
+          })
+        );
+      },
+    });
+    if (!hostOauthPersistence) {
+      sendError(res, "INVALID_TOKEN");
+      return;
+    }
 
     const client = await pool.connect();
     let jobId: JobId;
@@ -758,6 +841,9 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
         outputMode: body.output_mode,
         rangeMode: body.range_mode,
         rangeExpression: body.range_expression ?? null,
+        hostOauthAccessTokenEnc: hostOauthPersistence.encryptedHostOauthToken,
+        hostOauthTokenExpiresAt: hostOauthPersistence.hostOauthTokenExpiresAt,
+        hostOauthSource: hostOauthPersistence.hostOauthSource,
       });
 
       const fingerprint = crypto
@@ -845,6 +931,51 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
 
     res.status(201).json(response);
   };
+}
+
+export function sweepHostOauthTokensHandler(pool: Pool, config: AppConfig) {
+  return async (req: Request, res: Response) => {
+    if (!config.security.internalCronSecret) {
+      res.status(503).json({
+        error: "JOB_INTERNAL_ERROR",
+        message: "Internal cron secret is not configured.",
+      });
+      return;
+    }
+
+    if (!isInternalCronAuthorized(req.headers.authorization, config)) {
+      sendError(res, "UNAUTHORIZED");
+      return;
+    }
+
+    const purgedJobs = await sweepExpiredHostOauthTokens(pool, {
+      gracePeriodMinutes: HOST_OAUTH_SWEEP_GRACE_PERIOD_MINUTES,
+      limit: HOST_OAUTH_SWEEP_BATCH_LIMIT,
+    });
+    res.json({
+      status: "ok",
+      purged_jobs: purgedJobs,
+      grace_period_minutes: HOST_OAUTH_SWEEP_GRACE_PERIOD_MINUTES,
+      batch_limit: HOST_OAUTH_SWEEP_BATCH_LIMIT,
+    });
+  };
+}
+
+export function __extractBearerTokenForTests(
+  authorizationHeader: string | undefined
+): string | null {
+  return extractBearerToken(authorizationHeader);
+}
+
+export async function __resolveHostOauthPersistenceForTests(
+  authorizationHeader: string | undefined,
+  options?: {
+    readonly encrypt?: typeof kmsEncrypt;
+    readonly nowMs?: () => number;
+    readonly onEncryptError?: (error: unknown) => void;
+  }
+): Promise<ResolvedHostOauthPersistence | null> {
+  return resolveHostOauthPersistence(authorizationHeader, options);
 }
 
 // S1: UUID v4 format validation

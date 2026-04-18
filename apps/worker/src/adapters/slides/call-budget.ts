@@ -1,8 +1,15 @@
+import { isUserTokenAuthError } from "./auth";
+
 type SlidesBudgetOpName = "expensive_read" | "batch_update";
 
 export interface SlidesBudgetMetadata {
   readonly jobId?: string;
   readonly opName: string;
+  readonly authContext?: {
+    readonly source: "user" | "sa_fallback";
+    markScopeValidated: () => void;
+    fallbackToServiceAccount: (reason?: string, error?: unknown) => Promise<void>;
+  };
 }
 
 export interface SlidesCallBudgetOptions {
@@ -144,9 +151,15 @@ export class SlidesCallBudget {
     for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
       await bucket.take();
       try {
-        return await callable();
+        const result = await callable();
+        metadata.authContext?.markScopeValidated();
+        return result;
       } catch (error) {
         lastError = error;
+        if (isUserOauthFallbackRequired(error, metadata.authContext)) {
+          await metadata.authContext!.fallbackToServiceAccount("slides_auth_error", error);
+          continue;
+        }
         if (!isRetryableSlidesError(error) || attempt >= this.maxAttempts) {
           break;
         }
@@ -221,6 +234,16 @@ function isRetryableSlidesError(error: unknown): boolean {
   }
 
   return /quota|rate limit|resource exhausted|too many requests/i.test(error.message);
+}
+
+function isUserOauthFallbackRequired(
+  error: unknown,
+  authContext: SlidesBudgetMetadata["authContext"] | undefined
+): boolean {
+  if (!authContext || authContext.source !== "user") {
+    return false;
+  }
+  return isUserTokenAuthError(error);
 }
 
 function isSlidesQuotaSignal(error: unknown): boolean {

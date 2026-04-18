@@ -40,6 +40,9 @@ function createConfig(): WorkerConfig {
       allowDevTestRawOutputPersistence: false,
       llmOutputRetentionHours: 72,
     },
+    security: {
+      kmsKeyName: null,
+    },
   };
 }
 

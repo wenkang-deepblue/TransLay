@@ -44,6 +44,8 @@ tmp/
 *.db
 *.db-journal
 *.psql
+023*.sql
+024*.sql
 
 # Local database / test data directories
 .pgdata/

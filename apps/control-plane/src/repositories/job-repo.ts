@@ -74,14 +74,19 @@ export async function createJob(
     outputMode: OutputMode;
     rangeMode: RangeMode;
     rangeExpression: string | null;
+    hostOauthAccessTokenEnc: Buffer | null;
+    hostOauthTokenExpiresAt: Date | null;
+    hostOauthSource: "addon" | "sa_fallback";
   }
 ): Promise<JobId> {
   const result = await client.query(
     `INSERT INTO translation_jobs
        (user_id, host_type, source_doc_id, source_doc_name, target_doc_id,
         source_language_mode, target_language_input, target_language_code,
-       output_mode, range_mode, range_expression, status, current_stage, stage_status, stage_cursor, stage_payload, stage_attempt)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', 'extract', 'pending', '{}'::jsonb, '{}'::jsonb, 0)
+       output_mode, range_mode, range_expression, host_oauth_access_token_enc,
+       host_oauth_token_expires_at, host_oauth_source,
+       status, current_stage, stage_status, stage_cursor, stage_payload, stage_attempt)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending', 'extract', 'pending', '{}'::jsonb, '{}'::jsonb, 0)
      RETURNING id`,
     [
       params.userId,
@@ -95,6 +100,9 @@ export async function createJob(
       params.outputMode,
       params.rangeMode,
       params.rangeExpression,
+      params.hostOauthAccessTokenEnc,
+      params.hostOauthTokenExpiresAt,
+      params.hostOauthSource,
     ]
   );
   return result.rows[0].id as JobId;
@@ -160,6 +168,10 @@ export async function updateJobStatus(
     status === "canceled"
   ) {
     setClauses.push("completed_at = NOW()");
+    setClauses.push("host_oauth_access_token_enc = NULL");
+    setClauses.push("host_oauth_token_expires_at = NULL");
+    setClauses.push("host_oauth_source = 'sa_fallback'");
+    setClauses.push("host_oauth_purged_at = NOW()");
   }
   if (extra?.errorCode) {
     setClauses.push(`error_code = $${idx}`);
@@ -304,6 +316,37 @@ export async function hasCompletedEquivalentJob(
     ]
   );
   return result.rows.length > 0;
+}
+
+export async function sweepExpiredHostOauthTokens(
+  pool: Pool,
+  options: {
+    readonly gracePeriodMinutes?: number;
+    readonly limit?: number;
+  } = {}
+): Promise<number> {
+  const gracePeriodMinutes = Math.max(0, options.gracePeriodMinutes ?? 60);
+  const limit = Math.max(1, options.limit ?? 500);
+  const result = await pool.query(
+    `WITH expired_jobs AS (
+       SELECT id
+         FROM translation_jobs
+        WHERE host_oauth_access_token_enc IS NOT NULL
+          AND host_oauth_token_expires_at IS NOT NULL
+          AND host_oauth_token_expires_at < NOW() - make_interval(mins => $1::int)
+        ORDER BY host_oauth_token_expires_at ASC
+        LIMIT $2
+     )
+     UPDATE translation_jobs
+        SET host_oauth_access_token_enc = NULL,
+            host_oauth_token_expires_at = NULL,
+            host_oauth_source = 'sa_fallback',
+            host_oauth_purged_at = NOW()
+      WHERE id IN (SELECT id FROM expired_jobs)
+      RETURNING id`,
+    [gracePeriodMinutes, limit]
+  );
+  return result.rowCount ?? 0;
 }
 
 function normalizeJobRow(row: JobRow | undefined): JobRow | null {

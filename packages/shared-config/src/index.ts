@@ -39,6 +39,8 @@ function requireIntEnv(name: string, raw: string): number {
 export function loadConfig() {
   const nodeEnv = optionalEnv("NODE_ENV", "development");
   const sessionSecret = requireEnv("SESSION_SECRET");
+  const kmsKeyName = process.env.KMS_KEY_NAME ?? null;
+  const internalCronSecret = process.env.INTERNAL_CRON_SECRET ?? null;
 
   // S10: SESSION_SECRET must be at least 32 characters
   if (sessionSecret.length < 32) {
@@ -97,6 +99,11 @@ export function loadConfig() {
     domain: optionalEnv("PRODUCTION_DOMAIN", "your-domain.example.com"),
 
     entitlementCacheTtl: 300, // seconds, frozen decision
+
+    security: {
+      kmsKeyName,
+      internalCronSecret,
+    },
   } as const;
 }
 
@@ -110,6 +117,7 @@ export function loadWorkerConfig() {
     "CLOUD_TASKS_INVOKER_SA",
     ""
   );
+  const kmsKeyName = process.env.KMS_KEY_NAME ?? null;
   const captureLlmOutputs = optionalBooleanEnv("DEBUG_CAPTURE_LLM_OUTPUTS", false);
   const allowDevTestRawOutputPersistence = optionalBooleanEnv(
     "DEBUG_ALLOW_DEV_TEST_RAW_OUTPUT_PERSISTENCE",
@@ -186,7 +194,13 @@ export function loadWorkerConfig() {
         optionalEnv("DEBUG_LLM_OUTPUT_RETENTION_HOURS", "72")
       ),
     },
+
+    security: {
+      kmsKeyName,
+    },
   } as const;
 }
 
 export type WorkerConfig = ReturnType<typeof loadWorkerConfig>;
+
+export { kmsEncrypt, kmsDecrypt, __setKmsClientForTests } from "./kms";

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import type { Pool } from "pg";
 import type { slides_v1 } from "googleapis";
 import type { TranslatedNode } from "@translay/shared-contracts";
 import type { SlideTextNode } from "./types";
@@ -13,6 +14,7 @@ import {
 } from "./writer";
 import {
   __resetSlidesClientForTests,
+  __setSlidesAuthHooksForTests,
   __setSlidesClientForTests,
 } from "./auth";
 
@@ -151,6 +153,32 @@ function createShapeSlide(
       },
     ],
   };
+}
+
+function createAuthPoolMock(
+  row: {
+    user_id: string;
+    host_oauth_access_token_enc: Buffer | string | null;
+    host_oauth_token_expires_at: Date | string | null;
+    host_oauth_source: "addon" | "sa_fallback";
+  },
+  updates: Array<{ jobId: string; source: string }>
+): Pool {
+  return {
+    query: async (sql: string, params?: unknown[]) => {
+      if (sql.includes("FROM translation_jobs")) {
+        return { rows: [row] };
+      }
+      if (sql.includes("SET host_oauth_source")) {
+        updates.push({
+          jobId: String(params?.[0]),
+          source: String(params?.[1]),
+        });
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected SQL in test: ${sql}`);
+    },
+  } as unknown as Pool;
 }
 
 test("writer rebuilds mixed emphasis with paragraph and segment ranges instead of flattening one style over the whole node", () => {
@@ -2329,6 +2357,106 @@ test("writeBackAppend trips circuit breaker after repeated systemic auth failure
   }
 });
 
+test("writeBackNewFile falls back to service account after user OAuth write gets 403", async () => {
+  const sourceNode = createSingleParagraphNode({
+    node_id: "shape_user_403",
+    text: "First",
+    full_text: "First",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_user_403",
+  });
+  const sourceSlide = createShapeSlide("slide_user_403", "shape_user_403");
+  const fallbackUpdates: Array<{ jobId: string; source: string }> = [];
+  let userBatchUpdateCalls = 0;
+  let serviceAccountBatchUpdateCalls = 0;
+
+  __setSlidesClientForTests({
+    auth: { kind: "sa-auth" } as never,
+    slides: {
+      presentations: {
+        get: async () => ({
+          data: {
+            slides: [sourceSlide],
+          },
+        }),
+        batchUpdate: async () => {
+          serviceAccountBatchUpdateCalls += 1;
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+  __setSlidesAuthHooksForTests({
+    nowMs: () => Date.parse("2026-04-18T10:00:00.000Z"),
+    decryptToken: async () => "user-access-token",
+    buildUserSlidesClient: (accessToken) => {
+      assert.equal(accessToken, "user-access-token");
+      return {
+        auth: { kind: "user-auth" } as never,
+        slides: {
+          presentations: {
+            get: async () => ({
+              data: {
+                slides: [sourceSlide],
+              },
+            }),
+            batchUpdate: async () => {
+              userBatchUpdateCalls += 1;
+              throw Object.assign(new Error("Forbidden"), {
+                response: {
+                  status: 403,
+                  data: {
+                    error: {
+                      errors: [{ reason: "insufficientPermissions" }],
+                    },
+                  },
+                },
+              });
+            },
+          },
+        } as never,
+      };
+    },
+  });
+
+  try {
+    const result = await writeBackNewFile(
+      "presentation_user_403",
+      [
+        {
+          slide_index: 0,
+          slide_object_id: "slide_user_403",
+          nodes: [sourceNode],
+        },
+      ],
+      [createValidTranslatedNode(sourceNode, "Uno")],
+      undefined,
+      {
+        jobId: "job-user-403",
+        pool: createAuthPoolMock(
+          {
+            user_id: "user-1",
+            host_oauth_access_token_enc: Buffer.from("ciphertext"),
+            host_oauth_token_expires_at: "2026-04-18T10:10:00.000Z",
+            host_oauth_source: "addon",
+          },
+          fallbackUpdates
+        ),
+      }
+    );
+
+    assert.equal(result.committedUnits, 1);
+    assert.deepEqual(result.committed_slide_indexes, [0]);
+    assert.equal(userBatchUpdateCalls, 1);
+    assert.equal(serviceAccountBatchUpdateCalls, 1);
+    assert.deepEqual(fallbackUpdates, [{ jobId: "job-user-403", source: "sa_fallback" }]);
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
 test("test Slides client injection is blocked in production", () => {
   const originalNodeEnv = process.env.NODE_ENV;
   process.env.NODE_ENV = "production";
@@ -2341,6 +2469,24 @@ test("test Slides client injection is blocked in production", () => {
           slides: {} as never,
         }),
       /disabled in production/
+    );
+  } finally {
+    process.env.NODE_ENV = originalNodeEnv;
+  }
+});
+
+test("test Slides client injection is blocked in staging", () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "staging";
+
+  try {
+    assert.throws(
+      () =>
+        __setSlidesClientForTests({
+          auth: {} as never,
+          slides: {} as never,
+        }),
+      /production-like environments/
     );
   } finally {
     process.env.NODE_ENV = originalNodeEnv;

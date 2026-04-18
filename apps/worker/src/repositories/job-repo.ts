@@ -106,6 +106,10 @@ export async function updateJobStatus(
     status === "canceled"
   ) {
     setClauses.push("completed_at = NOW()");
+    setClauses.push("host_oauth_access_token_enc = NULL");
+    setClauses.push("host_oauth_token_expires_at = NULL");
+    setClauses.push("host_oauth_source = 'sa_fallback'");
+    setClauses.push("host_oauth_purged_at = NOW()");
   }
   if (status === "extracting") {
     setClauses.push("started_at = NOW()");

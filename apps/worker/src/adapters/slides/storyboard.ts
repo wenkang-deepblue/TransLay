@@ -1,5 +1,6 @@
 import type { slides_v1 } from "googleapis";
-import { getSlidesClient } from "./auth";
+import type { Pool } from "pg";
+import { getSlidesClient, getSlidesClientForJob } from "./auth";
 import { getSlidesCallBudget, type SlidesCallBudget } from "./call-budget";
 import type { SlideExtractionResult } from "./types";
 import {
@@ -29,6 +30,7 @@ export async function buildDeckStoryboard(
     readonly size?: ThumbnailSize;
     readonly cache?: SlideThumbnailCache;
     readonly budget?: SlidesCallBudget;
+    readonly pool?: Pool;
     readonly jobId?: string;
   } = {}
 ): Promise<DeckStoryboard> {
@@ -44,6 +46,7 @@ export async function buildPresentationStoryboard(
     readonly size?: ThumbnailSize;
     readonly presentation?: slides_v1.Schema$Presentation;
     readonly budget?: SlidesCallBudget;
+    readonly pool?: Pool;
     readonly jobId?: string;
   } = {}
 ): Promise<DeckStoryboard> {
@@ -63,6 +66,7 @@ export async function buildSingleSlideStoryboardFrame(
     readonly size?: ThumbnailSize;
     readonly cache?: SlideThumbnailCache;
     readonly budget?: SlidesCallBudget;
+    readonly pool?: Pool;
     readonly jobId?: string;
   } = {}
 ): Promise<StoryboardFrame> {
@@ -123,6 +127,7 @@ async function loadSlidesForStoryboard(
   options: {
     readonly presentation?: slides_v1.Schema$Presentation;
     readonly budget?: SlidesCallBudget;
+    readonly pool?: Pool;
     readonly jobId?: string;
   }
 ): Promise<readonly slides_v1.Schema$Page[]> {
@@ -130,13 +135,18 @@ async function loadSlidesForStoryboard(
     return options.presentation.slides;
   }
 
-  const { slides } = getSlidesClient();
+  const authContext =
+    options.pool && options.jobId
+      ? await getSlidesClientForJob(options.jobId, options.pool)
+      : null;
+  const getSlidesApi = () => authContext?.slides ?? getSlidesClient().slides;
   const budget = options.budget ?? getSlidesCallBudget();
   const presentation = await budget.expensiveRead(
-    () => slides.presentations.get({ presentationId }),
+    () => getSlidesApi().presentations.get({ presentationId }),
     {
       jobId: options.jobId,
       opName: "slides.presentations.get",
+      authContext: authContext ?? undefined,
     }
   );
   return presentation.data.slides ?? [];

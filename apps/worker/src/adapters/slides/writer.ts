@@ -1,4 +1,5 @@
 import type { slides_v1 } from "googleapis";
+import type { Pool } from "pg";
 import {
   type JobWarning,
   type JobWarningReason,
@@ -6,7 +7,12 @@ import {
   type TranslatedNode,
 } from "@translay/shared-contracts";
 import type { SlideTextNode, SlideExtractionResult } from "./types";
-import { getSlidesClient } from "./auth";
+import {
+  getSlidesClient,
+  getSlidesClientForJob,
+  isUserTokenAuthError,
+  type SlidesClientContext,
+} from "./auth";
 import { getSlidesCallBudget } from "./call-budget";
 import {
   type FitPassResult,
@@ -164,9 +170,17 @@ export async function writeBackAppend(
   presentationId: string,
   extractedSlides: SlideExtractionResult[],
   translatedNodes: readonly TranslatedNode[],
-  onProgress?: (result: WriteBackResult) => Promise<void>
+  onProgress?: (result: WriteBackResult) => Promise<void>,
+  authOptions?: {
+    readonly pool?: Pool;
+    readonly jobId?: string;
+  }
 ): Promise<WriteBackResult> {
-  const { slides } = getSlidesClient();
+  const authContext =
+    authOptions?.pool && authOptions.jobId
+      ? await getSlidesClientForJob(authOptions.jobId, authOptions.pool)
+      : undefined;
+  const getSlidesApi = () => authContext?.slides ?? getSlidesClient().slides;
   const budget = getSlidesCallBudget();
   const translationMap = buildTranslationMap(translatedNodes);
   const outputUrl = `https://docs.google.com/presentation/d/${presentationId}/edit`;
@@ -177,9 +191,11 @@ export async function writeBackAppend(
   }
 
   const pres = await budget.expensiveRead(
-    () => slides.presentations.get({ presentationId }),
+    () => getSlidesApi().presentations.get({ presentationId }),
     {
+      jobId: authOptions?.jobId,
       opName: "slides.presentations.get",
+      authContext,
     }
   );
   const allSlides = pres.data.slides ?? [];
@@ -243,7 +259,7 @@ export async function writeBackAppend(
     let duplicated = false;
     try {
       writeContext = await executeBatchUpdateWithRetry(
-        slides,
+        getSlidesApi,
         presentationId,
         [
           {
@@ -263,18 +279,20 @@ export async function writeBackAppend(
         {
           phase: "duplicate_slide",
           slideIndex: extracted.slide_index,
-        }
+        },
+        authContext
       );
       duplicated = true;
 
       const nodeWriteResult = await executeNodeWritesForSlide(
-        slides,
+        getSlidesApi,
         presentationId,
         plan.sourceSlide,
         plan.extractedSlide.nodes,
         translationMap,
         (sourceObjectId) => plan.objectIds[sourceObjectId] ?? sourceObjectId,
-        writeContext
+        writeContext,
+        authContext
       );
       writeContext = nodeWriteResult.context;
       if (nodeWriteResult.committedNodeIds.length === 0) {
@@ -302,7 +320,7 @@ export async function writeBackAppend(
       });
       if (duplicated) {
         await cleanupDuplicatedSlides(
-          slides,
+          getSlidesApi(),
           presentationId,
           [plan.newSlideId],
           extracted.slide_index,
@@ -357,9 +375,17 @@ export async function writeBackNewFile(
   targetPresentationId: string,
   extractedSlides: SlideExtractionResult[],
   translatedNodes: readonly TranslatedNode[],
-  onProgress?: (result: WriteBackResult) => Promise<void>
+  onProgress?: (result: WriteBackResult) => Promise<void>,
+  authOptions?: {
+    readonly pool?: Pool;
+    readonly jobId?: string;
+  }
 ): Promise<WriteBackResult> {
-  const { slides } = getSlidesClient();
+  const authContext =
+    authOptions?.pool && authOptions.jobId
+      ? await getSlidesClientForJob(authOptions.jobId, authOptions.pool)
+      : undefined;
+  const getSlidesApi = () => authContext?.slides ?? getSlidesClient().slides;
   const budget = getSlidesCallBudget();
   const translationMap = buildTranslationMap(translatedNodes);
   const outputUrl = `https://docs.google.com/presentation/d/${targetPresentationId}/edit`;
@@ -370,11 +396,13 @@ export async function writeBackNewFile(
 
   const newPres = await budget.expensiveRead(
     () =>
-      slides.presentations.get({
+      getSlidesApi().presentations.get({
         presentationId: targetPresentationId,
       }),
     {
+      jobId: authOptions?.jobId,
       opName: "slides.presentations.get",
+      authContext,
     }
   );
   const newSlides = newPres.data.slides ?? [];
@@ -411,13 +439,14 @@ export async function writeBackNewFile(
 
     try {
       const nodeWriteResult = await executeNodeWritesForSlide(
-        slides,
+        getSlidesApi,
         targetPresentationId,
         slide,
         extracted.nodes,
         translationMap,
         (sourceObjectId) => sourceObjectId,
-        writeContext
+        writeContext,
+        authContext
       );
       writeContext = nodeWriteResult.context;
       if (nodeWriteResult.committedNodeIds.length === 0) {
@@ -491,9 +520,17 @@ export async function writeBackExistingSlides(
   extractedSlides: SlideExtractionResult[],
   translatedNodes: readonly TranslatedNode[],
   existingTargets: readonly ExistingSlideWriteTarget[],
-  onProgress?: (result: WriteBackResult) => Promise<void>
+  onProgress?: (result: WriteBackResult) => Promise<void>,
+  authOptions?: {
+    readonly pool?: Pool;
+    readonly jobId?: string;
+  }
 ): Promise<WriteBackResult> {
-  const { slides } = getSlidesClient();
+  const authContext =
+    authOptions?.pool && authOptions.jobId
+      ? await getSlidesClientForJob(authOptions.jobId, authOptions.pool)
+      : undefined;
+  const getSlidesApi = () => authContext?.slides ?? getSlidesClient().slides;
   const budget = getSlidesCallBudget();
   const translationMap = buildTranslationMap(translatedNodes);
   const outputUrl = `https://docs.google.com/presentation/d/${presentationId}/edit`;
@@ -505,9 +542,11 @@ export async function writeBackExistingSlides(
 
   const targetBySlideIndex = new Map(existingTargets.map((target) => [target.slide_index, target]));
   const pres = await budget.expensiveRead(
-    () => slides.presentations.get({ presentationId }),
+    () => getSlidesApi().presentations.get({ presentationId }),
     {
+      jobId: authOptions?.jobId,
       opName: "slides.presentations.get",
+      authContext,
     }
   );
   const allSlides = pres.data.slides ?? [];
@@ -551,13 +590,14 @@ export async function writeBackExistingSlides(
 
     try {
       const nodeWriteResult = await executeNodeWritesForSlide(
-        slides,
+        getSlidesApi,
         presentationId,
         outputSlide,
         extracted.nodes,
         translationMap,
         (sourceObjectId) => target?.object_id_map?.[sourceObjectId] ?? sourceObjectId,
-        writeContext
+        writeContext,
+        authContext
       );
       writeContext = nodeWriteResult.context;
       if (nodeWriteResult.committedNodeIds.length === 0) {
@@ -696,13 +736,14 @@ function appendFailedSlidesResult(
 }
 
 async function executeNodeWritesForSlide(
-  slides: ReturnType<typeof getSlidesClient>["slides"],
+  slides: () => ReturnType<typeof getSlidesClient>["slides"],
   presentationId: string,
   slide: slides_v1.Schema$Page,
   originalNodes: readonly SlideTextNode[],
   translationMap: Map<string, TranslatedNode>,
   resolveObjectId: (sourceObjectId: string) => string,
-  context: WriteExecutionContext
+  context: WriteExecutionContext,
+  authContext?: SlidesClientContext
 ): Promise<NodeWriteExecutionResult> {
   const fitByNodeId = resolveSlideNodeFits(
     originalNodes,
@@ -765,7 +806,8 @@ async function executeNodeWritesForSlide(
     slides,
     presentationId,
     preparedPlans,
-    context
+    context,
+    authContext
   );
 
   return {
@@ -778,10 +820,11 @@ async function executeNodeWritesForSlide(
 }
 
 async function executePreparedNodeWritePlans(
-  slides: ReturnType<typeof getSlidesClient>["slides"],
+  slides: () => ReturnType<typeof getSlidesClient>["slides"],
   presentationId: string,
   plans: readonly PreparedNodeWritePlan[],
-  context: WriteExecutionContext
+  context: WriteExecutionContext,
+  authContext?: SlidesClientContext
 ): Promise<NodeWriteExecutionResult & { readonly context: WriteExecutionContext }> {
   if (plans.length === 0) {
     return {
@@ -802,7 +845,8 @@ async function executePreparedNodeWritePlans(
         phase: plans.length === 1 ? "single_node_write" : "group_write",
         slideIndex: plans[0]?.slideIndex,
         nodeIds: plans.map((plan) => plan.nodeId),
-      }
+      },
+      authContext
     );
     return {
       warnings: plans.flatMap((plan) => plan.warnings),
@@ -833,13 +877,15 @@ async function executePreparedNodeWritePlans(
       slides,
       presentationId,
       leftPlans,
-      context
+      context,
+      authContext
     );
     const rightResult = await executePreparedNodeWritePlans(
       slides,
       presentationId,
       rightPlans,
-      leftResult.context
+      leftResult.context,
+      authContext
     );
     return {
       warnings: [...leftResult.warnings, ...rightResult.warnings],
@@ -852,7 +898,7 @@ async function executePreparedNodeWritePlans(
 }
 
 async function executeBatchUpdateWithRetry(
-  slides: ReturnType<typeof getSlidesClient>["slides"],
+  slides: () => ReturnType<typeof getSlidesClient>["slides"],
   presentationId: string,
   requests: readonly slides_v1.Schema$Request[],
   context: WriteExecutionContext,
@@ -860,7 +906,8 @@ async function executeBatchUpdateWithRetry(
     readonly phase: string;
     readonly slideIndex?: number;
     readonly nodeIds?: readonly string[];
-  }
+  },
+  authContext?: SlidesClientContext
 ): Promise<WriteExecutionContext> {
   if (requests.length === 0) {
     return context;
@@ -872,13 +919,18 @@ async function executeBatchUpdateWithRetry(
     nextContext = await maybeApplyGlobalSlowModeDelay(nextContext);
     try {
       await budget.batchUpdateOnce(() =>
-        slides.presentations.batchUpdate({
+        slides().presentations.batchUpdate({
           presentationId,
           requestBody: { requests: [...requests] },
         })
       );
+      authContext?.markScopeValidated();
       return noteWriteSuccess(nextContext);
     } catch (error) {
+      if (authContext && authContext.source === "user" && isUserTokenAuthError(error)) {
+        await authContext.fallbackToServiceAccount("slides_batch_update_auth_error", error);
+        continue;
+      }
       const classifiedError = classifyWriteError(error);
       const retryBaseDelays =
         classifiedError.systemicCategory === "quota"
@@ -1787,7 +1839,7 @@ async function cleanupDuplicatedSlides(
 
   try {
     await executeBatchUpdateWithRetry(
-      slides,
+      () => slides,
       presentationId,
       slideObjectIds.map((objectId) => ({
         deleteObject: { objectId },

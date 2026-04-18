@@ -1,4 +1,10 @@
-import { getSlidesAuth, getSlidesClient } from "./auth";
+import type { Pool } from "pg";
+import {
+  getSlidesClient,
+  getSlidesClientForJob,
+  getSlidesAccessToken,
+  isUserTokenAuthError,
+} from "./auth";
 import { getSlidesCallBudget, type SlidesCallBudget } from "./call-budget";
 import type { SlideExtractionResult } from "./types";
 
@@ -54,6 +60,7 @@ export async function fetchSlideThumbnails(
     readonly size?: ThumbnailSize;
     readonly cache?: SlideThumbnailCache;
     readonly budget?: SlidesCallBudget;
+    readonly pool?: Pool;
     readonly jobId?: string;
   } = {}
 ): Promise<SlideThumbnail[]> {
@@ -64,6 +71,7 @@ export async function fetchSlideThumbnails(
       size,
       cache: options.cache,
       budget: options.budget,
+      pool: options.pool,
       jobId: options.jobId,
     }));
   }
@@ -77,6 +85,7 @@ export async function fetchSlideThumbnail(
     readonly size?: ThumbnailSize;
     readonly cache?: SlideThumbnailCache;
     readonly budget?: SlidesCallBudget;
+    readonly pool?: Pool;
     readonly jobId?: string;
   } = {}
 ): Promise<SlideThumbnail> {
@@ -103,19 +112,21 @@ async function fetchSlideThumbnailUncached(
   options: {
     readonly size?: ThumbnailSize;
     readonly budget?: SlidesCallBudget;
+    readonly pool?: Pool;
     readonly jobId?: string;
   }
 ): Promise<SlideThumbnail> {
-  const { slides: slidesClient } = getSlidesClient();
-  const auth = getSlidesAuth();
-  const authClient = await auth.getClient();
-  const accessToken = await authClient.getAccessToken();
-  const bearerToken =
-    typeof accessToken === "string" ? accessToken : accessToken?.token ?? undefined;
+  const authContext =
+    options.pool && options.jobId
+      ? await getSlidesClientForJob(options.jobId, options.pool)
+      : null;
+  const getSlidesApi = () => authContext?.slides ?? getSlidesClient().slides;
+  const getCurrentBearerToken = () =>
+    getSlidesAccessToken(authContext?.auth ?? getSlidesClient().auth);
   const budget = options.budget ?? getSlidesCallBudget();
   const response = await budget.expensiveRead(
     () =>
-      (slidesClient.presentations.pages as unknown as {
+      (getSlidesApi().presentations.pages as unknown as {
         getThumbnail(args: Record<string, unknown>): Promise<{
           data?: { contentUrl?: string; mimeType?: string };
         }>;
@@ -128,6 +139,7 @@ async function fetchSlideThumbnailUncached(
     {
       jobId: options.jobId,
       opName: "slides.presentations.pages.getThumbnail",
+      authContext: authContext ?? undefined,
     }
   );
 
@@ -137,7 +149,30 @@ async function fetchSlideThumbnailUncached(
     throw new Error(`Thumbnail URL missing for slide ${slide.slide_index}`);
   }
 
-  const imageResponse = await fetchThumbnailContent(contentUrl, bearerToken);
+  let imageResponse: Response;
+  try {
+    const bearerToken = await getCurrentBearerToken();
+    imageResponse = await fetchThumbnailContent(contentUrl, bearerToken);
+  } catch (error) {
+    const errorStatus =
+      typeof error === "object" &&
+      error !== null &&
+      "status" in error &&
+      typeof (error as { status?: unknown }).status === "number"
+        ? (error as { status: number }).status
+        : null;
+    if (
+      authContext &&
+      authContext.source === "user" &&
+      (errorStatus === 401 || errorStatus === 403 || isUserTokenAuthError(error))
+    ) {
+      await authContext.fallbackToServiceAccount("slides_thumbnail_content_auth_error", error);
+      const fallbackBearerToken = await getCurrentBearerToken();
+      imageResponse = await fetchThumbnailContent(contentUrl, fallbackBearerToken);
+    } else {
+      throw error;
+    }
+  }
   return {
     slide_index: slide.slide_index,
     slide_object_id: slide.slide_object_id,
@@ -156,14 +191,21 @@ async function fetchThumbnailContent(
   }
 
   if (!bearerToken) {
-    throw new Error(`Failed to fetch slide thumbnail: ${directResponse.status}`);
+    throw Object.assign(new Error(`Failed to fetch slide thumbnail: ${directResponse.status}`), {
+      status: directResponse.status,
+    });
   }
 
   const authorizedResponse = await fetchWithTimeout(contentUrl, {
     headers: { Authorization: `Bearer ${bearerToken}` },
   });
   if (!authorizedResponse.ok) {
-    throw new Error(`Failed to fetch slide thumbnail: ${authorizedResponse.status}`);
+    throw Object.assign(
+      new Error(`Failed to fetch slide thumbnail: ${authorizedResponse.status}`),
+      {
+        status: authorizedResponse.status,
+      }
+    );
   }
 
   return authorizedResponse;

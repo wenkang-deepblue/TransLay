@@ -1,11 +1,12 @@
 import crypto from "node:crypto";
 import type { slides_v1 } from "googleapis";
+import type { Pool } from "pg";
 import type {
   SlideTextNode,
   SlideExtractionResult,
   PresentationExtractionResult,
 } from "./types";
-import { getSlidesClient } from "./auth";
+import { getSlidesClient, getSlidesClientForJob } from "./auth";
 import { getSlidesCallBudget, type SlidesCallBudget } from "./call-budget";
 import {
   buildRichTextNode,
@@ -121,6 +122,7 @@ export async function extractSlides(
   options: {
     readonly presentation?: slides_v1.Schema$Presentation;
     readonly budget?: SlidesCallBudget;
+    readonly pool?: Pool;
     readonly jobId?: string;
   } = {}
 ): Promise<PresentationExtractionResult> {
@@ -204,16 +206,22 @@ async function loadPresentation(
   presentationId: string,
   options: {
     readonly budget?: SlidesCallBudget;
+    readonly pool?: Pool;
     readonly jobId?: string;
   }
 ): Promise<{ data: slides_v1.Schema$Presentation }> {
-  const { slides } = getSlidesClient();
+  const authContext =
+    options.pool && options.jobId
+      ? await getSlidesClientForJob(options.jobId, options.pool)
+      : null;
+  const getSlidesApi = () => authContext?.slides ?? getSlidesClient().slides;
   const budget = options.budget ?? getSlidesCallBudget();
   return budget.expensiveRead(
-    () => slides.presentations.get({ presentationId }),
+    () => getSlidesApi().presentations.get({ presentationId }),
     {
       jobId: options.jobId,
       opName: "slides.presentations.get",
+      authContext: authContext ?? undefined,
     }
   );
 }

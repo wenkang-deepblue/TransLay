@@ -59,6 +59,7 @@ import {
   buildSingleSlideStoryboardFrame,
   selectSlidingWindowSlides,
 } from "../adapters/slides/storyboard";
+import { isUserTokenAuthError } from "../adapters/slides/auth";
 import type { WriteBackResult } from "../adapters/slides";
 import { selectRoute } from "../providers/router";
 import {
@@ -272,7 +273,10 @@ async function runExtractStage(
     }
 
     const pageIndices = resolvePageIndices(job);
-    const extraction = await extractSlides(job.source_doc_id, pageIndices, { jobId });
+    const extraction = await extractSlides(job.source_doc_id, pageIndices, {
+      pool,
+      jobId,
+    });
     if (extraction.all_nodes.length === 0) {
       throw new PipelineError(
         "HOST_ADAPTER_ERROR",
@@ -395,7 +399,10 @@ async function runLayoutStage(
     const extraction = await extractSlides(
       job.source_doc_id,
       pageIndices.length > 0 ? pageIndices : resolvePageIndices(job),
-      { jobId }
+      {
+        pool,
+        jobId,
+      }
     );
     const notesPresentSlideIndices = asNumberArray(job.stage_payload.notes_present_slide_indices);
     slideResults = initializeJobSlideResults(
@@ -420,6 +427,7 @@ async function runLayoutStage(
           const thumbnail = await buildSingleSlideStoryboardFrame(job.source_doc_id, slide, {
             size: "LARGE",
             cache: thumbnailCache,
+            pool,
             jobId,
           });
           const [input] = buildLayoutSemanticInputs(slide ? [slide] : [], {
@@ -726,7 +734,10 @@ async function runAuthorityStage(
     }
     // range_mode === "entire" → pageIndices stays null (all slides)
 
-    const extraction = await extractSlides(job.source_doc_id, pageIndices, { jobId: job_id });
+    const extraction = await extractSlides(job.source_doc_id, pageIndices, {
+      pool,
+      jobId: job_id,
+    });
     console.log(
       `Job ${job_id} extraction completed: ${extraction.extracted_slides.length} slides, ${extraction.all_nodes.length} nodes`
     );
@@ -828,6 +839,7 @@ async function runAuthorityStage(
             buildSingleSlideStoryboardFrame(job.source_doc_id, slide, {
               size: "LARGE",
               cache: thumbnailCache,
+              pool,
               jobId: job_id,
             }),
           async (input) =>
@@ -868,6 +880,7 @@ async function runAuthorityStage(
           {
             size: "MEDIUM",
             cache: thumbnailCache,
+            pool,
             jobId: job_id,
           }
         );
@@ -894,6 +907,7 @@ async function runAuthorityStage(
                   buildSingleSlideStoryboardFrame(job.source_doc_id, slide, {
                     size: "LARGE",
                     cache: thumbnailCache,
+                    pool,
                     jobId: job_id,
                   })
                 )
@@ -962,6 +976,7 @@ async function runAuthorityStage(
               {
                 size: "LARGE",
                 cache: thumbnailCache,
+                pool,
                 jobId: job_id,
               }
             );
@@ -1256,14 +1271,16 @@ async function runAuthorityStage(
             job.target_doc_id,
             writableSlides,
             translationResult.nodes,
-            onContentWriteProgress
+            onContentWriteProgress,
+            { pool, jobId: job_id }
           );
         } else {
           writeResult = await writeBackAppend(
             job.source_doc_id,
             writableSlides,
             translationResult.nodes,
-            onContentWriteProgress
+            onContentWriteProgress,
+            { pool, jobId: job_id }
           );
         }
       } catch (error) {
@@ -1400,7 +1417,8 @@ async function runAuthorityStage(
         notesExistingSlides,
         noteTranslatedNodes,
         notesExistingTargets,
-        onNotesWriteProgress
+        onNotesWriteProgress,
+        { pool, jobId: job_id }
       );
       applyNotesWriteResultToSlideResults(
         slideResults,
@@ -1416,7 +1434,8 @@ async function runAuthorityStage(
         job.source_doc_id,
         notesAppendOnlySlides,
         noteTranslatedNodes,
-        onNotesWriteProgress
+        onNotesWriteProgress,
+        { pool, jobId: job_id }
       );
       applyNotesWriteResultToSlideResults(
         slideResults,
@@ -2105,8 +2124,21 @@ function toSlideFailureReasonCode(error: unknown): string {
 
   if (error instanceof Error) {
     const code = (error as Error & { code?: unknown }).code;
-    if (code === "SLIDES_QUOTA_EXHAUSTED" || code === "VERTEX_QUOTA_EXHAUSTED") {
+    if (
+      code === "SLIDES_QUOTA_EXHAUSTED" ||
+      code === "VERTEX_QUOTA_EXHAUSTED" ||
+      code === "UNAUTHORIZED" ||
+      code === "ACCESS_DENIED"
+    ) {
       return code;
+    }
+
+    const status = getPipelineErrorStatus(error);
+    if (status === 401 || isUserTokenAuthError(error)) {
+      return "UNAUTHORIZED";
+    }
+    if (status === 403) {
+      return "ACCESS_DENIED";
     }
   }
 
@@ -2405,6 +2437,10 @@ function toSafeErrorMessage(code: string): string {
   switch (code) {
     case "INVALID_RANGE":
       return "The selected slide range is invalid.";
+    case "UNAUTHORIZED":
+      return "Google Slides™ authentication expired or is no longer valid. Please retry from the add-on.";
+    case "ACCESS_DENIED":
+      return "The Google Slides™ document could not be accessed with the current account permissions.";
     case "HOST_ADAPTER_ERROR":
       return "Failed to access or update the Google Slides™ document.";
     case "SLIDES_QUOTA_EXHAUSTED":
@@ -2419,6 +2455,22 @@ function toSafeErrorMessage(code: string): string {
     default:
       return "The translation job failed due to an internal error.";
   }
+}
+
+function getPipelineErrorStatus(error: unknown): number | null {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+
+  const candidate = error as Error & {
+    code?: unknown;
+    status?: unknown;
+    response?: { status?: unknown };
+  };
+  const status = [candidate.status, candidate.response?.status, candidate.code].find(
+    (value) => typeof value === "number"
+  );
+  return typeof status === "number" ? status : null;
 }
 
 function toSafePipelineMessage(error: unknown, fallback: string): string {

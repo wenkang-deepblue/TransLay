@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { __setKmsClientForTests } from "@translay/shared-config";
 import type { JobId, JobSlideResult, JobWarning, UserId } from "@translay/shared-contracts";
-import { __buildJobStatusResponseForTests } from "./handler";
+import {
+  __buildJobStatusResponseForTests,
+  __extractBearerTokenForTests,
+  __resolveHostOauthPersistenceForTests,
+} from "./handler";
 
 function createBaseJob() {
   return {
@@ -594,4 +599,68 @@ test("job handler returns no-charge canceled message when net billed slides are 
     output_mode: "create_new_file",
     output_document_url: "https://docs.google.com/presentation/d/target-doc/edit",
   });
+});
+
+test("extractBearerToken rejects missing, empty, and oversized bearer tokens", () => {
+  assert.equal(__extractBearerTokenForTests(undefined), null);
+  assert.equal(__extractBearerTokenForTests("Bearer   "), null);
+  assert.equal(
+    __extractBearerTokenForTests(`Bearer ${"x".repeat(8 * 1024 + 1)}`),
+    null
+  );
+  assert.equal(__extractBearerTokenForTests("Bearer valid-token"), "valid-token");
+});
+
+test("resolveHostOauthPersistence returns null when authorization is missing", async () => {
+  const resolved = await __resolveHostOauthPersistenceForTests(undefined);
+  assert.equal(resolved, null);
+});
+
+test("resolveHostOauthPersistence stores encrypted token metadata when KMS succeeds", async () => {
+  const resolved = await __resolveHostOauthPersistenceForTests("Bearer host-token", {
+    encrypt: async (plaintext) => {
+      assert.equal(String(plaintext), "host-token");
+      return Buffer.from("ciphertext");
+    },
+    nowMs: () => Date.parse("2026-04-18T10:00:00.000Z"),
+  });
+
+  assert.deepEqual(resolved, {
+    encryptedHostOauthToken: Buffer.from("ciphertext"),
+    hostOauthTokenExpiresAt: new Date("2026-04-18T10:55:00.000Z"),
+    hostOauthSource: "addon",
+  });
+});
+
+test("resolveHostOauthPersistence falls back to service account when KMS encrypt fails", async () => {
+  const seenErrors: string[] = [];
+  const resolved = await __resolveHostOauthPersistenceForTests("Bearer host-token", {
+    encrypt: async () => {
+      throw new Error("kms unavailable");
+    },
+    onEncryptError: (error) => {
+      seenErrors.push(error instanceof Error ? error.message : String(error));
+    },
+  });
+
+  assert.deepEqual(resolved, {
+    encryptedHostOauthToken: null,
+    hostOauthTokenExpiresAt: null,
+    hostOauthSource: "sa_fallback",
+  });
+  assert.deepEqual(seenErrors, ["kms unavailable"]);
+});
+
+test("KMS test hooks are disabled in production-like environments", () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "staging";
+
+  try {
+    assert.throws(
+      () => __setKmsClientForTests(null),
+      /production-like environments/
+    );
+  } finally {
+    process.env.NODE_ENV = originalNodeEnv;
+  }
 });
