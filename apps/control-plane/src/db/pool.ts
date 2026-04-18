@@ -11,7 +11,7 @@ export function getPool(config: AppConfig): Pool {
       database: config.db.name,
       user: config.db.user,
       password: config.db.password,
-      max: 10,
+      max: config.db.poolMax,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
     });

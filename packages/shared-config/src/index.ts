@@ -28,12 +28,67 @@ function optionalBooleanEnv(name: string, fallback: boolean): boolean {
   throw new Error(`Environment variable ${name} must be a boolean, got: ${raw}`);
 }
 
+function optionalIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined) {
+    return fallback;
+  }
+  return requireIntEnv(name, raw);
+}
+
+function optionalBoundedIntEnv(
+  name: string,
+  fallback: number,
+  options: {
+    readonly min?: number;
+    readonly max?: number;
+  } = {}
+): number {
+  const raw = process.env[name];
+  if (raw === undefined) {
+    return fallback;
+  }
+  return requireBoundedIntEnv(name, raw, options);
+}
+
 function requireIntEnv(name: string, raw: string): number {
-  const parsed = parseInt(raw, 10);
-  if (isNaN(parsed)) {
+  if (!/^-?\d+$/.test(raw.trim())) {
+    throw new Error(`Environment variable ${name} must be a valid integer, got: ${raw}`);
+  }
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed)) {
     throw new Error(`Environment variable ${name} must be a valid integer, got: ${raw}`);
   }
   return parsed;
+}
+
+function requireBoundedIntEnv(
+  name: string,
+  raw: string,
+  options: {
+    readonly min?: number;
+    readonly max?: number;
+  } = {}
+): number {
+  const parsed = requireIntEnv(name, raw);
+  if (options.min !== undefined && parsed < options.min) {
+    throw new Error(`Environment variable ${name} must be >= ${options.min}, got: ${raw}`);
+  }
+  if (options.max !== undefined && parsed > options.max) {
+    throw new Error(`Environment variable ${name} must be <= ${options.max}, got: ${raw}`);
+  }
+  return parsed;
+}
+
+function resolveServicePoolMax(serviceSpecificEnvName: string): number {
+  const serviceSpecificValue = process.env[serviceSpecificEnvName];
+  if (serviceSpecificValue !== undefined) {
+    return requireBoundedIntEnv(serviceSpecificEnvName, serviceSpecificValue, {
+      min: 1,
+      max: 20,
+    });
+  }
+  return optionalBoundedIntEnv("DB_POOL_MAX", 20, { min: 1, max: 20 });
 }
 
 export function loadConfig() {
@@ -72,6 +127,7 @@ export function loadConfig() {
       name: optionalEnv("DB_NAME", "translay"),
       user: optionalEnv("DB_USER", "translay_app"),
       password: requireEnv("DB_PASSWORD"),
+      poolMax: resolveServicePoolMax("CONTROL_PLANE_DB_POOL_MAX"),
     },
 
     redis: {
@@ -99,6 +155,10 @@ export function loadConfig() {
     domain: optionalEnv("PRODUCTION_DOMAIN", "your-domain.example.com"),
 
     entitlementCacheTtl: 300, // seconds, frozen decision
+
+    jobs: {
+      maxGlobalInFlightJobs: optionalBoundedIntEnv("MAX_GLOBAL_INFLIGHT_JOBS", 50, { min: 1, max: 50 }),
+    },
 
     security: {
       kmsKeyName,
@@ -159,6 +219,7 @@ export function loadWorkerConfig() {
       name: optionalEnv("DB_NAME", "translay"),
       user: optionalEnv("DB_USER", "translay_app"),
       password: requireEnv("DB_PASSWORD"),
+      poolMax: resolveServicePoolMax("WORKER_DB_POOL_MAX"),
     },
 
     redis: {

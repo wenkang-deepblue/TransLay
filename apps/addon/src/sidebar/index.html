@@ -911,6 +911,8 @@
             showError('Language not recognized. Please try again.');
           } else if (msg.indexOf('[QUOTA_EXCEEDED]') !== -1) {
             showError('Usage quota exceeded. Upgrade to Pro for more capacity.');
+          } else if (msg.indexOf('[JOB_QUEUE_BUSY]') !== -1) {
+            showError('The system is currently busy. Please try again in a few minutes.');
           } else if (msg.indexOf('[CONCURRENT_JOB_RUNNING]') !== -1) {
             showError('A translation job is already in progress. Please wait for it to finish.');
           } else if (msg.indexOf('[IDEMPOTENT_REPLAY]') !== -1) {

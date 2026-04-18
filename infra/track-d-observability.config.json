@@ -1,0 +1,275 @@
+{
+  "dashboardId": "translay-track-d-overview",
+  "dashboardDisplayName": "TransLay Track D Overview",
+  "metrics": [
+    {
+      "name": "translay_track_d_slides_budget_attempt_total",
+      "config": {
+        "description": "Track D Slides budget attempts emitted by the worker call budget.",
+        "filter": "resource.type=\"cloud_run_revision\" AND textPayload:\"[slides-budget] attempt\"",
+        "metricDescriptor": {
+          "metricKind": "DELTA",
+          "valueType": "INT64",
+          "unit": "1"
+        }
+      }
+    },
+    {
+      "name": "translay_track_d_slides_budget_throttled_total",
+      "config": {
+        "description": "Track D Slides API throttling signals emitted by the worker call budget.",
+        "filter": "resource.type=\"cloud_run_revision\" AND textPayload:\"[slides-budget] throttled\"",
+        "metricDescriptor": {
+          "metricKind": "DELTA",
+          "valueType": "INT64",
+          "unit": "1"
+        }
+      }
+    },
+    {
+      "name": "translay_track_d_vertex_budget_attempt_total",
+      "config": {
+        "description": "Track D Vertex budget attempts emitted by the worker provider call budget.",
+        "filter": "resource.type=\"cloud_run_revision\" AND textPayload:\"[vertex-budget] attempt\"",
+        "metricDescriptor": {
+          "metricKind": "DELTA",
+          "valueType": "INT64",
+          "unit": "1"
+        }
+      }
+    },
+    {
+      "name": "translay_track_d_vertex_budget_throttled_total",
+      "config": {
+        "description": "Track D Vertex API throttling signals emitted by the worker provider call budget.",
+        "filter": "resource.type=\"cloud_run_revision\" AND textPayload:\"[vertex-budget] throttled\"",
+        "metricDescriptor": {
+          "metricKind": "DELTA",
+          "valueType": "INT64",
+          "unit": "1"
+        }
+      }
+    },
+    {
+      "name": "translay_track_d_job_terminal_total",
+      "config": {
+        "description": "Track D terminal job statuses emitted by the worker pipeline.",
+        "filter": "resource.type=\"cloud_run_revision\" AND textPayload:\"[job-terminal] finalized\"",
+        "metricDescriptor": {
+          "metricKind": "DELTA",
+          "valueType": "INT64",
+          "unit": "1",
+          "labels": [
+            {
+              "key": "status",
+              "valueType": "STRING",
+              "description": "Final job status."
+            }
+          ]
+        },
+        "labelExtractors": {
+          "status": "REGEXP_EXTRACT(textPayload, \"\\\"status\\\":\\\"([^\\\"]+)\\\"\")"
+        }
+      }
+    },
+    {
+      "name": "translay_track_d_fallback_triggered_total",
+      "config": {
+        "description": "Track D fallback events emitted by the worker pipeline.",
+        "filter": "resource.type=\"cloud_run_revision\" AND textPayload:\"[pipeline] fallback triggered\"",
+        "metricDescriptor": {
+          "metricKind": "DELTA",
+          "valueType": "INT64",
+          "unit": "1"
+        }
+      }
+    },
+    {
+      "name": "translay_track_d_token_source_selected_total",
+      "config": {
+        "description": "Track D token source selections emitted by the Slides auth context.",
+        "filter": "resource.type=\"cloud_run_revision\" AND textPayload:\"[slides-auth] selected client\"",
+        "metricDescriptor": {
+          "metricKind": "DELTA",
+          "valueType": "INT64",
+          "unit": "1",
+          "labels": [
+            {
+              "key": "source",
+              "valueType": "STRING",
+              "description": "Selected token source."
+            }
+          ]
+        },
+        "labelExtractors": {
+          "source": "REGEXP_EXTRACT(textPayload, \"\\\"source\\\":\\\"([^\\\"]+)\\\"\")"
+        }
+      }
+    },
+    {
+      "name": "translay_track_d_global_inflight_distribution",
+      "config": {
+        "description": "Track D global in-flight job pressure derived from control-plane queue admission logs.",
+        "filter": "resource.type=\"cloud_run_revision\" AND (textPayload:\"[jobs] queued\" OR textPayload:\"[jobs] queue busy\")",
+        "metricDescriptor": {
+          "metricKind": "DELTA",
+          "valueType": "DISTRIBUTION",
+          "unit": "1"
+        },
+        "valueExtractor": "REGEXP_EXTRACT(textPayload, \"global_inflight_jobs\\\":([0-9]+)\")",
+        "bucketOptions": {
+          "explicitBuckets": {
+            "bounds": [
+              0,
+              5,
+              10,
+              20,
+              30,
+              40,
+              45,
+              50
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "alertPolicies": [
+    {
+      "displayName": "TransLay Track D - Slides 429 rate > 5% (5m)",
+      "combiner": "OR",
+      "enabled": true,
+      "severity": "ERROR",
+      "userLabels": {
+        "track": "d",
+        "priority": "p2"
+      },
+      "documentation": {
+        "mimeType": "text/markdown",
+        "content": "Slides budget throttling exceeded the Track D launch threshold. Check `slides-budget` logs, worker concurrency, queue settings, and user-token health."
+      },
+      "conditions": [
+        {
+          "displayName": "Slides throttled ratio > 5%",
+          "conditionThreshold": {
+            "filter": "metric.type=\"logging.googleapis.com/user/translay_track_d_slides_budget_throttled_total\" AND resource.type=\"cloud_run_revision\"",
+            "aggregations": [
+              {
+                "alignmentPeriod": "300s",
+                "perSeriesAligner": "ALIGN_DELTA",
+                "crossSeriesReducer": "REDUCE_SUM",
+                "groupByFields": [
+                  "resource.label.project_id"
+                ]
+              }
+            ],
+            "denominatorFilter": "metric.type=\"logging.googleapis.com/user/translay_track_d_slides_budget_attempt_total\" AND resource.type=\"cloud_run_revision\"",
+            "denominatorAggregations": [
+              {
+                "alignmentPeriod": "300s",
+                "perSeriesAligner": "ALIGN_DELTA",
+                "crossSeriesReducer": "REDUCE_SUM",
+                "groupByFields": [
+                  "resource.label.project_id"
+                ]
+              }
+            ],
+            "comparison": "COMPARISON_GT",
+            "thresholdValue": 0.05,
+            "duration": "300s",
+            "trigger": {
+              "count": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "displayName": "TransLay Track D - Global in-flight jobs > 45 (10m)",
+      "combiner": "OR",
+      "enabled": true,
+      "severity": "WARNING",
+      "userLabels": {
+        "track": "d",
+        "priority": "p3"
+      },
+      "documentation": {
+        "mimeType": "text/markdown",
+        "content": "Global in-flight pressure is above the Track D capacity warning line. Review queue drain speed, worker revisions, and whether new jobs should be throttled before the queue hard-fails."
+      },
+      "conditions": [
+        {
+          "displayName": "Global in-flight p99 > 45",
+          "conditionThreshold": {
+            "filter": "metric.type=\"logging.googleapis.com/user/translay_track_d_global_inflight_distribution\" AND resource.type=\"cloud_run_revision\"",
+            "aggregations": [
+              {
+                "alignmentPeriod": "600s",
+                "perSeriesAligner": "ALIGN_PERCENTILE_99",
+                "crossSeriesReducer": "REDUCE_MAX",
+                "groupByFields": [
+                  "resource.label.project_id"
+                ]
+              }
+            ],
+            "comparison": "COMPARISON_GT",
+            "thresholdValue": 45,
+            "duration": "600s",
+            "trigger": {
+              "count": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "displayName": "TransLay Track D - SA fallback ratio > 30% (1h)",
+      "combiner": "OR",
+      "enabled": true,
+      "severity": "ERROR",
+      "userLabels": {
+        "track": "d",
+        "priority": "p2"
+      },
+      "documentation": {
+        "mimeType": "text/markdown",
+        "content": "User-token usage has degraded and service-account fallback is too high. Check add-on scope health, token persistence, KMS/KMS decrypt path, and Slides auth restore logs."
+      },
+      "conditions": [
+        {
+          "displayName": "SA fallback ratio > 30%",
+          "conditionThreshold": {
+            "filter": "metric.type=\"logging.googleapis.com/user/translay_track_d_token_source_selected_total\" AND resource.type=\"cloud_run_revision\" AND metric.label.source=\"sa_fallback\"",
+            "aggregations": [
+              {
+                "alignmentPeriod": "3600s",
+                "perSeriesAligner": "ALIGN_DELTA",
+                "crossSeriesReducer": "REDUCE_SUM",
+                "groupByFields": [
+                  "resource.label.project_id"
+                ]
+              }
+            ],
+            "denominatorFilter": "metric.type=\"logging.googleapis.com/user/translay_track_d_token_source_selected_total\" AND resource.type=\"cloud_run_revision\"",
+            "denominatorAggregations": [
+              {
+                "alignmentPeriod": "3600s",
+                "perSeriesAligner": "ALIGN_DELTA",
+                "crossSeriesReducer": "REDUCE_SUM",
+                "groupByFields": [
+                  "resource.label.project_id"
+                ]
+              }
+            ],
+            "comparison": "COMPARISON_GT",
+            "thresholdValue": 0.3,
+            "duration": "3600s",
+            "trigger": {
+              "count": 1
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

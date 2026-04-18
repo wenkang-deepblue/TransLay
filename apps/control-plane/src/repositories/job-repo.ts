@@ -59,6 +59,7 @@ const JOB_COLUMNS = `id, user_id, host_type, source_doc_id, source_doc_name, tar
   current_stage, stage_status, stage_cursor, stage_payload, stage_attempt,
   stage_lease_expires_at, stage_last_heartbeat_at, queued_task_name,
   started_at, completed_at`;
+const GLOBAL_IN_FLIGHT_GATE_LOCK_ID = 314159;
 
 export async function createJob(
   client: PoolClient,
@@ -121,7 +122,7 @@ export async function getJobById(
 }
 
 export async function hasRunningJob(
-  pool: Pool,
+  pool: Pool | PoolClient,
   userId: UserId
 ): Promise<boolean> {
   const result = await pool.query(
@@ -131,6 +132,41 @@ export async function hasRunningJob(
     [userId]
   );
   return result.rows.length > 0;
+}
+
+export async function countGlobalInFlightJobs(pool: Pool | PoolClient): Promise<number> {
+  const result = await pool.query(
+    `SELECT COUNT(*)::int AS n
+       FROM translation_jobs
+      WHERE status IN ('pending', 'queued', 'extracting', 'translating', 'writing')`
+  );
+  return toNumber(result.rows[0]?.n);
+}
+
+export async function acquireCreateJobAdmission(
+  client: PoolClient,
+  userId: UserId,
+  maxGlobalInFlightJobs: number
+): Promise<{
+  readonly allowed: boolean;
+  readonly blockedBy: "user" | "global" | null;
+  readonly activeCount: number;
+}> {
+  await client.query("SELECT pg_advisory_xact_lock($1)", [GLOBAL_IN_FLIGHT_GATE_LOCK_ID]);
+  const userHasRunningJob = await hasRunningJob(client, userId);
+  if (userHasRunningJob) {
+    return {
+      allowed: false,
+      blockedBy: "user",
+      activeCount: 0,
+    };
+  }
+  const activeCount = await countGlobalInFlightJobs(client);
+  return {
+    allowed: activeCount < maxGlobalInFlightJobs,
+    blockedBy: activeCount < maxGlobalInFlightJobs ? null : "global",
+    activeCount,
+  };
 }
 
 export async function updateJobStatus(

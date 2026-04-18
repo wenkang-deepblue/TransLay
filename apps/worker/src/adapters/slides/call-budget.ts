@@ -150,6 +150,16 @@ export class SlidesCallBudget {
 
     for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
       await bucket.take();
+      console.info(
+        "[slides-budget] attempt",
+        JSON.stringify({
+          job_id: metadata.jobId,
+          op_name: metadata.opName,
+          budget_op: budgetOp,
+          attempt,
+          auth_source: metadata.authContext?.source ?? null,
+        })
+      );
       try {
         const result = await callable();
         metadata.authContext?.markScopeValidated();
@@ -166,12 +176,14 @@ export class SlidesCallBudget {
 
         const retryDelayMs = resolveRetryDelayMs(error, attempt);
         console.warn(
-          `[slides-budget] retrying ${budgetOp}`,
+          "[slides-budget] throttled",
           JSON.stringify({
             job_id: metadata.jobId,
             op_name: metadata.opName,
+            budget_op: budgetOp,
             attempt,
             retry_delay_ms: retryDelayMs,
+            auth_source: metadata.authContext?.source ?? null,
           })
         );
         await sleep(retryDelayMs);

@@ -934,6 +934,15 @@ async function runAuthorityStage(
             error instanceof Error ? error.message : String(error)
           }`
         );
+        console.warn(
+          "[pipeline] fallback triggered",
+          JSON.stringify({
+            job_id: job_id,
+            stage: "authority",
+            mode: "slide_level_recovery",
+            reason_code: toSlideFailureReasonCode(error),
+          })
+        );
       }
       if (authorityResult) {
         providerRequestIds.push(authorityResult.provider_request_id);
@@ -1114,6 +1123,17 @@ async function runAuthorityStage(
               error instanceof Error ? error.message : String(error)
             }`
           );
+          console.warn(
+            "[pipeline] fallback triggered",
+            JSON.stringify({
+              job_id: job_id,
+              stage: "materialization",
+              mode: "single_node_recovery",
+              group_index: groupIndex + 1,
+              fallback_request_count: explodedGroups.length,
+              reason_code: toSlideFailureReasonCode(error),
+            })
+          );
           materializationQueue.splice(groupIndex, 1, ...explodedGroups);
           groupIndex -= 1;
           continue;
@@ -1130,6 +1150,17 @@ async function runAuthorityStage(
       } catch (error) {
         if (shouldExplodeMaterializationGroup(group, error)) {
           const explodedGroups = explodeMaterializationGroup(group);
+          console.warn(
+            "[pipeline] fallback triggered",
+            JSON.stringify({
+              job_id: job_id,
+              stage: "materialization",
+              mode: "single_node_recovery",
+              group_index: groupIndex + 1,
+              fallback_request_count: explodedGroups.length,
+              reason_code: toSlideFailureReasonCode(error),
+            })
+          );
           materializationQueue.splice(groupIndex, 1, ...explodedGroups);
           groupIndex -= 1;
           continue;
@@ -1672,6 +1703,10 @@ async function finalizeSuccessfulJob(
     }),
     redis.del(buildJobCancelKey(jobId)),
   ]);
+  logTrackDTerminalStatus(jobId, completedStatus, {
+    warning_count: finalWarnings.length,
+    slide_summary: summarizeSlideExecution(slideResults),
+  });
 }
 
 function buildSuccessfulCompletionDetail(
@@ -1780,6 +1815,10 @@ async function finalizeCanceledJob(
     }),
     redis.del(buildJobCancelKey(jobId)),
   ]);
+  logTrackDTerminalStatus(jobId, "canceled", {
+    provisionally_billed_units: provisionallyBilledUnits,
+    slide_summary: summarizeSlideExecution(slideResults),
+  });
 }
 
 async function finalizeFailedJob(
@@ -1845,6 +1884,25 @@ async function finalizeFailedJob(
     }),
     redis.del(buildJobCancelKey(jobId)),
   ]);
+  logTrackDTerminalStatus(jobId, "failed", {
+    error_code: errorCode,
+    slide_summary: summarizeSlideExecution(slideResults),
+  });
+}
+
+function logTrackDTerminalStatus(
+  jobId: string,
+  status: "completed" | "completed_with_warnings" | "failed" | "canceled",
+  extra: Record<string, unknown> = {}
+): void {
+  console.info(
+    "[job-terminal] finalized",
+    JSON.stringify({
+      job_id: jobId,
+      status,
+      ...extra,
+    })
+  );
 }
 
 function markSlideFailures(

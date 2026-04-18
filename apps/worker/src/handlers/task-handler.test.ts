@@ -16,6 +16,7 @@ function createConfig(): WorkerConfig {
       name: "translay",
       user: "postgres",
       password: "postgres",
+      poolMax: 20,
     },
     redis: {
       host: "localhost",

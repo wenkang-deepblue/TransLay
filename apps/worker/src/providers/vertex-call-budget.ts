@@ -105,6 +105,14 @@ export class VertexCallBudget {
 
     for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
       await this.bucket.take();
+      console.info(
+        "[vertex-budget] attempt",
+        JSON.stringify({
+          op_name: metadata.opName,
+          model: metadata.model,
+          attempt,
+        })
+      );
       try {
         return await callable();
       } catch (error) {
@@ -114,7 +122,7 @@ export class VertexCallBudget {
         }
         const delayMs = resolveRetryDelayMs(error, attempt);
         console.warn(
-          "[vertex-budget] retrying generateContent",
+          "[vertex-budget] throttled",
           JSON.stringify({
             op_name: metadata.opName,
             model: metadata.model,

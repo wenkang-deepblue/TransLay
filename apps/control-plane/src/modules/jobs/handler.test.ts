@@ -1,11 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { __setKmsClientForTests } from "@translay/shared-config";
+import type { AppConfig } from "@translay/shared-config";
+import type Redis from "ioredis";
+import type { Pool } from "pg";
 import type { JobId, JobSlideResult, JobWarning, UserId } from "@translay/shared-contracts";
 import {
   __buildJobStatusResponseForTests,
   __extractBearerTokenForTests,
   __resolveHostOauthPersistenceForTests,
+  createJobHandler,
 } from "./handler";
 
 function createBaseJob() {
@@ -663,4 +667,280 @@ test("KMS test hooks are disabled in production-like environments", () => {
   } finally {
     process.env.NODE_ENV = originalNodeEnv;
   }
+});
+
+test("createJobHandler returns JOB_QUEUE_BUSY when the global in-flight gate is full", async () => {
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("FROM idempotency_records")) {
+        return { rows: [] };
+      }
+      if (sql.includes("status IN ('completed', 'completed_with_warnings')")) {
+        return { rows: [] };
+      }
+      if (sql.includes("status IN ('pending', 'queued', 'extracting', 'translating', 'writing')")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM subscriptions")) {
+        return {
+          rows: [{
+            id: "sub-1",
+            user_id: "user-1",
+            plan_type: "free",
+            status: "active",
+            provider_name: "paddle",
+            provider_customer_id: null,
+            provider_subscription_id: null,
+            current_period_start: null,
+            current_period_end: null,
+            cancel_at_period_end: false,
+          }],
+        };
+      }
+      if (sql.includes("FROM usage_ledgers")) {
+        return {
+          rows: [{
+            slides_used: "0",
+            docs_pages_used: "0",
+            sheets_cells_used: "0",
+            total_jobs: 0,
+          }],
+        };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    },
+    connect: async () => ({
+      query: async (sql: string) => {
+        if (sql === "BEGIN" || sql === "ROLLBACK") {
+          return { rows: [], rowCount: 1 };
+        }
+        if (sql.includes("pg_advisory_xact_lock")) {
+          return { rows: [], rowCount: 1 };
+        }
+        if (sql.includes("SELECT 1 FROM translation_jobs")) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (sql.includes("COUNT(*)::int AS n")) {
+          return { rows: [{ n: "50" }], rowCount: 1 };
+        }
+        throw new Error(`Unexpected client query: ${sql}`);
+      },
+      release: () => {},
+    }),
+  } as unknown as Pool;
+
+  const redis = {} as Redis;
+  const config: AppConfig = {
+    port: 8080,
+    nodeEnv: "test",
+    gcpProjectId: "YOUR_GCP_PROJECT_ID",
+    gcpRegion: "us-central1",
+    db: {
+      host: "localhost",
+      port: 5432,
+      name: "translay",
+      user: "postgres",
+      password: "postgres",
+      poolMax: 20,
+    },
+    redis: {
+      host: "localhost",
+      port: 6379,
+    },
+    cloudTasks: {
+      queueName: "YOUR_CLOUD_TASKS_QUEUE",
+      location: "us-central1",
+      workerUrl: "https://worker.example.com",
+      audience: "https://worker.example.com/tasks/translate",
+      invokerServiceAccount: "worker-invoker@example.com",
+    },
+    session: {
+      secret: "x".repeat(32),
+      cookieName: "translay_sid",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    },
+    domain: "your-domain.example.com",
+    entitlementCacheTtl: 300,
+    jobs: {
+      maxGlobalInFlightJobs: 50,
+    },
+    security: {
+      kmsKeyName: null,
+      internalCronSecret: null,
+    },
+  };
+
+  let statusCode = 200;
+  let payload: Record<string, unknown> | null = null;
+  const res = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    json(body: Record<string, unknown>) {
+      payload = body;
+      return this;
+    },
+  } as never;
+
+  const req = {
+    authContext: { user_id: "user-1" as UserId },
+    headers: { authorization: "Bearer host-token" },
+    body: {
+      host_type: "slides",
+      document_id: "source-doc",
+      document_name: "Quarterly deck",
+      source_language_mode: "auto",
+      target_language_input: "French",
+      output_mode: "append_in_file",
+      range_mode: "entire",
+      idempotency_key: "idem-1",
+    },
+  } as never;
+
+  await createJobHandler(pool, redis, config)(req, res);
+
+  assert.equal(statusCode, 429);
+  assert.deepEqual(payload, {
+    error: "JOB_QUEUE_BUSY",
+    message: "The translation queue is currently busy",
+  });
+});
+
+test("createJobHandler returns CONCURRENT_JOB_RUNNING when atomic admission sees same-user work", async () => {
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("FROM idempotency_records")) {
+        return { rows: [] };
+      }
+      if (sql.includes("status IN ('completed', 'completed_with_warnings')")) {
+        return { rows: [] };
+      }
+      if (sql.includes("status IN ('pending', 'queued', 'extracting', 'translating', 'writing')")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM subscriptions")) {
+        return {
+          rows: [{
+            id: "sub-1",
+            user_id: "user-1",
+            plan_type: "free",
+            status: "active",
+            provider_name: "paddle",
+            provider_customer_id: null,
+            provider_subscription_id: null,
+            current_period_start: null,
+            current_period_end: null,
+            cancel_at_period_end: false,
+          }],
+        };
+      }
+      if (sql.includes("FROM usage_ledgers")) {
+        return {
+          rows: [{
+            slides_used: "0",
+            docs_pages_used: "0",
+            sheets_cells_used: "0",
+            total_jobs: 0,
+          }],
+        };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    },
+    connect: async () => ({
+      query: async (sql: string) => {
+        if (sql === "BEGIN" || sql === "ROLLBACK") {
+          return { rows: [], rowCount: 1 };
+        }
+        if (sql.includes("pg_advisory_xact_lock")) {
+          return { rows: [], rowCount: 1 };
+        }
+        if (sql.includes("SELECT 1 FROM translation_jobs")) {
+          return { rows: [{ exists: 1 }], rowCount: 1 };
+        }
+        if (sql.includes("COUNT(*)::int AS n")) {
+          throw new Error("global count should not run after same-user admission fails");
+        }
+        throw new Error(`Unexpected client query: ${sql}`);
+      },
+      release: () => {},
+    }),
+  } as unknown as Pool;
+
+  const redis = {} as Redis;
+  const config: AppConfig = {
+    port: 8080,
+    nodeEnv: "test",
+    gcpProjectId: "YOUR_GCP_PROJECT_ID",
+    gcpRegion: "us-central1",
+    db: {
+      host: "localhost",
+      port: 5432,
+      name: "translay",
+      user: "postgres",
+      password: "postgres",
+      poolMax: 20,
+    },
+    redis: {
+      host: "localhost",
+      port: 6379,
+    },
+    cloudTasks: {
+      queueName: "YOUR_CLOUD_TASKS_QUEUE",
+      location: "us-central1",
+      workerUrl: "https://worker.example.com",
+      audience: "https://worker.example.com/tasks/translate",
+      invokerServiceAccount: "worker-invoker@example.com",
+    },
+    session: {
+      secret: "x".repeat(32),
+      cookieName: "translay_sid",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    },
+    domain: "your-domain.example.com",
+    entitlementCacheTtl: 300,
+    jobs: {
+      maxGlobalInFlightJobs: 50,
+    },
+    security: {
+      kmsKeyName: null,
+      internalCronSecret: null,
+    },
+  };
+
+  let statusCode = 200;
+  let payload: Record<string, unknown> | null = null;
+  const res = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    json(body: Record<string, unknown>) {
+      payload = body;
+      return this;
+    },
+  } as never;
+
+  const req = {
+    authContext: { user_id: "user-1" as UserId },
+    headers: { authorization: "Bearer host-token" },
+    body: {
+      host_type: "slides",
+      document_id: "source-doc",
+      document_name: "Quarterly deck",
+      source_language_mode: "auto",
+      target_language_input: "French",
+      output_mode: "append_in_file",
+      range_mode: "entire",
+      idempotency_key: "idem-1",
+    },
+  } as never;
+
+  await createJobHandler(pool, redis, config)(req, res);
+
+  assert.equal(statusCode, 409);
+  assert.deepEqual(payload, {
+    error: "CONCURRENT_JOB_RUNNING",
+    message: "A translation job is already in progress",
+  });
 });

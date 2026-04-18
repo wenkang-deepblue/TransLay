@@ -1,0 +1,179 @@
+{
+  "displayName": "TransLay Track D Overview",
+  "gridLayout": {
+    "columns": "2",
+    "widgets": [
+      {
+        "text": {
+          "content": "## Track D Overview\n\nThis dashboard is driven by Track D log-based metrics.\n\n- `slides_429_rate`: proxy via Slides throttled/attempted call-budget events\n- `vertex_429_rate`: proxy via Vertex throttled/attempted call-budget events\n- `job_failure_rate`: terminal jobs with `status=failed`\n- `fallback_triggered_rate`: worker pipeline fallback events\n- `token_source_ratio`: `user` vs `sa_fallback` selection events\n- `global_inflight_jobs`: control-plane admission pressure from queue logs\n\nApply with `infra/configure-track-d-observability.sh`.",
+          "format": "MARKDOWN"
+        }
+      },
+      {
+        "title": "Slides throttled attempts / min",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"logging.googleapis.com/user/translay_track_d_slides_budget_throttled_total\" AND resource.type=\"cloud_run_revision\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_RATE",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "groupByFields": []
+                  }
+                },
+                "unitOverride": "1/s"
+              },
+              "plotType": "LINE",
+              "legendTemplate": "slides throttled"
+            }
+          ],
+          "timeshiftDuration": "0s",
+          "yAxis": {
+            "label": "events / second",
+            "scale": "LINEAR"
+          }
+        }
+      },
+      {
+        "title": "Vertex throttled attempts / min",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"logging.googleapis.com/user/translay_track_d_vertex_budget_throttled_total\" AND resource.type=\"cloud_run_revision\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_RATE",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "groupByFields": []
+                  }
+                },
+                "unitOverride": "1/s"
+              },
+              "plotType": "LINE",
+              "legendTemplate": "vertex throttled"
+            }
+          ],
+          "timeshiftDuration": "0s",
+          "yAxis": {
+            "label": "events / second",
+            "scale": "LINEAR"
+          }
+        }
+      },
+      {
+        "title": "Failed jobs / min",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"logging.googleapis.com/user/translay_track_d_job_terminal_total\" AND resource.type=\"cloud_run_revision\" AND metric.label.status=\"failed\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_RATE",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "groupByFields": []
+                  }
+                },
+                "unitOverride": "1/s"
+              },
+              "plotType": "LINE",
+              "legendTemplate": "failed jobs"
+            }
+          ],
+          "timeshiftDuration": "0s",
+          "yAxis": {
+            "label": "jobs / second",
+            "scale": "LINEAR"
+          }
+        }
+      },
+      {
+        "title": "Fallback triggers / min",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"logging.googleapis.com/user/translay_track_d_fallback_triggered_total\" AND resource.type=\"cloud_run_revision\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_RATE",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "groupByFields": []
+                  }
+                },
+                "unitOverride": "1/s"
+              },
+              "plotType": "LINE",
+              "legendTemplate": "fallbacks"
+            }
+          ],
+          "timeshiftDuration": "0s",
+          "yAxis": {
+            "label": "events / second",
+            "scale": "LINEAR"
+          }
+        }
+      },
+      {
+        "title": "Token source selections (1h)",
+        "timeSeriesTable": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"logging.googleapis.com/user/translay_track_d_token_source_selected_total\" AND resource.type=\"cloud_run_revision\"",
+                  "aggregation": {
+                    "alignmentPeriod": "3600s",
+                    "perSeriesAligner": "ALIGN_DELTA",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "groupByFields": [
+                      "metric.label.source"
+                    ]
+                  }
+                },
+                "outputFullDuration": true,
+                "unitOverride": "1"
+              }
+            }
+          ],
+          "metricVisualization": "NUMBER"
+        }
+      },
+      {
+        "title": "Global in-flight pressure (p99)",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"logging.googleapis.com/user/translay_track_d_global_inflight_distribution\" AND resource.type=\"cloud_run_revision\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_PERCENTILE_99",
+                    "crossSeriesReducer": "REDUCE_MAX",
+                    "groupByFields": []
+                  }
+                },
+                "unitOverride": "1"
+              },
+              "plotType": "LINE",
+              "legendTemplate": "p99 inflight"
+            }
+          ],
+          "timeshiftDuration": "0s",
+          "yAxis": {
+            "label": "jobs",
+            "scale": "LINEAR"
+          }
+        }
+      }
+    ]
+  }
+}

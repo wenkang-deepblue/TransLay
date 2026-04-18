@@ -32,6 +32,7 @@ import {
 import { getActiveSubscription } from "../../repositories/subscription-repo";
 import { getUsageSummary } from "../../repositories/usage-repo";
 import {
+  acquireCreateJobAdmission,
   createJob,
   getJobById,
   hasRunningJob,
@@ -826,8 +827,33 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
 
     const client = await pool.connect();
     let jobId: JobId;
+    let postAdmissionInFlightJobs = 0;
     try {
       await client.query("BEGIN");
+
+      const admission = await acquireCreateJobAdmission(
+        client,
+        auth.user_id,
+        config.jobs.maxGlobalInFlightJobs
+      );
+      if (!admission.allowed) {
+        await client.query("ROLLBACK");
+        if (admission.blockedBy === "user") {
+          sendError(res, "CONCURRENT_JOB_RUNNING");
+          return;
+        }
+        console.warn(
+          "[jobs] queue busy",
+          JSON.stringify({
+            user_id: auth.user_id,
+            global_inflight_jobs: admission.activeCount,
+            max_global_inflight_jobs: config.jobs.maxGlobalInFlightJobs,
+          })
+        );
+        sendError(res, "JOB_QUEUE_BUSY");
+        return;
+      }
+      postAdmissionInFlightJobs = admission.activeCount + 1;
 
       jobId = await createJob(client, {
         userId: auth.user_id,
@@ -928,6 +954,16 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
       job_id: jobId,
       queued: true,
     };
+
+    console.info(
+      "[jobs] queued",
+      JSON.stringify({
+        job_id: jobId,
+        user_id: auth.user_id,
+        global_inflight_jobs: postAdmissionInFlightJobs,
+        max_global_inflight_jobs: config.jobs.maxGlobalInFlightJobs,
+      })
+    );
 
     res.status(201).json(response);
   };
