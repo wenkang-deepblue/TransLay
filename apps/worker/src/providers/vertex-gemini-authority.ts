@@ -68,6 +68,7 @@ Follow these rules for every request:
 - Avoid empty segments unless a source structural segment naturally collapses in the target language.
 - Make translated_full_text equal the paragraph translations joined with "\\n".
 - Make each paragraph translated_text equal the concatenation of its segment translations.
+- If the target language normally uses spaces between words, preserve or insert boundary spaces inside segment translations so adjacent segments still read naturally after concatenation, even when the source boundary had no whitespace.
 - For speaker_notes, keep the source paragraph boundaries and preserve the full meaning. Do not compress or summarize notes for brevity.
 - Return only JSON that matches the provided response schema.
 `.trim();
@@ -85,6 +86,7 @@ Follow these rules for every request:
 - Preserve line breaks and paragraph boundaries when possible.
 - Make translated_full_text equal the paragraph translations joined with "\\n".
 - Make each paragraph translated_text equal the concatenation of its segment translations.
+- If the target language normally uses spaces between words, preserve or insert boundary spaces inside segment translations so adjacent segments still read naturally after concatenation, even when the source boundary had no whitespace.
 - Return only JSON that matches the provided response schema.
 `.trim();
 
@@ -1876,7 +1878,8 @@ MATERIALIZATION RULES:
 7. Do not output empty middle paragraphs, alternating empty paragraphs, or empty leading paragraphs.
 8. If the translation becomes shorter than the source structure, redistribute it by semantic chunks. Do not split by character count.
 9. Keep bullet paragraphs aligned with the source paragraph bullet metadata.
-10. For speaker_notes, preserve the source paragraph boundaries and keep the translation complete rather than concise.
+10. If the target language normally uses spaces between words, keep or insert boundary spaces inside segment translations so adjacent translated segments do not collapse words together after concatenation, even when the source boundary had no whitespace. Attach the inserted space to the segment where it most naturally belongs, usually the following segment.
+11. For speaker_notes, preserve the source paragraph boundaries and keep the translation complete rather than concise.
 
 DECK TITLE:
 ${request.deck_title}
@@ -1908,7 +1911,8 @@ NOTES TRANSLATION RULES:
 4. Preserve paragraph boundaries and output complete notes, not concise slide copy.
 5. Keep abbreviations, product names, and repeated terms aligned with the slide authority anchor when the meaning stays the same.
 6. Do not invent missing content beyond the provided source notes text.
-7. ${request.notes_truncated
+7. If the target language normally uses spaces between words, keep or insert boundary spaces inside segment translations so adjacent translated segments do not collapse words together after concatenation, even when the source boundary had no whitespace. Attach the inserted space to the segment where it most naturally belongs, usually the following segment.
+8. ${request.notes_truncated
     ? "The source notes were truncated at 5000 characters before translation. Translate only the truncated portion."
     : "The full source notes are included for translation."}
 

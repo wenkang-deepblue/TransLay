@@ -4,6 +4,7 @@ import type { WorkerConfig } from "@translay/shared-config";
 import type { TranslationRequest } from "@translay/shared-contracts";
 import {
   __resetAccessTokenCacheForTests,
+  buildPrompt,
   translateWithVertexGemini,
 } from "./vertex-gemini";
 import {
@@ -194,6 +195,10 @@ test("translateWithVertexGemini sends system instructions and a constrained JSON
       systemInstruction,
       /Maintain consistent terminology for repeated domain terms/i
     );
+    assert.match(
+      systemInstruction,
+      /target language normally uses spaces between words/i
+    );
     assert.match(userPrompt, /DECK CONTEXT PACK/i);
     assert.match(userPrompt, /Q3 Product Presentation/);
     assert.match(userPrompt, /ARR/);
@@ -206,6 +211,10 @@ test("translateWithVertexGemini sends system instructions and a constrained JSON
     assert.match(userPrompt, /<BEGIN_OPAQUE_USER_DATA_JSON>/);
     assert.match(userPrompt, /<END_OPAQUE_USER_DATA_JSON>/);
     assert.match(userPrompt, /Translate only the target nodes/i);
+    assert.match(
+      userPrompt,
+      /Attach the inserted space to the segment where it most naturally belongs/i
+    );
     assert.doesNotMatch(userPrompt, /for reference only/i);
     assert.doesNotMatch(
       userPrompt,
@@ -665,6 +674,512 @@ test("translateWithVertexGemini preserves source boundary whitespace, rebuilds s
         ],
       },
     ]));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("translateWithVertexGemini preserves model-provided boundary whitespace when the source boundary has none", async () => {
+  __resetAccessTokenCacheForTests();
+  const request: TranslationRequest = {
+    provider: "vertex_gemini",
+    model: "gemini-3.1-flash-lite-preview",
+    source_language: "Chinese",
+    target_language: "English",
+    context_pack: {
+      deck_title: "Boundary whitespace deck",
+      source_language: "Chinese",
+      target_language: "English",
+      deck_plaintext_context: "[Slide 1] 时代开启",
+      glossary_candidates: [],
+      nodes: [
+        {
+          node_id: "n1",
+          archetype: "mixed_emphasis",
+          slide_index: 1,
+          full_text: "时代开启",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "时代开启",
+              bullet: undefined,
+              style_roles: ["default", "emphasis"],
+              segments: [
+                {
+                  segment_id: "r0",
+                  text: "时代",
+                  style_role: "default",
+                },
+                {
+                  segment_id: "r1",
+                  text: "开启",
+                  style_role: "emphasis",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    nodes: [{ node_id: "n1", text: "时代开启" }],
+  };
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("metadata.google.internal")) {
+      return new Response(JSON.stringify({ access_token: "test-token", expires_in: 3600 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify([
+                    {
+                      node_id: "n1",
+                      translated_full_text: "ignored",
+                      paragraphs: [
+                        {
+                          paragraph_id: "p0",
+                          translated_text: "ignored",
+                          bullet_behavior: "none",
+                        },
+                      ],
+                      segments: [
+                        {
+                          segment_id: "r0",
+                          translated_text: "A New Era ",
+                          style_role: "default",
+                        },
+                        {
+                          segment_id: "r1",
+                          translated_text: "Begins",
+                          style_role: "emphasis",
+                        },
+                      ],
+                    },
+                  ]),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const result = await translateWithVertexGemini(createConfig(), request);
+    assert.equal(result.nodes[0]?.translated_full_text, "A New Era Begins");
+    assert.equal(result.nodes[0]?.paragraphs[0]?.translated_text, "A New Era Begins");
+    assert.equal(result.nodes[0]?.risk_flags, undefined);
+    assert.deepEqual(result.nodes[0]?.segments, [
+      {
+        segment_id: "r0",
+        translated_text: "A New Era ",
+        style_role: "default",
+      },
+      {
+        segment_id: "r1",
+        translated_text: "Begins",
+        style_role: "emphasis",
+      },
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("translateWithVertexGemini injects a missing boundary space for word-based target languages", async () => {
+  __resetAccessTokenCacheForTests();
+  const request: TranslationRequest = {
+    provider: "vertex_gemini",
+    model: "gemini-3.1-flash-lite-preview",
+    source_language: "Chinese",
+    target_language: "English",
+    context_pack: {
+      deck_title: "Boundary insertion deck",
+      source_language: "Chinese",
+      target_language: "English",
+      deck_plaintext_context: "[Slide 1] 嵌入帮助",
+      glossary_candidates: [],
+      nodes: [
+        {
+          node_id: "n1",
+          archetype: "mixed_emphasis",
+          slide_index: 1,
+          full_text: "嵌入帮助",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "嵌入帮助",
+              bullet: undefined,
+              style_roles: ["default", "emphasis"],
+              segments: [
+                {
+                  segment_id: "r0",
+                  text: "嵌入",
+                  style_role: "default",
+                },
+                {
+                  segment_id: "r1",
+                  text: "帮助",
+                  style_role: "emphasis",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    nodes: [{ node_id: "n1", text: "嵌入帮助" }],
+  };
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("metadata.google.internal")) {
+      return new Response(JSON.stringify({ access_token: "test-token", expires_in: 3600 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify([
+                    {
+                      node_id: "n1",
+                      translated_full_text: "ignored",
+                      paragraphs: [
+                        {
+                          paragraph_id: "p0",
+                          translated_text: "ignored",
+                          bullet_behavior: "none",
+                        },
+                      ],
+                      segments: [
+                        {
+                          segment_id: "r0",
+                          translated_text: "Embeddings",
+                          style_role: "default",
+                        },
+                        {
+                          segment_id: "r1",
+                          translated_text: "help",
+                          style_role: "emphasis",
+                        },
+                      ],
+                    },
+                  ]),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const result = await translateWithVertexGemini(createConfig(), request);
+    assert.equal(result.nodes[0]?.translated_full_text, "Embeddings help");
+    assert.equal(result.nodes[0]?.paragraphs[0]?.translated_text, "Embeddings help");
+    assert.deepEqual(result.nodes[0]?.risk_flags, [
+      "segment_boundary_spacing_normalized",
+    ]);
+    assert.deepEqual(result.nodes[0]?.segments, [
+      {
+        segment_id: "r0",
+        translated_text: "Embeddings",
+        style_role: "default",
+      },
+      {
+        segment_id: "r1",
+        translated_text: " help",
+        style_role: "emphasis",
+      },
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("buildPrompt instructs word-based targets to keep segment boundary spaces", () => {
+  const prompt = buildPrompt(
+    [{ node_id: "n1", text: "嵌入帮助" }],
+    "Chinese",
+    "English"
+  );
+
+  assert.match(prompt, /target language normally uses spaces between words/i);
+  assert.match(
+    prompt,
+    /Attach the inserted space to the segment where it most naturally belongs/i
+  );
+});
+
+test("translateWithVertexGemini does not inject boundary spaces for Japanese language codes", async () => {
+  __resetAccessTokenCacheForTests();
+  const request: TranslationRequest = {
+    provider: "vertex_gemini",
+    model: "gemini-3.1-flash-lite-preview",
+    source_language: "Chinese",
+    target_language: "ja",
+    context_pack: {
+      deck_title: "Japanese boundary deck",
+      source_language: "Chinese",
+      target_language: "ja",
+      deck_plaintext_context: "[Slide 1] 顧客成長",
+      glossary_candidates: [],
+      nodes: [
+        {
+          node_id: "n1",
+          archetype: "mixed_emphasis",
+          slide_index: 1,
+          full_text: "顧客成長",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "顧客成長",
+              bullet: undefined,
+              style_roles: ["default", "emphasis"],
+              segments: [
+                {
+                  segment_id: "r0",
+                  text: "顧客",
+                  style_role: "default",
+                },
+                {
+                  segment_id: "r1",
+                  text: "成長",
+                  style_role: "emphasis",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    nodes: [{ node_id: "n1", text: "顧客成長" }],
+  };
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("metadata.google.internal")) {
+      return new Response(JSON.stringify({ access_token: "test-token", expires_in: 3600 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify([
+                    {
+                      node_id: "n1",
+                      translated_full_text: "ignored",
+                      paragraphs: [
+                        {
+                          paragraph_id: "p0",
+                          translated_text: "ignored",
+                          bullet_behavior: "none",
+                        },
+                      ],
+                      segments: [
+                        {
+                          segment_id: "r0",
+                          translated_text: "顧客",
+                          style_role: "default",
+                        },
+                        {
+                          segment_id: "r1",
+                          translated_text: "成長",
+                          style_role: "emphasis",
+                        },
+                      ],
+                    },
+                  ]),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const result = await translateWithVertexGemini(createConfig(), request);
+    assert.equal(result.nodes[0]?.translated_full_text, "顧客成長");
+    assert.equal(result.nodes[0]?.paragraphs[0]?.translated_text, "顧客成長");
+    assert.equal(result.nodes[0]?.risk_flags, undefined);
+    assert.deepEqual(result.nodes[0]?.segments, [
+      {
+        segment_id: "r0",
+        translated_text: "顧客",
+        style_role: "default",
+      },
+      {
+        segment_id: "r1",
+        translated_text: "成長",
+        style_role: "emphasis",
+      },
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("translateWithVertexGemini deduplicates adjacent boundary whitespace to a single space", async () => {
+  __resetAccessTokenCacheForTests();
+  const request: TranslationRequest = {
+    provider: "vertex_gemini",
+    model: "gemini-3.1-flash-lite-preview",
+    source_language: "Chinese",
+    target_language: "en",
+    context_pack: {
+      deck_title: "Boundary dedupe deck",
+      source_language: "Chinese",
+      target_language: "en",
+      deck_plaintext_context: "[Slide 1] 嵌入帮助",
+      glossary_candidates: [],
+      nodes: [
+        {
+          node_id: "n1",
+          archetype: "mixed_emphasis",
+          slide_index: 1,
+          full_text: "嵌入帮助",
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "嵌入帮助",
+              bullet: undefined,
+              style_roles: ["default", "emphasis"],
+              segments: [
+                {
+                  segment_id: "r0",
+                  text: "嵌入",
+                  style_role: "default",
+                },
+                {
+                  segment_id: "r1",
+                  text: "帮助",
+                  style_role: "emphasis",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    nodes: [{ node_id: "n1", text: "嵌入帮助" }],
+  };
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("metadata.google.internal")) {
+      return new Response(JSON.stringify({ access_token: "test-token", expires_in: 3600 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify([
+                    {
+                      node_id: "n1",
+                      translated_full_text: "ignored",
+                      paragraphs: [
+                        {
+                          paragraph_id: "p0",
+                          translated_text: "ignored",
+                          bullet_behavior: "none",
+                        },
+                      ],
+                      segments: [
+                        {
+                          segment_id: "r0",
+                          translated_text: "Embeddings ",
+                          style_role: "default",
+                        },
+                        {
+                          segment_id: "r1",
+                          translated_text: " help",
+                          style_role: "emphasis",
+                        },
+                      ],
+                    },
+                  ]),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const result = await translateWithVertexGemini(createConfig(), request);
+    assert.equal(result.nodes[0]?.translated_full_text, "Embeddings help");
+    assert.equal(result.nodes[0]?.paragraphs[0]?.translated_text, "Embeddings help");
+    assert.deepEqual(result.nodes[0]?.risk_flags, [
+      "segment_boundary_spacing_normalized",
+    ]);
+    assert.deepEqual(result.nodes[0]?.segments, [
+      {
+        segment_id: "r0",
+        translated_text: "Embeddings",
+        style_role: "default",
+      },
+      {
+        segment_id: "r1",
+        translated_text: " help",
+        style_role: "emphasis",
+      },
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
   }

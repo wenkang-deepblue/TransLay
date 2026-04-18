@@ -1768,10 +1768,268 @@ test("materializeTranslatedNodesWithVertexGemini prompt requires exact paragraph
     const prompt = String(body.contents?.[0]?.parts?.[0]?.text ?? "");
 
     assert.match(systemInstruction, /Preserve the exact paragraph count/i);
+    assert.match(
+      systemInstruction,
+      /target language normally uses spaces between words/i
+    );
     assert.match(prompt, /preserve the exact paragraph count for every node/i);
     assert.match(prompt, /Never merge, split, drop, or reorder paragraphs/i);
     assert.match(prompt, /Do not output empty middle paragraphs/i);
     assert.match(prompt, /Do not split by character count/i);
+    assert.match(
+      prompt,
+      /Attach the inserted space to the segment where it most naturally belongs/i
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("materializeTranslatedNodesWithVertexGemini injects missing boundary spaces for word-based target languages", async () => {
+  __resetAccessTokenCacheForTests();
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+
+    if (url.includes("metadata.google.internal")) {
+      return new Response(JSON.stringify({ access_token: "test-token" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify([
+                    {
+                      node_id: "mixed-boundary",
+                      translated_full_text: "ignored",
+                      paragraphs: [
+                        {
+                          paragraph_id: "p0",
+                          translated_text: "ignored",
+                          bullet_behavior: "none",
+                        },
+                      ],
+                      segments: [
+                        {
+                          segment_id: "r0",
+                          translated_text: "Embeddings",
+                          style_role: "default",
+                        },
+                        {
+                          segment_id: "r1",
+                          translated_text: "help",
+                          style_role: "emphasis",
+                        },
+                      ],
+                    },
+                  ]),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const result = await materializeTranslatedNodesWithVertexGemini(createConfig(), {
+      model: "gemini-3.1-flash-lite-preview",
+      source_language: "Chinese",
+      target_language: "English",
+      deck_title: "Embedding deck",
+      glossary_candidates: [],
+      node_summaries: [
+        createMaterializationNodeSummary({
+          node_id: "mixed-boundary",
+          archetype: "mixed_emphasis",
+          slide_index: 7,
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "嵌入帮助",
+              style_roles: ["default", "emphasis"],
+              segments: [
+                {
+                  segment_id: "r0",
+                  text: "嵌入",
+                  style_role: "default",
+                },
+                {
+                  segment_id: "r1",
+                  text: "帮助",
+                  style_role: "emphasis",
+                },
+              ],
+            },
+          ],
+        }),
+      ],
+      authority_nodes: [
+        {
+          node_id: "mixed-boundary",
+          slide_index: 7,
+          translated_full_text: "Embeddings help",
+        },
+      ],
+    });
+
+    assert.equal(result.nodes[0]?.translated_full_text, "Embeddings help");
+    assert.deepEqual(
+      result.nodes[0]?.paragraphs.map((paragraph) => paragraph.translated_text),
+      ["Embeddings help"]
+    );
+    assert.deepEqual(result.nodes[0]?.risk_flags, [
+      "segment_boundary_spacing_normalized",
+    ]);
+    assert.deepEqual(result.nodes[0]?.segments, [
+      {
+        segment_id: "r0",
+        translated_text: "Embeddings",
+        style_role: "default",
+      },
+      {
+        segment_id: "r1",
+        translated_text: " help",
+        style_role: "emphasis",
+      },
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("materializeTranslatedNodesWithVertexGemini does not inject boundary spaces for Japanese language codes", async () => {
+  __resetAccessTokenCacheForTests();
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+
+    if (url.includes("metadata.google.internal")) {
+      return new Response(JSON.stringify({ access_token: "test-token" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify([
+                    {
+                      node_id: "mixed-boundary-ja",
+                      translated_full_text: "ignored",
+                      paragraphs: [
+                        {
+                          paragraph_id: "p0",
+                          translated_text: "ignored",
+                          bullet_behavior: "none",
+                        },
+                      ],
+                      segments: [
+                        {
+                          segment_id: "r0",
+                          translated_text: "顧客",
+                          style_role: "default",
+                        },
+                        {
+                          segment_id: "r1",
+                          translated_text: "成長",
+                          style_role: "emphasis",
+                        },
+                      ],
+                    },
+                  ]),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const result = await materializeTranslatedNodesWithVertexGemini(createConfig(), {
+      model: "gemini-3.1-flash-lite-preview",
+      source_language: "Chinese",
+      target_language: "ja",
+      deck_title: "Japanese embedding deck",
+      glossary_candidates: [],
+      node_summaries: [
+        createMaterializationNodeSummary({
+          node_id: "mixed-boundary-ja",
+          archetype: "mixed_emphasis",
+          slide_index: 8,
+          paragraphs: [
+            {
+              paragraph_id: "p0",
+              text: "顧客成長",
+              style_roles: ["default", "emphasis"],
+              segments: [
+                {
+                  segment_id: "r0",
+                  text: "顧客",
+                  style_role: "default",
+                },
+                {
+                  segment_id: "r1",
+                  text: "成長",
+                  style_role: "emphasis",
+                },
+              ],
+            },
+          ],
+        }),
+      ],
+      authority_nodes: [
+        {
+          node_id: "mixed-boundary-ja",
+          slide_index: 8,
+          translated_full_text: "顧客成長",
+        },
+      ],
+    });
+
+    assert.equal(result.nodes[0]?.translated_full_text, "顧客成長");
+    assert.deepEqual(
+      result.nodes[0]?.paragraphs.map((paragraph) => paragraph.translated_text),
+      ["顧客成長"]
+    );
+    assert.equal(result.nodes[0]?.risk_flags, undefined);
+    assert.deepEqual(result.nodes[0]?.segments, [
+      {
+        segment_id: "r0",
+        translated_text: "顧客",
+        style_role: "default",
+      },
+      {
+        segment_id: "r1",
+        translated_text: "成長",
+        style_role: "emphasis",
+      },
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
   }

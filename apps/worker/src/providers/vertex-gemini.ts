@@ -22,6 +22,8 @@ import { getVertexCallBudget } from "./vertex-call-budget";
 const MAX_NODES_PER_BATCH = 50;
 const ACCESS_TOKEN_REFRESH_BUFFER_MS = 2 * 60 * 1000;
 const DEFAULT_VERTEX_REQUEST_TIMEOUT_MS = 180_000;
+const SEGMENT_BOUNDARY_SPACING_NORMALIZED_RISK_FLAG =
+  "segment_boundary_spacing_normalized";
 export const VERTEX_MAX_OUTPUT_TOKENS = 65_535;
 export const VERTEX_SAFETY_SETTINGS_OFF = [
   {
@@ -121,6 +123,7 @@ Follow these rules for every request:
 - For bullet source paragraphs, set bullet_behavior to "preserve". Otherwise set it to "none".
 - Make translated_full_text equal the paragraph translations joined with "\\n".
 - Make each paragraph's translated_text equal the concatenation of that paragraph's segment translations in output order.
+- If the target language normally uses spaces between words, preserve or insert boundary spaces inside segment translations so adjacent segments still read naturally after concatenation, even when the source boundary had no whitespace.
 - For metric cards, preserve semantic roles instead of copying source character positions mechanically.
 - For titles, subtitles, headings, and short banner text, prefer concise phrasing that preserves the core meaning over verbose literal translation. Slides have limited space.
 - Return only JSON that matches the provided response schema.
@@ -490,10 +493,11 @@ TRANSLATION PRIORITIES:
 8. Set bullet_behavior to "preserve" for source bullet paragraphs and "none" for non-bullet paragraphs.
 9. Build translated_full_text by joining paragraph translated_text values with "\n".
 10. Build each paragraph's translated_text from that paragraph's segment translations in output order.
-11. For metric_card nodes, translate according to semantic role, not source character positions.
-12. Preserve line breaks, punctuation, and non-translatable content when possible.
-13. If a node contains only numbers, punctuation, or other non-translatable content, return it unchanged.
-14. For slide titles, subtitles, headings, and short banner-style text, prefer concise phrasing that preserves the core meaning. Avoid verbose or overly literal translations that significantly increase text length.
+11. If the target language normally uses spaces between words, keep or insert boundary spaces inside segment translations so adjacent translated segments do not collapse words together after concatenation, even when the source boundary had no whitespace. Attach the inserted space to the segment where it most naturally belongs, usually the following segment.
+12. For metric_card nodes, translate according to semantic role, not source character positions.
+13. Preserve line breaks, punctuation, and non-translatable content when possible.
+14. If a node contains only numbers, punctuation, or other non-translatable content, return it unchanged.
+15. For slide titles, subtitles, headings, and short banner-style text, prefer concise phrasing that preserves the core meaning. Avoid verbose or overly literal translations that significantly increase text length.
 
 ${contextBlock}
 
@@ -664,7 +668,13 @@ export function parseTranslationResponse(
       risk_flags: parseRiskFlags(item.risk_flags, nodeId),
     };
 
-    result.push(validateStructuredNode(translatedNode, sourceNodeById.get(nodeId)));
+    result.push(
+      validateStructuredNode(
+        translatedNode,
+        sourceNodeById.get(nodeId),
+        request.target_language
+      )
+    );
   }
 
   return result;
@@ -804,9 +814,14 @@ function parseRiskFlags(
 
 function validateStructuredNode(
   node: TranslatedNode,
-  sourceNode?: TranslationContextNodeSummary
+  sourceNode?: TranslationContextNodeSummary,
+  targetLanguage?: string
 ): TranslatedNode {
-  const normalizedNode = normalizeTranslatedNodeForValidation(node, sourceNode);
+  const normalizedNode = normalizeTranslatedNodeForValidation(
+    node,
+    sourceNode,
+    targetLanguage
+  );
   const paragraphText = normalizedNode.paragraphs
     .map((paragraph) => paragraph.translated_text)
     .join("\n");
@@ -903,12 +918,14 @@ function validateStructuredNode(
 
 function normalizeTranslatedNodeForValidation(
   node: TranslatedNode,
-  sourceNode?: TranslationContextNodeSummary
+  sourceNode?: TranslationContextNodeSummary,
+  targetLanguage?: string
 ): TranslatedNode {
   if (!sourceNode) {
     return node;
   }
 
+  let boundarySpacingNormalized = false;
   const sourceSegmentById = new Map(
     sourceNode.paragraphs.flatMap((paragraph) =>
       paragraph.segments.map((segment) => [segment.segment_id, segment] as const)
@@ -928,6 +945,23 @@ function normalizeTranslatedNodeForValidation(
       ),
     };
   });
+  for (let index = 0; index < node.segments.length; index += 1) {
+    const sourceSegment = sourceSegmentById.get(node.segments[index]?.segment_id ?? "");
+    const originalSegment = node.segments[index];
+    const normalizedSegment = normalizedSegments[index];
+    if (
+      sourceSegment &&
+      originalSegment &&
+      normalizedSegment &&
+      normalizedSegment.translated_text !== originalSegment.translated_text &&
+      usesGeneratedBoundaryWhitespace(
+        sourceSegment.text,
+        originalSegment.translated_text
+      )
+    ) {
+      boundarySpacingNormalized = true;
+    }
+  }
 
   const normalizedSegmentById = new Map(
     normalizedSegments.map((segment) => [segment.segment_id, segment] as const)
@@ -940,8 +974,35 @@ function normalizeTranslatedNodeForValidation(
       return paragraph;
     }
 
-    const translatedText = sourceParagraph.segments
+    const paragraphSegmentsBeforeSpacing = sourceParagraph.segments
       .map((segment) => normalizedSegmentById.get(segment.segment_id)?.translated_text ?? "")
+      .map((translated_text, index) => ({
+        ...sourceParagraph.segments[index],
+        translated_text,
+      }));
+    const paragraphSegments = applyTargetWordBoundarySpacing(
+      paragraphSegmentsBeforeSpacing,
+      targetLanguage
+    );
+    if (
+      paragraphSegments.some(
+        (segment, index) =>
+          segment.translated_text !==
+          (paragraphSegmentsBeforeSpacing[index]?.translated_text ?? "")
+      )
+    ) {
+      boundarySpacingNormalized = true;
+    }
+    for (const segment of paragraphSegments) {
+      normalizedSegmentById.set(segment.segment_id, {
+        segment_id: segment.segment_id,
+        translated_text: segment.translated_text,
+        style_role: segment.style_role,
+      });
+    }
+
+    const translatedText = paragraphSegments
+      .map((segment) => segment.translated_text)
       .join("");
 
     return {
@@ -953,11 +1014,19 @@ function normalizeTranslatedNodeForValidation(
 
   return {
     ...node,
-    segments: normalizedSegments,
+    segments: node.segments.map(
+      (segment) => normalizedSegmentById.get(segment.segment_id) ?? segment
+    ),
     paragraphs: normalizedParagraphs,
     translated_full_text: normalizedParagraphs
       .map((paragraph) => paragraph.translated_text)
       .join("\n"),
+    risk_flags: boundarySpacingNormalized
+      ? appendUniqueRiskFlag(
+          node.risk_flags,
+          SEGMENT_BOUNDARY_SPACING_NORMALIZED_RISK_FLAG
+        )
+      : node.risk_flags,
   };
 }
 
@@ -981,8 +1050,262 @@ function preserveSourceBoundaryWhitespace(
 
   const sourceLeading = sourceText.match(/^\s*/)?.[0] ?? "";
   const sourceTrailing = sourceText.match(/\s*$/)?.[0] ?? "";
+  const translatedLeading = translatedText.match(/^\s*/)?.[0] ?? "";
+  const translatedTrailing = translatedText.match(/\s*$/)?.[0] ?? "";
   const translatedCore = translatedText.trim();
-  return `${sourceLeading}${translatedCore}${sourceTrailing}`;
+  if (translatedCore.length === 0) {
+    if (sourceLeading.length > 0 || sourceTrailing.length > 0) {
+      return `${sourceLeading}${sourceTrailing}`;
+    }
+    return normalizeGeneratedBoundaryWhitespace(translatedText);
+  }
+  const leading =
+    sourceLeading.length > 0
+      ? sourceLeading
+      : normalizeGeneratedBoundaryWhitespace(translatedLeading);
+  const trailing =
+    sourceTrailing.length > 0
+      ? sourceTrailing
+      : normalizeGeneratedBoundaryWhitespace(translatedTrailing);
+  return `${leading}${translatedCore}${trailing}`;
+}
+
+function normalizeGeneratedBoundaryWhitespace(value: string): string {
+  if (value.length === 0) {
+    return "";
+  }
+  return " ";
+}
+
+function usesGeneratedBoundaryWhitespace(
+  sourceText: string,
+  translatedText: string
+): boolean {
+  if (translatedText.trim().length === 0 && translatedText.length > 0) {
+    return true;
+  }
+
+  const sourceLeading = sourceText.match(/^\s*/)?.[0] ?? "";
+  const sourceTrailing = sourceText.match(/\s*$/)?.[0] ?? "";
+  const translatedLeading = translatedText.match(/^\s*/)?.[0] ?? "";
+  const translatedTrailing = translatedText.match(/\s*$/)?.[0] ?? "";
+
+  return (
+    (sourceLeading.length === 0 && translatedLeading.length > 0) ||
+    (sourceTrailing.length === 0 && translatedTrailing.length > 0)
+  );
+}
+
+function applyTargetWordBoundarySpacing<
+  TSegment extends {
+    readonly text: string;
+    readonly segment_id: string;
+    readonly style_role: TranslationSegmentStyleRole;
+    readonly translated_text: string;
+  },
+>(segments: readonly TSegment[], targetLanguage?: string): TSegment[] {
+  if (
+    segments.length < 2 ||
+    !targetLanguageLikelyUsesInterWordSpaces(targetLanguage)
+  ) {
+    return [...segments];
+  }
+
+  const adjustedSegments = [...segments];
+  for (let index = 1; index < adjustedSegments.length; index += 1) {
+    const previousSegment = adjustedSegments[index - 1];
+    const currentSegment = adjustedSegments[index];
+    if (!previousSegment || !currentSegment) {
+      continue;
+    }
+
+    if (
+      previousSegment.text.trim().length === 0 ||
+      currentSegment.text.trim().length === 0
+    ) {
+      continue;
+    }
+
+    const normalizedPair = dedupeAdjacentBoundaryWhitespace(
+      previousSegment,
+      currentSegment
+    );
+    adjustedSegments[index - 1] = normalizedPair.previous;
+    adjustedSegments[index] = normalizedPair.current;
+
+    const previousText = adjustedSegments[index - 1]?.translated_text ?? "";
+    const currentText = adjustedSegments[index]?.translated_text ?? "";
+    if (
+      !shouldInsertMissingBoundarySpace(
+        previousText,
+        currentText
+      )
+    ) {
+      continue;
+    }
+
+    adjustedSegments[index] = {
+      ...adjustedSegments[index],
+      translated_text: ` ${currentText}`,
+    };
+  }
+
+  return adjustedSegments;
+}
+
+function targetLanguageLikelyUsesInterWordSpaces(
+  targetLanguage: string | undefined
+): boolean {
+  if (!targetLanguage) {
+    return false;
+  }
+
+  const normalizedTargetLanguage = targetLanguage.trim().toLowerCase();
+  if (normalizedTargetLanguage.length === 0) {
+    return false;
+  }
+
+  const normalizedCode = normalizedTargetLanguage.replace(/_/g, "-");
+  if (
+    normalizedCode === "ja" ||
+    normalizedCode === "ko" ||
+    normalizedCode === "th" ||
+    normalizedCode === "lo" ||
+    normalizedCode === "km" ||
+    normalizedCode === "my" ||
+    normalizedCode === "zh" ||
+    normalizedCode.startsWith("zh-")
+  ) {
+    return false;
+  }
+
+  return ![
+    "chinese",
+    "simplified chinese",
+    "traditional chinese",
+    "zh-cn",
+    "zh-tw",
+    "zh-hans",
+    "zh-hant",
+    "japanese",
+    "ja",
+    "korean",
+    "ko",
+    "thai",
+    "th",
+    "lao",
+    "lo",
+    "khmer",
+    "km",
+    "burmese",
+    "myanmar",
+    "my",
+  ].some((token) => normalizedTargetLanguage.includes(token));
+}
+
+function shouldInsertMissingBoundarySpace(
+  previousText: string,
+  currentText: string
+): boolean {
+  if (
+    previousText.length === 0 ||
+    currentText.length === 0 ||
+    /\s$/u.test(previousText) ||
+    /^\s/u.test(currentText)
+  ) {
+    return false;
+  }
+
+  const previousChar = previousText.at(-1) ?? "";
+  const currentChar = currentText[0] ?? "";
+  if (
+    !isWordBoundaryTrailingChar(previousChar) ||
+    !isWordBoundaryLeadingChar(currentChar) ||
+    isNonSegmentedScriptChar(previousChar) ||
+    isNonSegmentedScriptChar(currentChar)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function dedupeAdjacentBoundaryWhitespace<
+  TSegment extends {
+    readonly text: string;
+    readonly translated_text: string;
+  },
+>(previous: TSegment, current: TSegment): {
+  readonly previous: TSegment;
+  readonly current: TSegment;
+} {
+  if (
+    !/\s$/u.test(previous.translated_text) ||
+    !/^\s/u.test(current.translated_text)
+  ) {
+    return { previous, current };
+  }
+
+  const previousSourceHasTrailingWhitespace = /\s$/u.test(previous.text);
+  const currentSourceHasLeadingWhitespace = /^\s/u.test(current.text);
+  let normalizedPrevious = previous;
+  let normalizedCurrent = current;
+
+  if (!previousSourceHasTrailingWhitespace) {
+    normalizedPrevious = {
+      ...normalizedPrevious,
+      translated_text: normalizedPrevious.translated_text.replace(/\s+$/u, ""),
+    };
+  }
+
+  if (!currentSourceHasLeadingWhitespace) {
+    normalizedCurrent = {
+      ...normalizedCurrent,
+      translated_text: normalizedCurrent.translated_text.replace(/^\s+/u, ""),
+    };
+  }
+
+  if (
+    /\s$/u.test(normalizedPrevious.translated_text) ||
+    /^\s/u.test(normalizedCurrent.translated_text)
+  ) {
+    return {
+      previous: normalizedPrevious,
+      current: normalizedCurrent,
+    };
+  }
+
+  return {
+    previous: normalizedPrevious,
+    current: {
+      ...normalizedCurrent,
+      translated_text: ` ${normalizedCurrent.translated_text}`,
+    },
+  };
+}
+
+function isWordBoundaryTrailingChar(value: string): boolean {
+  return /[\p{L}\p{N}]/u.test(value);
+}
+
+function isWordBoundaryLeadingChar(value: string): boolean {
+  return /\p{L}/u.test(value);
+}
+
+function isNonSegmentedScriptChar(value: string): boolean {
+  return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u.test(
+    value
+  );
+}
+
+function appendUniqueRiskFlag(
+  current: readonly string[] | undefined,
+  riskFlag: string
+): readonly string[] {
+  if (current?.includes(riskFlag)) {
+    return current;
+  }
+  return [...(current ?? []), riskFlag];
 }
 
 function asRecord(value: unknown, label: string): Record<string, unknown> {
