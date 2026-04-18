@@ -6,6 +6,22 @@ PROJECT_ID="${PROJECT_ID:-YOUR_GCP_PROJECT_ID}"
 CONFIG_PATH="${CONFIG_PATH:-${SCRIPT_DIR}/track-d-observability.config.json}"
 DASHBOARD_TEMPLATE_PATH="${DASHBOARD_TEMPLATE_PATH:-${SCRIPT_DIR}/track-d-dashboard.json}"
 NOTIFICATION_CHANNELS_RAW="${TRACK_D_NOTIFICATION_CHANNELS:-}"
+TMP_FILES=()
+
+cleanup() {
+  if [[ ${#TMP_FILES[@]} -gt 0 ]]; then
+    rm -f "${TMP_FILES[@]}"
+  fi
+}
+
+trap cleanup EXIT
+
+for required_cmd in gcloud python3; do
+  if ! command -v "${required_cmd}" >/dev/null 2>&1; then
+    echo "Error: ${required_cmd} is required but was not found in PATH." >&2
+    exit 1
+  fi
+done
 
 echo "Applying Track D observability assets..."
 echo "  project: ${PROJECT_ID}"
@@ -21,6 +37,7 @@ create_or_update_metric() {
   local metric_name="$1"
   local tmp_config
   tmp_config="$(mktemp)"
+  TMP_FILES+=("$tmp_config")
   python3 - "$CONFIG_PATH" "$metric_name" "$tmp_config" <<'PY'
 import json
 import sys
@@ -50,10 +67,10 @@ PY
       --config-from-file "$tmp_config"
   fi
 
-  rm -f "$tmp_config"
 }
 
 metric_names_tmp="$(mktemp)"
+TMP_FILES+=("$metric_names_tmp")
 python3 - "$CONFIG_PATH" "$metric_names_tmp" <<'PY'
 import json
 import sys
@@ -70,12 +87,12 @@ PY
 while IFS= read -r metric_name; do
   create_or_update_metric "$metric_name"
 done <"$metric_names_tmp"
-rm -f "$metric_names_tmp"
 
 apply_dashboard() {
   local existing_dashboard
   local dashboard_inventory
   dashboard_inventory="$(mktemp)"
+  TMP_FILES+=("$dashboard_inventory")
   gcloud monitoring dashboards list \
     --project "$PROJECT_ID" \
     --format=json >"$dashboard_inventory"
@@ -97,14 +114,14 @@ for dashboard in dashboards:
         break
 PY
   )"
-  rm -f "$dashboard_inventory"
-
   local tmp_dashboard
   tmp_dashboard="$(mktemp)"
+  TMP_FILES+=("$tmp_dashboard")
 
   if [[ -n "${existing_dashboard}" ]]; then
     local existing_snapshot
     existing_snapshot="$(mktemp)"
+    TMP_FILES+=("$existing_snapshot")
     gcloud monitoring dashboards describe "$existing_dashboard" \
       --project "$PROJECT_ID" \
       --format=json >"$existing_snapshot"
@@ -129,7 +146,6 @@ PY
     gcloud monitoring dashboards update "$existing_dashboard" \
       --project "$PROJECT_ID" \
       --config-from-file "$tmp_dashboard"
-    rm -f "$existing_snapshot"
   else
     python3 - "$DASHBOARD_TEMPLATE_PATH" "$tmp_dashboard" "$PROJECT_ID" "$CONFIG_PATH" <<'PY'
 import json
@@ -160,21 +176,22 @@ PY
       --config-from-file "$tmp_dashboard"
   fi
 
-  rm -f "$tmp_dashboard"
 }
 
 apply_dashboard
 
 ACCESS_TOKEN="$(gcloud auth print-access-token)"
-python3 - "$CONFIG_PATH" "$PROJECT_ID" "$ACCESS_TOKEN" "$NOTIFICATION_CHANNELS_RAW" <<'PY'
+ACCESS_TOKEN="$ACCESS_TOKEN" python3 - "$CONFIG_PATH" "$PROJECT_ID" "$NOTIFICATION_CHANNELS_RAW" <<'PY'
 import copy
 import json
+import os
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 
-config_path, project_id, access_token, raw_channels = sys.argv[1:]
+config_path, project_id, raw_channels = sys.argv[1:]
+access_token = os.environ["ACCESS_TOKEN"]
 channels = [item.strip() for item in raw_channels.split(",") if item.strip()]
 
 with open(config_path, "r", encoding="utf-8") as fh:
@@ -230,10 +247,28 @@ for policy in config["alertPolicies"]:
 
     existing = existing_by_display_name.get(payload["displayName"])
     if existing is not None:
-        request("DELETE", f"https://monitoring.googleapis.com/v3/{existing['name']}")
-
-    request("POST", base_url, payload)
-    print(f"Applied alert policy: {payload['displayName']}")
+        payload["name"] = existing["name"]
+        if existing.get("etag"):
+            payload["etag"] = existing["etag"]
+        update_mask = ",".join([
+            "display_name",
+            "combiner",
+            "enabled",
+            "severity",
+            "user_labels",
+            "documentation",
+            "conditions",
+            "notification_channels",
+        ])
+        request(
+            "PATCH",
+            f"https://monitoring.googleapis.com/v3/{existing['name']}?updateMask={urllib.parse.quote(update_mask, safe=',')}",
+            payload,
+        )
+        print(f"Updated alert policy: {payload['displayName']}")
+    else:
+        request("POST", base_url, payload)
+        print(f"Created alert policy: {payload['displayName']}")
 PY
 
 echo "Track D observability assets are configured."

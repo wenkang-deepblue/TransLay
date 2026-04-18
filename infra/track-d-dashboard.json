@@ -10,7 +10,7 @@
         }
       },
       {
-        "title": "Slides throttled attempts / min",
+        "title": "Slides throttled attempts / sec",
         "xyChart": {
           "dataSets": [
             {
@@ -38,7 +38,7 @@
         }
       },
       {
-        "title": "Vertex throttled attempts / min",
+        "title": "Vertex throttled attempts / sec",
         "xyChart": {
           "dataSets": [
             {
@@ -66,7 +66,7 @@
         }
       },
       {
-        "title": "Failed jobs / min",
+        "title": "Failed jobs / sec",
         "xyChart": {
           "dataSets": [
             {
@@ -94,7 +94,7 @@
         }
       },
       {
-        "title": "Fallback triggers / min",
+        "title": "Fallback triggers / sec",
         "xyChart": {
           "dataSets": [
             {

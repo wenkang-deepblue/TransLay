@@ -6,6 +6,7 @@ import pg from "pg";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = join(__dirname, "migrations");
+const MIGRATION_LOCK_ID = 20260418;
 
 async function run() {
   const statusOnly = process.argv.includes("--status");
@@ -42,6 +43,8 @@ async function run() {
   }
 
   try {
+    await client.query("SELECT pg_advisory_lock($1)", [MIGRATION_LOCK_ID]);
+
     // Ensure tracker table exists
     const trackerSql = await readFile(
       join(MIGRATIONS_DIR, "000_migrations_tracker.sql"),
@@ -102,6 +105,11 @@ async function run() {
         : "All migrations already applied."
     );
   } finally {
+    try {
+      await client.query("SELECT pg_advisory_unlock($1)", [MIGRATION_LOCK_ID]);
+    } catch {
+      // Ignore unlock errors during shutdown.
+    }
     await client.end();
   }
 }

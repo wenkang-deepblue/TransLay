@@ -5,6 +5,11 @@ PROJECT_ID="${PROJECT_ID:-YOUR_GCP_PROJECT_ID}"
 LOCATION="${LOCATION:-us-central1}"
 QUEUE_NAME="${QUEUE_NAME:-YOUR_CLOUD_TASKS_QUEUE}"
 
+if ! command -v gcloud >/dev/null 2>&1; then
+  echo "Error: gcloud is required but was not found in PATH." >&2
+  exit 1
+fi
+
 # Track D fixed queue baseline. Do not override these via environment variables.
 # This script only owns the mutable flags explicitly set below. Cloud Tasks
 # fields without matching gcloud flags (for example maxBurstSize) are not reset

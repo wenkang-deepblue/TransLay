@@ -41,7 +41,9 @@ test("release-worker.sh binds deploy and Track D runtime sync together", async (
   const script = await readWorkspaceFile("infra/release-worker.sh");
 
   assert.match(script, /gcloud builds submit/);
+  assert.match(script, /--project "\$\{PROJECT_ID\}"/);
   assert.match(script, /cloudbuild-worker\.yaml/);
+  assert.match(script, /--service-account "\$\{WORKER_SERVICE_ACCOUNT\}"/);
   assert.match(script, /gcloud run deploy "\$\{SERVICE_NAME\}"/);
   assert.match(script, /configure-worker-runtime\.sh/);
   assert.match(script, /configure-cloud-tasks-queue\.sh/);
@@ -51,27 +53,93 @@ test("release-worker.sh binds deploy and Track D runtime sync together", async (
 
 test("Track D observability assets define required metrics and alerts", async () => {
   const script = await readWorkspaceFile("infra/configure-track-d-observability.sh");
-  const config = await readWorkspaceFile("infra/track-d-observability.config.json");
-  const dashboard = await readWorkspaceFile("infra/track-d-dashboard.json");
+  const configRaw = await readWorkspaceFile("infra/track-d-observability.config.json");
+  const dashboardRaw = await readWorkspaceFile("infra/track-d-dashboard.json");
+  const config = JSON.parse(configRaw) as {
+    metrics: Array<{ name: string }>;
+    alertPolicies: Array<{ displayName: string }>;
+  };
+  const dashboard = JSON.parse(dashboardRaw) as {
+    displayName: string;
+    gridLayout: {
+      widgets: Array<{
+        title?: string;
+        xyChart?: {
+          dataSets?: Array<{
+            timeSeriesQuery?: {
+              timeSeriesFilter?: {
+                filter?: string;
+              };
+            };
+          }>;
+        };
+        timeSeriesTable?: {
+          dataSets?: Array<{
+            timeSeriesQuery?: {
+              timeSeriesFilter?: {
+                filter?: string;
+              };
+            };
+          }>;
+        };
+      }>;
+    };
+  };
 
   assert.match(script, /gcloud logging metrics (create|update)/);
   assert.match(script, /gcloud monitoring dashboards (create|update)/);
   assert.match(script, /TRACK_D_NOTIFICATION_CHANNELS/);
   assert.doesNotMatch(script, /\breadarray\b/);
   assert.match(script, /\bpython3\b/);
+  assert.match(script, /\btrap cleanup EXIT\b/);
+  assert.match(script, /ACCESS_TOKEN="\$ACCESS_TOKEN" python3/);
+  assert.match(script, /PATCH/);
 
-  assert.match(config, /translay_track_d_slides_budget_attempt_total/);
-  assert.match(config, /translay_track_d_slides_budget_throttled_total/);
-  assert.match(config, /translay_track_d_vertex_budget_attempt_total/);
-  assert.match(config, /translay_track_d_vertex_budget_throttled_total/);
-  assert.match(config, /translay_track_d_job_terminal_total/);
-  assert.match(config, /translay_track_d_fallback_triggered_total/);
-  assert.match(config, /translay_track_d_token_source_selected_total/);
-  assert.match(config, /translay_track_d_global_inflight_distribution/);
-  assert.match(config, /Slides 429 rate > 5% \(5m\)/);
-  assert.match(config, /Global in-flight jobs > 45 \(10m\)/);
-  assert.match(config, /SA fallback ratio > 30% \(1h\)/);
+  const metricNames = new Set(config.metrics.map((metric) => metric.name));
+  assert.ok(metricNames.has("translay_track_d_slides_budget_attempt_total"));
+  assert.ok(metricNames.has("translay_track_d_slides_budget_throttled_total"));
+  assert.ok(metricNames.has("translay_track_d_vertex_budget_attempt_total"));
+  assert.ok(metricNames.has("translay_track_d_vertex_budget_throttled_total"));
+  assert.ok(metricNames.has("translay_track_d_job_terminal_total"));
+  assert.ok(metricNames.has("translay_track_d_fallback_triggered_total"));
+  assert.ok(metricNames.has("translay_track_d_token_source_selected_total"));
+  assert.ok(metricNames.has("translay_track_d_global_inflight_distribution"));
 
-  assert.match(dashboard, /TransLay Track D Overview/);
-  assert.match(dashboard, /logging\.googleapis\.com\/user\/translay_track_d_global_inflight_distribution/);
+  const alertDisplayNames = new Set(
+    config.alertPolicies.map((policy) => policy.displayName)
+  );
+  assert.ok(alertDisplayNames.has("TransLay Track D - Slides 429 rate > 5% (5m)"));
+  assert.ok(alertDisplayNames.has("TransLay Track D - Global in-flight jobs > 45 (10m)"));
+  assert.ok(alertDisplayNames.has("TransLay Track D - SA fallback ratio > 30% (1h)"));
+
+  assert.equal(dashboard.displayName, "TransLay Track D Overview");
+
+  const dashboardFilters = dashboard.gridLayout.widgets.flatMap((widget) => {
+    const xyFilters = (widget.xyChart?.dataSets ?? []).flatMap((dataSet) => {
+      const filter = dataSet.timeSeriesQuery?.timeSeriesFilter?.filter;
+      return filter ? [filter] : [];
+    });
+    const tableFilters = (widget.timeSeriesTable?.dataSets ?? []).flatMap((dataSet) => {
+      const filter = dataSet.timeSeriesQuery?.timeSeriesFilter?.filter;
+      return filter ? [filter] : [];
+    });
+    return [...xyFilters, ...tableFilters];
+  });
+
+  assert.ok(
+    dashboardFilters.some((filter) =>
+      filter.includes("logging.googleapis.com/user/translay_track_d_global_inflight_distribution")
+    )
+  );
+
+  for (const filter of dashboardFilters) {
+    const metricTypeMatch = filter.match(/logging\.googleapis\.com\/user\/([A-Za-z0-9_]+)/);
+    if (!metricTypeMatch) {
+      continue;
+    }
+    assert.ok(
+      metricNames.has(metricTypeMatch[1]!),
+      `dashboard references unknown metric: ${metricTypeMatch[1]}`
+    );
+  }
 });
