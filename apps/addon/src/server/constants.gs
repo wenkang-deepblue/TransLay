@@ -23,8 +23,8 @@ var PRESET_LANGUAGES = [
   { name: 'Arabic', code: 'ar' },
   { name: 'Greek', code: 'el' },
   { name: 'Hebrew', code: 'he' },
-  { name: 'Simplified Chinese', code: 'zh-CN' },
-  { name: 'Traditional Chinese', code: 'zh-TW' },
+  { name: 'Simplified Chinese', code: 'zh-Hans' },
+  { name: 'Traditional Chinese', code: 'zh-Hant' },
   { name: 'Japanese', code: 'ja' },
   { name: 'Korean', code: 'ko' },
   { name: 'Klingon', code: 'tlh' }

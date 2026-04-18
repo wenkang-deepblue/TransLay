@@ -63,7 +63,8 @@ function getInitData() {
     slideCount: 0,
     currentSlideIndex: 1,
     sheetNames: [],
-    entitlementCacheTtl: ENTITLEMENT_CACHE_TTL
+    entitlementCacheTtl: ENTITLEMENT_CACHE_TTL,
+    jobPollIntervalMs: JOB_POLL_INTERVAL_MS
   };
 
   // C6: getSlideCount/getCurrentSlideIndex now throw on error;

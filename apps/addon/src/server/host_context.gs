@@ -171,3 +171,29 @@ function cleanupPreparedPresentation(documentId) {
     console.error('Failed to cleanup prepared presentation: ' + err.message);
   }
 }
+
+/**
+ * Revokes the worker service account's editor access from a document
+ * after job completion, failure, or cancellation. Best-effort: failures
+ * are logged but never surfaced to the user.
+ */
+function revokeWorkerAccess(documentId) {
+  if (!documentId) return;
+
+  try {
+    DriveApp.getFileById(documentId).removeEditor(WORKER_SERVICE_ACCOUNT_EMAIL);
+  } catch (err) {
+    console.log('Could not revoke worker access from ' + documentId + ': ' + err.message);
+  }
+}
+
+/**
+ * Revokes worker access from both source and target documents after job ends.
+ * Skips revocation if both IDs are the same (append_in_file mode).
+ */
+function revokeWorkerAccessForJob(sourceDocumentId, targetDocumentId) {
+  revokeWorkerAccess(sourceDocumentId);
+  if (targetDocumentId && targetDocumentId !== sourceDocumentId) {
+    revokeWorkerAccess(targetDocumentId);
+  }
+}

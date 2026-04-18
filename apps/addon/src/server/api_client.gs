@@ -1,11 +1,9 @@
 /**
  * Builds request headers with auth token.
- * Includes ngrok-skip-browser-warning for local dev tunneling.
  */
 function _authHeaders(token) {
   return {
-    'Authorization': 'Bearer ' + token,
-    'ngrok-skip-browser-warning': '1'
+    'Authorization': 'Bearer ' + token
   };
 }
 
