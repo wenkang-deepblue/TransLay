@@ -17,7 +17,7 @@ export function entitlementHandler(pool: Pool) {
 
     const sub = await getActiveSubscription(pool, auth.user_id);
     if (!sub) {
-      sendError(res, "JOB_INTERNAL_ERROR", "No subscription found");
+      sendError(res, "ACCESS_DENIED", "Subscription state is not initialized");
       return;
     }
 

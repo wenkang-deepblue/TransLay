@@ -27,8 +27,9 @@ export function portalSessionMiddleware(redis: Redis, config: AppConfig) {
       }
     } catch (err) {
       console.error("Session middleware Redis error:", (err as Error).message);
+      res.setHeader("Retry-After", "5");
       res.status(503).json({
-        error: "JOB_INTERNAL_ERROR",
+        error: "SERVICE_UNAVAILABLE",
         message: "Service temporarily unavailable",
       });
       return;

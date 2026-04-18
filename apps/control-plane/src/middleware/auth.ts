@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
+import { OAuth2Client } from "google-auth-library";
 import type { Pool } from "pg";
 import type Redis from "ioredis";
 import type {
@@ -13,8 +14,8 @@ import { sendError } from "../utils/errors";
 // Augmentations consolidated in types/express.d.ts
 
 const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
-const GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo";
 const IDENTITY_CACHE_TTL = 90; // seconds
+const idTokenClient = new OAuth2Client();
 
 async function fetchAsAccessToken(token: string): Promise<GoogleIdentity | null> {
   const res = await fetch(GOOGLE_USERINFO_URL, {
@@ -32,11 +33,9 @@ async function fetchAsAccessToken(token: string): Promise<GoogleIdentity | null>
 }
 
 async function fetchAsIdToken(token: string): Promise<GoogleIdentity | null> {
-  const res = await fetch(
-    `${GOOGLE_TOKENINFO_URL}?id_token=${encodeURIComponent(token)}`
-  );
-  if (!res.ok) return null;
-  const data = (await res.json()) as Record<string, unknown>;
+  const ticket = await idTokenClient.verifyIdToken({ idToken: token });
+  const data = ticket.getPayload();
+  if (!data) return null;
   const sub = data.sub as string | undefined;
   if (!sub) return null;
   return {
@@ -148,7 +147,7 @@ export function googleAuthMiddleware(pool: Pool, redis: Redis) {
     } catch (err) {
       console.error("User upsert DB error:", (err as Error).stack);
       res.status(503).json({
-        error: "JOB_INTERNAL_ERROR",
+        error: "SERVICE_UNAVAILABLE",
         message: "Service temporarily unavailable",
       });
       return;

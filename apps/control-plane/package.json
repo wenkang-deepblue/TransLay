@@ -13,6 +13,7 @@
     "@translay/shared-contracts": "*",
     "@translay/shared-domain": "*",
     "express": "^4.21.0",
+    "google-auth-library": "^10.6.2",
     "ioredis": "^5.10.1",
     "pg": "^8.20.0"
   },

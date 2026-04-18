@@ -26,6 +26,9 @@ export const ERROR_CODES = {
   RATE_LIMITED: { status: 429, message: "Too many requests" },
   JOB_QUEUE_BUSY: { status: 429, message: "The translation queue is currently busy" },
 
+  // 503
+  SERVICE_UNAVAILABLE: { status: 503, message: "Service temporarily unavailable" },
+
   // 500
   INTERNAL_ERROR: { status: 500, message: "Internal server error" },
   LLM_PROVIDER_ERROR: { status: 500, message: "Translation provider error" },

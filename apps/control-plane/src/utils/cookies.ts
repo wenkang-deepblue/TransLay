@@ -1,3 +1,7 @@
+/**
+ * TransLay only uses simple opaque cookie values (hex session ids) without
+ * RFC 6265 quoting or percent-encoding. Keep this parser scoped to that shape.
+ */
 export function parseCookies(header: string | undefined): Record<string, string> {
   const cookies: Record<string, string> = {};
   if (!header) return cookies;

@@ -116,7 +116,12 @@ function isInternalCronAuthorized(
   if (!secret) {
     return false;
   }
-  return authorizationHeader === `Bearer ${secret}`;
+  const expected = Buffer.from(`Bearer ${secret}`);
+  const received = Buffer.from(authorizationHeader ?? "");
+  if (expected.length !== received.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(expected, received);
 }
 
 // S8: Validate a string is a known job status
@@ -587,12 +592,47 @@ function toNumber(value: unknown): number {
   return 0;
 }
 
+function canonicalizeJson(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalizeJson);
+  }
+
+  if (value && typeof value === "object") {
+    const sortedEntries = Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, nestedValue]) => [key, canonicalizeJson(nestedValue)]);
+    return Object.fromEntries(sortedEntries);
+  }
+
+  return value;
+}
+
+function stableRequestFingerprint(value: unknown): string {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(canonicalizeJson(value)))
+    .digest("hex");
+}
+
 function buildJobStatusResponse(
   job: JobRow,
   slideResults: readonly JobSlideResult[] = [],
   progress?: Record<string, string>
 ): JobStatusResponse {
   if (job.status === "completed" || job.status === "completed_with_warnings") {
+    if (!job.output_document_url) {
+      const response: JobFailedResponse = {
+        job_id: job.id,
+        status: "failed",
+        error: "JOB_INTERNAL_ERROR",
+        message: "Translation finished without an output document URL.",
+        total_billed_units: job.total_units_billed,
+        gross_billed_slides: job.gross_billed_slides,
+        refunded_slides: job.refunded_slides,
+        net_billed_slides: job.net_billed_slides,
+      };
+      return response;
+    }
     const normalizedWarnings = mergeWarningsWithSlideResults(
       normalizeWarnings(job.warnings),
       slideResults
@@ -605,7 +645,7 @@ function buildJobStatusResponse(
       job_id: job.id,
       status: completionCode ? "completed_with_warnings" : job.status,
       progress_percent: 100,
-      output_document_url: job.output_document_url ?? "",
+      output_document_url: job.output_document_url,
       message: buildCompletedMessage(normalizedWarnings, slideSummary, slideResults),
       ...(completionCode ? { completion_code: completionCode } : {}),
       fully_delivered_body_slide_indices: slideSummary.fully_delivered_body_slide_indices,
@@ -777,7 +817,7 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
 
     const sub = await getActiveSubscription(pool, auth.user_id);
     if (!sub) {
-      sendError(res, "JOB_INTERNAL_ERROR", "No subscription found");
+      sendError(res, "ACCESS_DENIED", "Subscription state is not initialized");
       return;
     }
 
@@ -872,10 +912,7 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
         hostOauthSource: hostOauthPersistence.hostOauthSource,
       });
 
-      const fingerprint = crypto
-        .createHash("sha256")
-        .update(JSON.stringify(body))
-        .digest("hex");
+      const fingerprint = stableRequestFingerprint(body);
 
       await insertIdempotencyRecord(client, {
         userId: auth.user_id,
@@ -973,7 +1010,7 @@ export function sweepHostOauthTokensHandler(pool: Pool, config: AppConfig) {
   return async (req: Request, res: Response) => {
     if (!config.security.internalCronSecret) {
       res.status(503).json({
-        error: "JOB_INTERNAL_ERROR",
+        error: "SERVICE_UNAVAILABLE",
         message: "Internal cron secret is not configured.",
       });
       return;

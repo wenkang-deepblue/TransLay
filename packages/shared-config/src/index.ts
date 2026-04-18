@@ -148,7 +148,7 @@ export function loadConfig() {
 
     session: {
       secret: sessionSecret,
-      cookieName: "translay_sid",
+      cookieName: "__Host-translay_sid",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
 

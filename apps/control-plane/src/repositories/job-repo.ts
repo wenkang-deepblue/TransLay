@@ -209,17 +209,17 @@ export async function updateJobStatus(
     setClauses.push("host_oauth_source = 'sa_fallback'");
     setClauses.push("host_oauth_purged_at = NOW()");
   }
-  if (extra?.errorCode) {
+  if (extra?.errorCode !== undefined) {
     setClauses.push(`error_code = $${idx}`);
     params.push(extra.errorCode);
     idx++;
   }
-  if (extra?.errorMessage) {
+  if (extra?.errorMessage !== undefined) {
     setClauses.push(`error_message = $${idx}`);
     params.push(extra.errorMessage);
     idx++;
   }
-  if (extra?.outputDocumentUrl) {
+  if (extra?.outputDocumentUrl !== undefined) {
     setClauses.push(`output_document_url = $${idx}`);
     params.push(extra.outputDocumentUrl);
     idx++;

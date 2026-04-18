@@ -6,6 +6,7 @@ interface RateLimitConfig {
   readonly windowSeconds: number;
   readonly maxRequests: number;
   readonly keyPrefix: string;
+  readonly failOpen?: boolean;
 }
 
 /**
@@ -17,6 +18,7 @@ export function rateLimitMiddleware(redis: Redis, config: RateLimitConfig) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const identifier =
       req.authContext?.user_id ??
+      req.portalSession?.userId ??
       req.ip ??
       "unknown";
 
@@ -34,8 +36,14 @@ export function rateLimitMiddleware(redis: Redis, config: RateLimitConfig) {
         return;
       }
     } catch (err) {
-      // Rate limit failure should not block requests — log and proceed
+      // Public/global throttles may fail open for availability. Auth/session-scoped
+      // throttles should fail closed because they protect write-heavy control paths.
       console.warn("Rate limit Redis error:", (err as Error).message);
+      if (!config.failOpen) {
+        res.setHeader("Retry-After", String(config.windowSeconds));
+        sendError(res, "RATE_LIMITED");
+        return;
+      }
     }
 
     next();

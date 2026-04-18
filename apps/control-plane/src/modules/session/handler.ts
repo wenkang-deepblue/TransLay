@@ -24,7 +24,8 @@ function generateSecureId(): string {
 /**
  * C1: Lua script for atomic ticket consumption.
  * C3: Returns user_id directly to avoid TOCTOU with separate HGET after EXPIRE.
- * Returns: user_id string = consumed successfully, "0" = already consumed, "-1" = ticket not found
+ * Returns: user_id string = consumed successfully, "0" = already consumed,
+ * "-1" = ticket not found, "-2" = corrupted ticket payload
  */
 const CONSUME_TICKET_LUA = `
 local key = KEYS[1]
@@ -33,9 +34,10 @@ if exists == 0 then return "-1" end
 local consumed = redis.call('HGET', key, 'consumed')
 if consumed == '1' then return "0" end
 local user_id = redis.call('HGET', key, 'user_id')
+if not user_id then return "-2" end
 redis.call('HSET', key, 'consumed', '1')
 redis.call('EXPIRE', key, 5)
-return user_id or "-1"
+return user_id
 `;
 
 export function sessionStartHandler(redis: Redis, config: AppConfig) {
@@ -99,7 +101,7 @@ export function sessionConsumeHandler(pool: Pool, redis: Redis, config: AppConfi
       // I11: Redis failure during ticket consumption
       console.error("Ticket consume Redis error:", (err as Error).message);
       res.status(503).json({
-        error: "JOB_INTERNAL_ERROR",
+        error: "SERVICE_UNAVAILABLE",
         message: "Service temporarily unavailable",
       });
       return;
@@ -111,6 +113,11 @@ export function sessionConsumeHandler(pool: Pool, redis: Redis, config: AppConfi
     }
     if (consumeResult === "0") {
       sendError(res, "TICKET_ALREADY_CONSUMED");
+      return;
+    }
+    if (consumeResult === "-2") {
+      console.error("Ticket payload missing user_id:", ticketKey);
+      sendError(res, "JOB_INTERNAL_ERROR", "Ticket payload is corrupted");
       return;
     }
 
@@ -142,7 +149,7 @@ export function sessionConsumeHandler(pool: Pool, redis: Redis, config: AppConfi
     } catch (err) {
       console.error("Session creation Redis error:", (err as Error).message);
       res.status(503).json({
-        error: "JOB_INTERNAL_ERROR",
+        error: "SERVICE_UNAVAILABLE",
         message: "Service temporarily unavailable",
       });
       return;

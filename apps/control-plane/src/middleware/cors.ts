@@ -10,6 +10,7 @@ export function corsMiddleware(allowedOrigin: string) {
     const origin = req.headers.origin;
 
     if (origin === allowedOrigin) {
+      res.setHeader("Vary", "Origin");
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Access-Control-Allow-Credentials", "true");
       res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");

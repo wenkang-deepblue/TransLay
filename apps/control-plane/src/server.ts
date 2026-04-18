@@ -32,30 +32,49 @@ const redis = getRedis(config);
 app.use(express.json({ limit: "1mb" }));
 
 // Trust proxy headers (Cloud Run sits behind a load balancer)
-app.set("trust proxy", true);
+app.set("trust proxy", 1);
 
 // I1: CORS locked to production domain
 app.use(corsMiddleware(`https://${config.domain}`));
 
 // I2: Global rate limit (60 req/min per user/IP)
-app.use(rateLimitMiddleware(redis, { windowSeconds: 60, maxRequests: 60, keyPrefix: "global" }));
+app.use(
+  rateLimitMiddleware(redis, {
+    windowSeconds: 60,
+    maxRequests: 60,
+    keyPrefix: "global",
+    failOpen: true,
+  })
+);
 
 // --- Public routes (no auth) ---
 app.get("/api/health", asyncHandler(healthHandler(pool, redis)));
 
 // --- Portal routes (session cookie auth) ---
 const portalSession = portalSessionMiddleware(redis, config);
+const portalUserRateLimit = rateLimitMiddleware(redis, {
+  windowSeconds: 60,
+  maxRequests: 60,
+  keyPrefix: "portal-user",
+  failOpen: false,
+});
 app.post("/api/session/consume", asyncHandler(sessionConsumeHandler(pool, redis, config)));
-app.get("/api/session/me", portalSession, asyncHandler(sessionMeHandler(pool)));
-app.post("/api/session/logout", portalSession, asyncHandler(sessionLogoutHandler(redis, config)));
+app.get("/api/session/me", portalSession, portalUserRateLimit, asyncHandler(sessionMeHandler(pool)));
+app.post("/api/session/logout", portalSession, portalUserRateLimit, asyncHandler(sessionLogoutHandler(redis, config)));
 
 // --- Add-on routes (Google token auth) ---
 const googleAuth = googleAuthMiddleware(pool, redis);
-app.get("/api/entitlement", googleAuth, asyncHandler(entitlementHandler(pool)));
-app.post("/api/session/start", googleAuth, asyncHandler(sessionStartHandler(redis, config)));
-app.post("/api/jobs", googleAuth, asyncHandler(createJobHandler(pool, redis, config)));
-app.get("/api/jobs/:jobId", googleAuth, asyncHandler(getJobHandler(pool, redis)));
-app.post("/api/jobs/:jobId/cancel", googleAuth, asyncHandler(cancelJobHandler(pool, redis, config)));
+const googleUserRateLimit = rateLimitMiddleware(redis, {
+  windowSeconds: 60,
+  maxRequests: 60,
+  keyPrefix: "google-user",
+  failOpen: false,
+});
+app.get("/api/entitlement", googleAuth, googleUserRateLimit, asyncHandler(entitlementHandler(pool)));
+app.post("/api/session/start", googleAuth, googleUserRateLimit, asyncHandler(sessionStartHandler(redis, config)));
+app.post("/api/jobs", googleAuth, googleUserRateLimit, asyncHandler(createJobHandler(pool, redis, config)));
+app.get("/api/jobs/:jobId", googleAuth, googleUserRateLimit, asyncHandler(getJobHandler(pool, redis)));
+app.post("/api/jobs/:jobId/cancel", googleAuth, googleUserRateLimit, asyncHandler(cancelJobHandler(pool, redis, config)));
 
 // --- Internal maintenance routes ---
 app.post(
@@ -65,7 +84,7 @@ app.post(
 
 // I9: Generic error code in response, stack trace logged server-side only
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("Unhandled error:", err.stack ?? err.message);
+  console.error("Unhandled error:", err.name, err.message);
   sendError(res, "INTERNAL_ERROR");
 });
 
