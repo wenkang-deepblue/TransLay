@@ -61,15 +61,19 @@ export async function kmsDecrypt(
   ciphertext: Buffer | Uint8Array | string
 ): Promise<string> {
   const keyName = getKmsKeyName();
-  const normalizedCiphertext =
-    typeof ciphertext === "string" ? Buffer.from(ciphertext, "base64") : assertPlaintext(ciphertext);
 
   if (!keyName) {
     if (isProductionLike()) {
       throw new Error("KMS_KEY_NAME is required when decrypting OAuth tokens in production-like environments");
     }
-    return normalizedCiphertext.toString("utf8");
+    if (typeof ciphertext === "string") {
+      return ciphertext;
+    }
+    return assertPlaintext(ciphertext).toString("utf8");
   }
+
+  const normalizedCiphertext =
+    typeof ciphertext === "string" ? Buffer.from(ciphertext, "base64") : assertPlaintext(ciphertext);
 
   const [response] = await getClient().decrypt({
     name: keyName,

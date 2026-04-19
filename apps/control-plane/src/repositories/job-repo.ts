@@ -201,7 +201,8 @@ export async function updateJobStatus(
     status === "completed" ||
     status === "completed_with_warnings" ||
     status === "failed" ||
-    status === "canceled"
+    status === "canceled" ||
+    status === "rolled_back"
   ) {
     setClauses.push("completed_at = NOW()");
     setClauses.push("host_oauth_access_token_enc = NULL");

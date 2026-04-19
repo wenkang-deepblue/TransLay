@@ -40,9 +40,6 @@ export const ERROR_CODES = {
   // 502
   HOST_ADAPTER_ERROR: { status: 502, message: "Document extraction or write-back error" },
   WEBHOOK_SIGNATURE_INVALID: { status: 502, message: "Webhook signature verification failed" },
-
-  // 200 semantic non-error status
-  PARTIAL_SUCCESS: { status: 200, message: "Job completed with partial success" },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

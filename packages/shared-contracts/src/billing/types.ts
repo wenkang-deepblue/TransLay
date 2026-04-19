@@ -9,10 +9,11 @@ export const SUBSCRIPTION_STATUSES = [
   "canceled",
   "expired",
   "grace_period",
+  "blocked",
 ] as const;
 export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 
-export type AccessLevel = "free" | "pro";
+export type AccessLevel = "free" | "pro" | "blocked";
 
 /** S6: Supported payment provider names. */
 export const PAYMENT_PROVIDER_NAMES = ["none", "paddle"] as const;
@@ -29,12 +30,7 @@ export interface MeteredUsageSnapshot {
   readonly sheets_cells_limit: number;
 }
 
-/** Usage for plans without per-host limits. */
-export interface UnlimitedUsageSnapshot {
-  readonly unlimited: true;
-}
-
-export type UsageSnapshot = MeteredUsageSnapshot | UnlimitedUsageSnapshot;
+export type UsageSnapshot = MeteredUsageSnapshot;
 
 /** GET /api/entitlement response. */
 export interface EntitlementResponse {

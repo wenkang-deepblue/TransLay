@@ -27,6 +27,10 @@ export interface CancellationNotice {
 export function computeEntitlement(input: EntitlementInput): EntitlementResult {
   const { plan_type, subscription_status, cancel_at_period_end, current_period_end } = input;
 
+  if (subscription_status === "blocked") {
+    return { access: "blocked", active: false, cancellation_notice: null };
+  }
+
   if (plan_type === "free") {
     return { access: "free", active: true, cancellation_notice: null };
   }
@@ -42,10 +46,6 @@ export function computeEntitlement(input: EntitlementInput): EntitlementResult {
     case "expired":
       isPro = false;
       break;
-    default: {
-      const _exhaustive: never = subscription_status;
-      throw new Error(`Unknown subscription status: ${_exhaustive}`);
-    }
   }
 
   let cancellation_notice: CancellationNotice | null = null;

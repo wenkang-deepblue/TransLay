@@ -1,33 +1,233 @@
-/** Preset language list. UI displays name only, never the code. */
+export interface PresetLanguage {
+  readonly display_name_zh: string;
+  readonly display_name_en: string;
+  readonly language_code: string;
+  readonly bcp47_tag: string;
+  readonly is_preset: true;
+  readonly is_low_resource: boolean;
+  readonly rtl: boolean;
+  readonly aliases: readonly string[];
+}
+
+/** Preset language dictionary. UI displays language names, not internal codes. */
 export const PRESET_LANGUAGES = [
-  { name: "English", code: "en" },
-  { name: "Portuguese", code: "pt" },
-  { name: "Spanish", code: "es" },
-  { name: "French", code: "fr" },
-  { name: "German", code: "de" },
-  { name: "Italian", code: "it" },
-  { name: "Dutch", code: "nl" },
-  { name: "Swedish", code: "sv" },
-  { name: "Russian", code: "ru" },
-  { name: "Arabic", code: "ar" },
-  { name: "Greek", code: "el" },
-  { name: "Hebrew", code: "he" },
-  { name: "Simplified Chinese", code: "zh-CN" },
-  { name: "Traditional Chinese", code: "zh-TW" },
-  { name: "Japanese", code: "ja" },
-  { name: "Korean", code: "ko" },
-  { name: "Klingon", code: "tlh" },
-] as const;
+  {
+    display_name_zh: "英语",
+    display_name_en: "English",
+    language_code: "EN",
+    bcp47_tag: "en",
+    is_preset: true,
+    is_low_resource: false,
+    rtl: false,
+    aliases: ["english", "英语", "en"],
+  },
+  {
+    display_name_zh: "葡萄牙语",
+    display_name_en: "Portuguese",
+    language_code: "PT",
+    bcp47_tag: "pt",
+    is_preset: true,
+    is_low_resource: false,
+    rtl: false,
+    aliases: ["portuguese", "葡萄牙语", "葡语", "pt"],
+  },
+  {
+    display_name_zh: "西班牙语",
+    display_name_en: "Spanish",
+    language_code: "ES",
+    bcp47_tag: "es",
+    is_preset: true,
+    is_low_resource: false,
+    rtl: false,
+    aliases: ["spanish", "西班牙语", "西语", "es"],
+  },
+  {
+    display_name_zh: "法语",
+    display_name_en: "French",
+    language_code: "FR",
+    bcp47_tag: "fr",
+    is_preset: true,
+    is_low_resource: false,
+    rtl: false,
+    aliases: ["french", "法语", "fr"],
+  },
+  {
+    display_name_zh: "德语",
+    display_name_en: "German",
+    language_code: "DE",
+    bcp47_tag: "de",
+    is_preset: true,
+    is_low_resource: false,
+    rtl: false,
+    aliases: ["german", "德语", "de"],
+  },
+  {
+    display_name_zh: "意大利语",
+    display_name_en: "Italian",
+    language_code: "IT",
+    bcp47_tag: "it",
+    is_preset: true,
+    is_low_resource: false,
+    rtl: false,
+    aliases: ["italian", "意大利语", "it"],
+  },
+  {
+    display_name_zh: "荷兰语",
+    display_name_en: "Dutch",
+    language_code: "NL",
+    bcp47_tag: "nl",
+    is_preset: true,
+    is_low_resource: false,
+    rtl: false,
+    aliases: ["dutch", "荷兰语", "nl"],
+  },
+  {
+    display_name_zh: "瑞典语",
+    display_name_en: "Swedish",
+    language_code: "SV",
+    bcp47_tag: "sv",
+    is_preset: true,
+    is_low_resource: false,
+    rtl: false,
+    aliases: ["swedish", "瑞典语", "sv"],
+  },
+  {
+    display_name_zh: "俄语",
+    display_name_en: "Russian",
+    language_code: "RU",
+    bcp47_tag: "ru",
+    is_preset: true,
+    is_low_resource: false,
+    rtl: false,
+    aliases: ["russian", "俄语", "ru"],
+  },
+  {
+    display_name_zh: "阿拉伯语",
+    display_name_en: "Arabic",
+    language_code: "AR",
+    bcp47_tag: "ar",
+    is_preset: true,
+    is_low_resource: false,
+    rtl: true,
+    aliases: ["arabic", "阿拉伯语", "ar"],
+  },
+  {
+    display_name_zh: "希腊语",
+    display_name_en: "Greek",
+    language_code: "EL",
+    bcp47_tag: "el",
+    is_preset: true,
+    is_low_resource: false,
+    rtl: false,
+    aliases: ["greek", "希腊语", "el"],
+  },
+  {
+    display_name_zh: "希伯来语",
+    display_name_en: "Hebrew",
+    language_code: "HE",
+    bcp47_tag: "he",
+    is_preset: true,
+    is_low_resource: false,
+    rtl: true,
+    aliases: ["hebrew", "希伯来语", "he"],
+  },
+  {
+    display_name_zh: "简体中文",
+    display_name_en: "Simplified Chinese",
+    language_code: "zh-Hans",
+    bcp47_tag: "zh-Hans",
+    is_preset: true,
+    is_low_resource: false,
+    rtl: false,
+    aliases: [
+      "simplified chinese",
+      "chinese simplified",
+      "简体中文",
+      "简中",
+      "zh-hans",
+      "zh_cn",
+      "zh-cn",
+    ],
+  },
+  {
+    display_name_zh: "繁体中文",
+    display_name_en: "Traditional Chinese",
+    language_code: "zh-Hant",
+    bcp47_tag: "zh-Hant",
+    is_preset: true,
+    is_low_resource: false,
+    rtl: false,
+    aliases: [
+      "traditional chinese",
+      "chinese traditional",
+      "繁体中文",
+      "繁中",
+      "zh-hant",
+      "zh_tw",
+      "zh-tw",
+    ],
+  },
+  {
+    display_name_zh: "日语",
+    display_name_en: "Japanese",
+    language_code: "JA",
+    bcp47_tag: "ja",
+    is_preset: true,
+    is_low_resource: false,
+    rtl: false,
+    aliases: ["japanese", "日语", "日文", "ja"],
+  },
+  {
+    display_name_zh: "韩语",
+    display_name_en: "Korean",
+    language_code: "KO",
+    bcp47_tag: "ko",
+    is_preset: true,
+    is_low_resource: false,
+    rtl: false,
+    aliases: ["korean", "韩语", "韩文", "ko"],
+  },
+  {
+    display_name_zh: "克林贡语",
+    display_name_en: "Klingon",
+    language_code: "TLH",
+    bcp47_tag: "tlh",
+    is_preset: true,
+    is_low_resource: true,
+    rtl: false,
+    aliases: ["klingon", "克林贡语", "tlh"],
+  },
+] as const satisfies readonly PresetLanguage[];
 
-export type PresetLanguageCode = (typeof PRESET_LANGUAGES)[number]["code"];
+export type PresetLanguageCode = (typeof PRESET_LANGUAGES)[number]["language_code"];
 
-/** Attempts to match a natural language input to a preset language code. */
+function normalizeLanguageInput(input: string): string {
+  return input
+    .normalize("NFKC")
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s-]+/g, " ");
+}
+
+/** Attempts to match a natural-language input to a preset language code. */
 export function matchPresetLanguage(input: string): PresetLanguageCode | null {
-  const normalized = input.trim().toLowerCase();
+  const normalized = normalizeLanguageInput(input);
+  if (!normalized) {
+    return null;
+  }
+
   for (const lang of PRESET_LANGUAGES) {
-    if (lang.name.toLowerCase() === normalized || lang.code.toLowerCase() === normalized) {
-      return lang.code;
+    const candidates = [
+      lang.display_name_en,
+      lang.display_name_zh,
+      lang.language_code,
+      lang.bcp47_tag,
+      ...lang.aliases,
+    ];
+    if (candidates.some((candidate) => normalizeLanguageInput(candidate) === normalized)) {
+      return lang.language_code;
     }
   }
+
   return null;
 }

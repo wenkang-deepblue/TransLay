@@ -22,6 +22,7 @@ export const JOB_STATUSES = [
   "completed_with_warnings",
   "failed",
   "canceled",
+  "rolled_back",
 ] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
 
@@ -67,6 +68,9 @@ export const JOB_WARNING_REASONS = [
   "slide_charge_refunded",
 ] as const;
 export type JobWarningReason = (typeof JOB_WARNING_REASONS)[number];
+
+export const JOB_COMPLETION_CODES = ["PARTIAL_SUCCESS"] as const;
+export type JobCompletionCode = (typeof JOB_COMPLETION_CODES)[number];
 
 export const SLIDE_EXECUTION_STATUSES = [
   "pending",
@@ -188,7 +192,7 @@ export interface JobProgressResponse {
 export interface JobCompletedResponse {
   readonly job_id: string;
   readonly status: "completed" | "completed_with_warnings";
-  readonly completion_code?: "PARTIAL_SUCCESS";
+  readonly completion_code?: JobCompletionCode;
   readonly progress_percent: 100;
   readonly output_document_url: string;
   readonly message: string;

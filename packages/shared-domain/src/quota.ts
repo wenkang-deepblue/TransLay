@@ -15,7 +15,7 @@ export interface QuotaLimits {
  * that apply when a free-tier job IS allowed.
  */
 const PLAN_LIMITS: Record<PlanType, QuotaLimits> = {
-  free: { slides: 50, docs_pages: 10, sheets_cells: 25000 },
+  free: { slides: 20, docs_pages: 5, sheets_cells: 2000 },
   pro_monthly: { slides: 300, docs_pages: 100, sheets_cells: 40000 },
   pro_yearly: { slides: 500, docs_pages: 200, sheets_cells: 100000 },
 };

@@ -663,7 +663,7 @@ function buildJobStatusResponse(
     return response;
   }
 
-  if (job.status === "failed") {
+  if (job.status === "failed" || job.status === "rolled_back") {
     const normalizedWarnings = mergeWarningsWithSlideResults(
       normalizeWarnings(job.warnings),
       slideResults
@@ -673,7 +673,15 @@ function buildJobStatusResponse(
       job_id: job.id,
       status: "failed",
       error: job.error_code ?? "JOB_INTERNAL_ERROR",
-      message: buildFailedMessage(job.error_message ?? "Translation failed.", normalizedWarnings, slideSummary, slideResults),
+      message: buildFailedMessage(
+        job.error_message ??
+          (job.status === "rolled_back"
+            ? "Translation output was rolled back."
+            : "Translation failed."),
+        normalizedWarnings,
+        slideSummary,
+        slideResults
+      ),
       output_document_url: job.output_document_url ?? undefined,
       total_billed_units: job.total_units_billed,
       gross_billed_slides: job.gross_billed_slides,
@@ -828,7 +836,7 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
       current_period_end: sub.current_period_end,
     });
 
-    if (!entitlement.active && entitlement.access === "free" && sub.plan_type !== "free") {
+    if (!entitlement.active) {
       sendError(res, "ACCESS_DENIED");
       return;
     }
@@ -1078,7 +1086,8 @@ export function getJobHandler(pool: Pool, redis: Redis) {
       job.status === "completed" ||
       job.status === "completed_with_warnings" ||
       job.status === "failed" ||
-      job.status === "canceled"
+      job.status === "canceled" ||
+      job.status === "rolled_back"
     ) {
       const slideResults = await listJobSlideResults(pool, job.id, auth.user_id);
       res.json(buildJobStatusResponse(job, slideResults));
@@ -1120,11 +1129,14 @@ export function cancelJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
       return;
     }
 
-    if (job.status === "failed") {
+    if (job.status === "failed" || job.status === "rolled_back") {
       const response: CancelJobResponse = {
         job_id: job.id,
         status: "already_failed",
-        message: "This translation job has already failed.",
+        message:
+          job.status === "rolled_back"
+            ? "This translation job has already been rolled back."
+            : "This translation job has already failed.",
       };
       res.json(response);
       return;

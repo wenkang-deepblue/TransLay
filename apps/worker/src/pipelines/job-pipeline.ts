@@ -654,7 +654,13 @@ async function withAuthorityChunkHeartbeat<T>(
 }
 
 function isTerminalStatus(status: string): boolean {
-  return status === "completed" || status === "completed_with_warnings" || status === "failed" || status === "canceled";
+  return (
+    status === "completed" ||
+    status === "completed_with_warnings" ||
+    status === "failed" ||
+    status === "canceled" ||
+    status === "rolled_back"
+  );
 }
 
 /**

@@ -44,6 +44,7 @@ export interface TranslationContextGlossaryCandidate {
 
 export interface TranslationContextParagraphSummary {
   readonly paragraph_id: string;
+  /** @internal MUST NOT be persisted, logged, or cached — zero-content-persistence rule. */
   readonly text: string;
   readonly bullet?: {
     readonly nesting_level?: number;
@@ -54,6 +55,7 @@ export interface TranslationContextParagraphSummary {
 
 export interface TranslationContextSegmentSummary {
   readonly segment_id: string;
+  /** @internal MUST NOT be persisted, logged, or cached — zero-content-persistence rule. */
   readonly text: string;
   readonly style_role: TranslationSegmentStyleRole;
 }
@@ -62,6 +64,7 @@ export interface TranslationContextNodeSummary {
   readonly node_id: string;
   readonly archetype: TranslationNodeArchetype;
   readonly slide_index: number;
+  /** @internal MUST NOT be persisted, logged, or cached — zero-content-persistence rule. */
   readonly full_text: string;
   readonly paragraphs: readonly TranslationContextParagraphSummary[];
 }

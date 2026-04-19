@@ -115,7 +115,7 @@ export function loadConfig() {
   }
 
   return {
-    port: requireIntEnv("PORT", optionalEnv("PORT", "8080")),
+    port: optionalIntEnv("PORT", 8080),
     nodeEnv,
 
     gcpProjectId: requireEnv("GCP_PROJECT_ID"),
@@ -123,7 +123,7 @@ export function loadConfig() {
 
     db: {
       host: optionalEnv("DB_HOST", "127.0.0.1"),
-      port: requireIntEnv("DB_PORT", optionalEnv("DB_PORT", "5432")),
+      port: optionalIntEnv("DB_PORT", 5432),
       name: optionalEnv("DB_NAME", "translay"),
       user: optionalEnv("DB_USER", "translay_app"),
       password: requireEnv("DB_PASSWORD"),
@@ -132,7 +132,7 @@ export function loadConfig() {
 
     redis: {
       host: requireEnv("REDIS_HOST"),
-      port: requireIntEnv("REDIS_PORT", optionalEnv("REDIS_PORT", "6379")),
+      port: optionalIntEnv("REDIS_PORT", 6379),
     },
 
     cloudTasks: {
@@ -211,7 +211,7 @@ export function loadWorkerConfig() {
   const effectiveCaptureLlmOutputs = productionLikeNodeEnv ? false : captureLlmOutputs;
 
   return {
-    port: requireIntEnv("PORT", optionalEnv("PORT", "8081")),
+    port: optionalIntEnv("PORT", 8081),
     nodeEnv,
 
     gcpProjectId: requireEnv("GCP_PROJECT_ID"),
@@ -219,7 +219,7 @@ export function loadWorkerConfig() {
 
     db: {
       host: optionalEnv("DB_HOST", "127.0.0.1"),
-      port: requireIntEnv("DB_PORT", optionalEnv("DB_PORT", "5432")),
+      port: optionalIntEnv("DB_PORT", 5432),
       name: optionalEnv("DB_NAME", "translay"),
       user: optionalEnv("DB_USER", "translay_app"),
       password: requireEnv("DB_PASSWORD"),
@@ -228,7 +228,7 @@ export function loadWorkerConfig() {
 
     redis: {
       host: requireEnv("REDIS_HOST"),
-      port: requireIntEnv("REDIS_PORT", optionalEnv("REDIS_PORT", "6379")),
+      port: optionalIntEnv("REDIS_PORT", 6379),
     },
 
     vertex: {
