@@ -5,36 +5,37 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
+    html, body {
+      height: 100%;
+    }
+
     body {
       font-family: 'Google Sans', Roboto, Arial, sans-serif;
       font-size: 13px;
       color: #202124;
       padding: 16px;
       background: #fff;
+      min-height: 100vh;
     }
 
     /* ── Header ── */
     .header {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 8px;
       margin-bottom: 12px;
       padding-bottom: 12px;
       border-bottom: 1px solid #e0e0e0;
     }
-    .header-logo {
-      width: 28px;
-      height: 28px;
-      border-radius: 6px;
-      background: #4285f4;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 14px;
+    .header-logo-image {
+      width: 32px;
+      height: 32px;
+      display: none;
+      object-fit: contain;
       flex-shrink: 0;
     }
+    .header-logo-image.visible { display: block; }
     .header-title {
       font-size: 16px;
       font-weight: 600;
@@ -235,14 +236,71 @@
       line-height: 1.5;
     }
     .result-warnings.visible { display: block; }
+    .result-link-wrap {
+      margin-top: 8px;
+      text-align: center;
+    }
     .result-link {
       display: inline-block;
-      margin-top: 8px;
       color: #1967d2;
       text-decoration: none;
       font-weight: 500;
     }
     .result-link:hover { text-decoration: underline; }
+    .result-task-id {
+      display: none;
+      margin-top: 10px;
+      font-size: 9px;
+      line-height: 1.5;
+      color: inherit;
+      word-break: break-all;
+    }
+    .result-task-id.visible { display: block; }
+    .result-task-id-label {
+      opacity: 0.85;
+    }
+    .result-task-id-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 2px;
+    }
+    .result-task-id-value {
+      display: inline-block;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+    .copy-task-id-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border: none;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      opacity: 0.8;
+      transition: opacity 0.15s, transform 0.15s;
+    }
+    .copy-task-id-btn:hover {
+      opacity: 1;
+      transform: scale(1.05);
+    }
+    .copy-task-id-btn svg {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+    }
+    .copy-task-id-btn.copied {
+      width: auto;
+      padding: 0 4px;
+      font-size: 9px;
+      font-weight: 600;
+    }
+    .copy-task-id-btn:disabled {
+      transform: none;
+    }
 
     /* ── Coming Soon overlay ── */
     .coming-soon-overlay {
@@ -304,6 +362,15 @@
       text-align: center;
     }
     .duplicate-action.visible { display: block; }
+    .duplicate-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 10px;
+    }
+    .duplicate-actions .btn {
+      margin-top: 0;
+    }
 
     /* ── Confirm dialog ── */
     .dialog-overlay {
@@ -330,12 +397,30 @@
       font-weight: 600;
       color: #202124;
       margin-bottom: 10px;
+      text-align: center;
     }
     .dialog-body {
       font-size: 12px;
       line-height: 1.6;
       color: #3c4043;
       white-space: pre-line;
+    }
+    .confirmation-lead {
+      font-size: 13px;
+      font-weight: 700;
+      color: #202124;
+      margin-bottom: 6px;
+    }
+    .confirmation-target-language {
+      color: #e84133;
+      font-weight: 700;
+    }
+    .confirmation-summary {
+      line-height: 1.7;
+    }
+    .confirmation-cta {
+      margin-top: 8px;
+      text-align: center;
     }
     .dialog-actions {
       margin-top: 14px;
@@ -349,6 +434,22 @@
       margin-top: 0;
       padding: 8px 12px;
       font-size: 12px;
+    }
+    .support-link-wrap {
+      margin-top: auto;
+      padding-top: 24px;
+      text-align: center;
+    }
+    .support-link {
+      display: inline-block;
+      font-size: 12px;
+      color: #1967d2;
+      text-decoration: none;
+      transition: color 0.15s, text-decoration-color 0.15s;
+    }
+    .support-link:hover {
+      color: #174ea6;
+      text-decoration: underline;
     }
   </style>
 </head>
@@ -375,7 +476,7 @@
 
     <!-- Header -->
     <div class="header">
-      <div class="header-logo">T</div>
+      <img class="header-logo-image" id="headerLogoImage" alt="TransLay logo">
       <div class="header-title">TransLay</div>
     </div>
 
@@ -407,9 +508,14 @@
     <div class="error-banner" id="errorBanner"></div>
     <div class="duplicate-action" id="duplicateAction">
       <div id="duplicateMessage"></div>
-      <button class="btn btn-secondary btn-inline" id="resubmitBtn" onclick="handleResubmit()">
-        Resubmit
-      </button>
+      <div class="duplicate-actions">
+        <button class="btn btn-secondary btn-inline" id="duplicateCancelBtn" onclick="handleDuplicateCancel()" type="button">
+          Cancel
+        </button>
+        <button class="btn btn-secondary btn-inline" id="resubmitBtn" onclick="handleResubmit()" type="button">
+          Resubmit
+        </button>
+      </div>
     </div>
 
     <!-- Source Language -->
@@ -482,7 +588,21 @@
     <div class="result-area" id="resultArea">
       <div id="resultMessage"></div>
       <ul id="resultWarnings" class="result-warnings"></ul>
-      <a id="resultLink" class="result-link" href="#" target="_blank" style="display:none;">Open translated document</a>
+      <div class="result-link-wrap">
+        <a id="resultLink" class="result-link" href="#" target="_blank" style="display:none;">Open translated document</a>
+      </div>
+      <div id="resultTaskId" class="result-task-id"></div>
+    </div>
+
+    <div class="support-link-wrap">
+      <a
+        id="supportLink"
+        class="support-link"
+        href="mailto:support@example.com?subject=TransLay%20task_id%3A%20%5Bpaste%20your%20task%20id%20here%5D&body=%5BPlease%20describe%20your%20issues%20in%20detail%5D"
+        target="_blank"
+      >
+        Questions? Support Needed.
+      </a>
     </div>
 
   </div>
@@ -514,16 +634,25 @@
       currentJobId: null,
       currentJobOutputMode: null,
       currentOutputDocumentId: null,
+      lastResultTaskId: null,
       translatedUnitsBilled: 0,
       cancelRequested: false,
       cancelRequestInFlight: false,
+      isTranslating: false,
       activeSubmission: null,
+      pendingDuplicateSubmission: null,
       submissionSeq: 0,
       pollTimer: null,
       pollStartedAt: 0,
       lastPollActivityAt: 0,
       presetLanguages: []
     };
+
+    var COPY_TASK_ID_ICON = [
+      '<svg viewBox="0 0 24 24" aria-hidden="true">',
+      '<path d="M16 1H6c-1.1 0-2 .9-2 2v14h2V3h10V1zm3 4H10c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h9c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H10V7h9v14z"/>',
+      '</svg>'
+    ].join('');
 
     // ── Initialization ──
     google.script.run
@@ -544,6 +673,11 @@
       state.presetLanguages = data.presetLanguages || [];
       state.entitlementCacheTtl = data.entitlementCacheTtl || 300;
       state.jobPollIntervalMs = data.jobPollIntervalMs || 3000;
+
+      if (data.logoDataUrl) {
+        document.getElementById('headerLogoImage').src = data.logoDataUrl;
+        document.getElementById('headerLogoImage').classList.add('visible');
+      }
 
       if (!data.hostType) {
         showError('Could not detect document type.');
@@ -568,7 +702,10 @@
       updateRangeHint(data);
 
       hideLoading();
-      document.getElementById('mainView').style.display = 'block';
+      var mainView = document.getElementById('mainView');
+      mainView.style.display = 'flex';
+      mainView.style.flexDirection = 'column';
+      mainView.style.minHeight = 'calc(100vh - 32px)';
 
       // Fetch entitlement
       refreshEntitlement();
@@ -666,12 +803,10 @@
           formatUsageNumber(usage.slides_used) + ' / ' + formatUsageNumber(usage.slides_limit);
 
         document.getElementById('usageDocs').style.display = 'flex';
-        document.getElementById('usageDocsText').textContent =
-          formatUsageNumber(usage.docs_pages_used) + ' / ' + formatUsageNumber(usage.docs_pages_limit);
+        document.getElementById('usageDocsText').textContent = 'Coming soon';
 
         document.getElementById('usageSheets').style.display = 'flex';
-        document.getElementById('usageSheetsText').textContent =
-          formatUsageNumber(usage.sheets_cells_used) + ' / ' + formatUsageNumber(usage.sheets_cells_limit);
+        document.getElementById('usageSheetsText').textContent = 'Coming soon';
       } else if (usage && usage.unlimited) {
         document.getElementById('usageSlides').style.display = 'none';
         document.getElementById('usageDocs').style.display = 'none';
@@ -704,14 +839,42 @@
     }
 
     // ── Translate ──
-    function handleTranslate(options) {
+    function handleTranslate() {
+      hideDuplicateAction();
+      resetSubmissionUiState();
+
+      var submissionData = buildTranslationSubmission({ forceResubmit: false });
+      if (!submissionData) {
+        return;
+      }
+
+      showConfirmationDialog(
+        'Confirmation',
+        buildTranslationConfirmationBody(
+          submissionData.targetLang,
+          submissionData.rangeMode,
+          submissionData.rangeExpression,
+          submissionData.outputMode,
+          submissionData.translatedPageCount
+        ),
+        'Confirm',
+        'Cancel',
+        function() {
+          executeTranslateSubmission(
+            submissionData.jobRequest,
+            submissionData.targetLang,
+            submissionData.outputMode,
+            submissionData.rangeExpression,
+            submissionData.submissionNonce
+          );
+        },
+        true
+      );
+    }
+
+    function buildTranslationSubmission(options) {
       options = options || {};
       clearError();
-      hideDuplicateAction();
-      hideResult();
-      state.cancelRequested = false;
-      state.cancelRequestInFlight = false;
-      state.currentOutputDocumentId = null;
 
       // Gather target language
       var targetLangSel = document.getElementById('targetLang');
@@ -758,27 +921,18 @@
       var translatedPageCount = estimateSelectedSlideCount(rangeMode, rangeExpression);
       if (translatedPageCount === null) {
         showError('The selected page range is invalid.');
-        return;
+        return null;
       }
 
-      showConfirmationDialog(
-        'Confirmation',
-        [
-          'Translation task:',
-          'Source language: Auto-detect',
-          'Target language: ' + targetLang,
-          'Translation range: ' + describeRange(rangeMode, rangeExpression),
-          'Output mode: ' + describeOutputMode(outputMode),
-          'Usage to consume: ' + translatedPageCount,
-          '',
-          'Start this task?'
-        ].join('\n'),
-        'Confirm',
-        'Cancel',
-        function() {
-          executeTranslateSubmission(jobRequest, targetLang, outputMode, rangeExpression, submissionNonce);
-        }
-      );
+      return {
+        jobRequest: jobRequest,
+        targetLang: targetLang,
+        outputMode: outputMode,
+        rangeMode: rangeMode,
+        rangeExpression: rangeExpression,
+        translatedPageCount: translatedPageCount,
+        submissionNonce: submissionNonce
+      };
     }
 
     function executeTranslateSubmission(jobRequest, targetLang, outputMode, rangeExpression, submissionNonce) {
@@ -876,7 +1030,28 @@
     }
 
     function handleResubmit() {
-      handleTranslate({ forceResubmit: true });
+      if (!state.pendingDuplicateSubmission || state.isTranslating) {
+        return;
+      }
+
+      var duplicateSubmission = state.pendingDuplicateSubmission;
+      var jobRequest = cloneJobRequest(duplicateSubmission.jobRequest);
+      var submissionNonce = 'resubmit_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      jobRequest.resubmit = true;
+
+      hideDuplicateAction();
+      resetSubmissionUiState();
+      executeTranslateSubmission(
+        jobRequest,
+        duplicateSubmission.targetLang,
+        duplicateSubmission.outputMode,
+        duplicateSubmission.rangeExpression,
+        submissionNonce
+      );
+    }
+
+    function handleDuplicateCancel() {
+      hideDuplicateAction();
     }
 
     function submitJob(jobRequest, submissionToken) {
@@ -921,7 +1096,13 @@
             showError('A translation job is already in progress. Please wait for it to finish.');
           } else if (msg.indexOf('[IDEMPOTENT_REPLAY]') !== -1) {
             showDuplicateAction(
-              'This translation has already been submitted. You can also submit it again, but resubmitting will consume your usage quota.'
+              'This translation has already been submitted. You can also submit it again, but resubmitting will consume your usage quota.',
+              {
+                jobRequest: cloneJobRequest(jobRequest),
+                targetLang: jobRequest.target_language_input,
+                outputMode: jobRequest.output_mode,
+                rangeExpression: jobRequest.range_expression
+              }
             );
           } else {
             showError(msg);
@@ -1174,9 +1355,14 @@
       var bodyEl = document.getElementById('confirmDialogBody');
       var cancelBtn = document.getElementById('confirmDialogCancelBtn');
       var confirmBtn = document.getElementById('confirmDialogConfirmBtn');
+      var bodyIsHtml = arguments[5] === true;
 
       titleEl.textContent = title || 'Confirmation';
-      bodyEl.textContent = body || '';
+      if (bodyIsHtml) {
+        bodyEl.innerHTML = body || '';
+      } else {
+        bodyEl.textContent = body || '';
+      }
       cancelBtn.textContent = cancelText || 'Cancel';
       confirmBtn.textContent = confirmText || 'Confirm';
 
@@ -1267,18 +1453,37 @@
         : 'Append translated slides after originals';
     }
 
+    function buildTranslationConfirmationBody(targetLang, rangeMode, rangeExpression, outputMode, translatedPageCount) {
+      return [
+        '<div class="confirmation-lead">Translation task:</div>',
+        '<div class="confirmation-summary">',
+        'Source language: Auto-detect<br>',
+        'Target language: <span class="confirmation-target-language">' + escapeHtml(targetLang) + '</span><br>',
+        'Translation range: ' + escapeHtml(describeRange(rangeMode, rangeExpression)) + '<br>',
+        'Output mode: ' + escapeHtml(describeOutputMode(outputMode)) + '<br>',
+        'Usage to consume: ' + escapeHtml(String(translatedPageCount)) + '<br>',
+        '</div>',
+        '<div class="confirmation-cta">Start this task?</div>'
+      ].join('');
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     // ── UI helpers ──
     function hideLoading() {
       document.getElementById('loadingView').style.display = 'none';
     }
 
     function setTranslating(active) {
-      document.getElementById('translateBtn').disabled = active;
-      if (active) {
-        document.getElementById('translateBtn').textContent = 'Translating...';
-      } else {
-        document.getElementById('translateBtn').textContent = 'Translate';
-      }
+      state.isTranslating = active;
+      updateTranslateButtonState();
       updateCancelButton();
     }
 
@@ -1309,6 +1514,7 @@
       } else {
         link.style.display = 'none';
       }
+      renderResultTaskId(resultMeta);
     }
 
     function showCanceledResult(resp) {
@@ -1327,6 +1533,7 @@
       document.getElementById('resultArea').classList.remove('visible');
       document.getElementById('resultArea').className = 'result-area';
       renderResultWarnings([]);
+      renderResultTaskId(null);
     }
 
     function renderResultWarnings(warnings, resultMeta) {
@@ -1337,7 +1544,6 @@
       }
 
       var excludedSlides = [];
-      var layoutReviewSlides = [];
       var fullyDeliveredSlides = Array.isArray(resultMeta && resultMeta.fully_delivered_body_slide_indices)
         ? resultMeta.fully_delivered_body_slide_indices.slice()
         : [];
@@ -1374,7 +1580,6 @@
         ) {
           return;
         }
-        if (layoutReviewSlides.indexOf(pageNumber) === -1) layoutReviewSlides.push(pageNumber);
       });
 
       fullyDeliveredSlides.sort(function(a, b) { return a - b; });
@@ -1384,8 +1589,6 @@
       skippedSlides.sort(function(a, b) { return a - b; });
       refundedSlides.sort(function(a, b) { return a - b; });
       excludedSlides.sort(function(a, b) { return a - b; });
-      layoutReviewSlides.sort(function(a, b) { return a - b; });
-
       if (fullyDeliveredSlides.length > 0) {
         appendResultWarning(list, 'Fully delivered translated slides: ' + fullyDeliveredSlides.length + '.');
       }
@@ -1410,10 +1613,6 @@
       if (excludedSlides.length > 0) {
         appendResultWarning(list, 'Skipped for safety review: slide ' + excludedSlides.join(', ') + '.');
       }
-      if (layoutReviewSlides.length > 0) {
-        appendResultWarning(list, 'Minor manual layout review recommended: slide ' + layoutReviewSlides.join(', ') + '.');
-      }
-
       if (list.children.length > 0) {
         list.classList.add('visible');
       } else {
@@ -1429,6 +1628,87 @@
 
     function formatSlideReference(slides) {
       return (slides.length === 1 ? 'slide ' : 'slides ') + slides.join(', ');
+    }
+
+    function renderResultTaskId(resultMeta) {
+      var taskIdEl = document.getElementById('resultTaskId');
+      var taskId = resultMeta && typeof resultMeta.job_id === 'string'
+        ? resultMeta.job_id
+        : '';
+      state.lastResultTaskId = taskId || null;
+
+      if (!taskId) {
+        taskIdEl.classList.remove('visible');
+        taskIdEl.innerHTML = '';
+        return;
+      }
+
+      taskIdEl.innerHTML = [
+        '<span class="result-task-id-label">Task ID (share this with support if you need help):</span><br>',
+        '<span class="result-task-id-row">',
+        '<span class="result-task-id-value">' + escapeHtml(taskId) + '</span>',
+        '<button class="copy-task-id-btn" type="button" aria-label="Copy task ID" title="Copy task ID" onclick="copyTaskId()">',
+        COPY_TASK_ID_ICON,
+        '</button>',
+        '</span>'
+      ].join('');
+      taskIdEl.classList.add('visible');
+    }
+
+    function copyTaskId() {
+      var taskId = state.lastResultTaskId || '';
+      if (!taskId) {
+        return;
+      }
+
+      var copyBtn = document.querySelector('.copy-task-id-btn');
+      var resetTimer = null;
+
+      function finishCopy(success) {
+        if (!copyBtn) {
+          return;
+        }
+        if (!success) {
+          copyBtn.disabled = false;
+          return;
+        }
+        copyBtn.classList.add('copied');
+        copyBtn.innerHTML = '&#10003;';
+        copyBtn.disabled = false;
+        resetTimer = window.setTimeout(function() {
+          copyBtn.classList.remove('copied');
+          copyBtn.innerHTML = COPY_TASK_ID_ICON;
+        }, 3000);
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(taskId)
+          .then(function() { finishCopy(true); })
+          .catch(function() { fallbackCopyTaskId(taskId, finishCopy); });
+        return;
+      }
+
+      fallbackCopyTaskId(taskId, finishCopy);
+    }
+
+    function fallbackCopyTaskId(taskId, done) {
+      var textArea = document.createElement('textarea');
+      textArea.value = taskId;
+      textArea.setAttribute('readonly', 'readonly');
+      textArea.style.position = 'fixed';
+      textArea.style.top = '-9999px';
+      document.body.appendChild(textArea);
+      textArea.select();
+
+      var copied = false;
+      try {
+        copied = document.execCommand('copy');
+      } catch (err) {
+        copied = false;
+      }
+
+      document.body.removeChild(textArea);
+      done(copied);
     }
 
     function revokeWorkerAccessAfterJob() {
@@ -1461,14 +1741,52 @@
       banner.textContent = '';
     }
 
-    function showDuplicateAction(message) {
+    function showDuplicateAction(message, duplicateSubmission) {
       document.getElementById('duplicateMessage').textContent = message;
+      state.pendingDuplicateSubmission = duplicateSubmission || null;
       document.getElementById('duplicateAction').classList.add('visible');
+      updateTranslateButtonState();
     }
 
     function hideDuplicateAction() {
       document.getElementById('duplicateAction').classList.remove('visible');
       document.getElementById('duplicateMessage').textContent = '';
+      state.pendingDuplicateSubmission = null;
+      updateTranslateButtonState();
+    }
+
+    function isDuplicateActionVisible() {
+      return document.getElementById('duplicateAction').classList.contains('visible');
+    }
+
+    function updateTranslateButtonState() {
+      var btn = document.getElementById('translateBtn');
+      btn.disabled = state.isTranslating || isDuplicateActionVisible();
+      btn.textContent = state.isTranslating ? 'Translating...' : 'Translate';
+    }
+
+    function resetSubmissionUiState() {
+      clearError();
+      hideResult();
+      state.cancelRequested = false;
+      state.cancelRequestInFlight = false;
+      state.currentOutputDocumentId = null;
+    }
+
+    function cloneJobRequest(jobRequest) {
+      return {
+        host_type: jobRequest.host_type,
+        document_id: jobRequest.document_id,
+        document_name: jobRequest.document_name,
+        target_document_id: jobRequest.target_document_id,
+        resubmit: jobRequest.resubmit,
+        source_language_mode: jobRequest.source_language_mode,
+        target_language_input: jobRequest.target_language_input,
+        output_mode: jobRequest.output_mode,
+        range_mode: jobRequest.range_mode,
+        range_expression: jobRequest.range_expression,
+        idempotency_key: null
+      };
     }
 
     function updateCancelButton() {

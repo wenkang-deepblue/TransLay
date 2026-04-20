@@ -58,6 +58,7 @@ function getInitData() {
     hostType: hostType,
     documentId: context ? context.documentId : null,
     documentName: context ? context.documentName : null,
+    logoDataUrl: TRANSLAY_LOGO_DATA_URL,
     isSupported: isSupported,
     presetLanguages: PRESET_LANGUAGES,
     slideCount: 0,
