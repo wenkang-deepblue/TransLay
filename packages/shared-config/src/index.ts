@@ -160,6 +160,50 @@ export function loadConfig() {
       maxGlobalInFlightJobs: optionalBoundedIntEnv("MAX_GLOBAL_INFLIGHT_JOBS", 50, { min: 1, max: 50 }),
     },
 
+    // Inbound HTTP rate limits split into three buckets so the pre-auth
+    // IP-keyed bucket only acts as a DDoS shield while authenticated read /
+    // write paths get user-scoped quotas. Defaults are calibrated against the
+    // 50-tenant Track D baseline (50 SAs * one poll per ~3s ≈ 1000 req/min)
+    // plus headroom for shared NAT egress in load tests.
+    rateLimits: {
+      global: {
+        windowSeconds: optionalBoundedIntEnv(
+          "RATE_LIMIT_GLOBAL_WINDOW_SECONDS",
+          60,
+          { min: 1, max: 3600 }
+        ),
+        maxRequests: optionalBoundedIntEnv(
+          "RATE_LIMIT_GLOBAL_MAX_REQUESTS",
+          1200,
+          { min: 1, max: 100000 }
+        ),
+      },
+      userWrite: {
+        windowSeconds: optionalBoundedIntEnv(
+          "RATE_LIMIT_USER_WRITE_WINDOW_SECONDS",
+          60,
+          { min: 1, max: 3600 }
+        ),
+        maxRequests: optionalBoundedIntEnv(
+          "RATE_LIMIT_USER_WRITE_MAX_REQUESTS",
+          30,
+          { min: 1, max: 100000 }
+        ),
+      },
+      userRead: {
+        windowSeconds: optionalBoundedIntEnv(
+          "RATE_LIMIT_USER_READ_WINDOW_SECONDS",
+          60,
+          { min: 1, max: 3600 }
+        ),
+        maxRequests: optionalBoundedIntEnv(
+          "RATE_LIMIT_USER_READ_MAX_REQUESTS",
+          120,
+          { min: 1, max: 100000 }
+        ),
+      },
+    },
+
     security: {
       kmsKeyName,
       internalCronSecret,

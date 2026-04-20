@@ -15,6 +15,7 @@ node_modules/
 
 # Build artifacts
 dist/
+**/tsconfig.tsbuildinfo
 
 # Environment
 .env
@@ -60,3 +61,7 @@ exports/
 #Assests
 *.ai
 *.svg
+
+#Load test
+*load_test*.py
+sync_logo*.py

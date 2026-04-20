@@ -37,44 +37,102 @@ app.set("trust proxy", 1);
 // I1: CORS locked to production domain
 app.use(corsMiddleware(`https://${config.domain}`));
 
-// I2: Global rate limit (60 req/min per user/IP)
-app.use(
-  rateLimitMiddleware(redis, {
-    windowSeconds: 60,
-    maxRequests: 60,
-    keyPrefix: "global",
-    failOpen: true,
-  })
-);
+// Track D inbound rate limiting — three buckets:
+//
+//   1. globalIpRateLimit   — pre-auth, IP-keyed DDoS shield. Loose ceiling so
+//      multi-tenant load tests (many SAs sharing one egress IP) do not hit
+//      it during normal polling. Fails open to preserve availability if
+//      Redis is down.
+//   2. userWriteRateLimit  — user-keyed where identity is already known, with
+//      anon:<ip> fallback for pre-session writes such as /api/session/consume.
+//      Job submissions / cancels are still effectively post-auth. Writes are
+//      also gated by CONCURRENT_JOB_RUNNING / JOB_QUEUE_BUSY, so the bucket is
+//      intentionally low. Fails closed so a Redis outage cannot silently flood
+//      writes.
+//   3. userReadRateLimit   — post-auth, user-keyed quota for status polls and
+//      entitlement reads. Sized to comfortably accept the sidebar's ~3s
+//      polling cadence with headroom. Fails closed.
+const globalIpRateLimit = rateLimitMiddleware(redis, {
+  windowSeconds: config.rateLimits.global.windowSeconds,
+  maxRequests: config.rateLimits.global.maxRequests,
+  keyPrefix: "global-ip",
+  failOpen: true,
+  identifierStrategy: "ip",
+});
+
+const userWriteRateLimit = rateLimitMiddleware(redis, {
+  windowSeconds: config.rateLimits.userWrite.windowSeconds,
+  maxRequests: config.rateLimits.userWrite.maxRequests,
+  keyPrefix: "user-write",
+  failOpen: false,
+  identifierStrategy: "user",
+});
+
+const userReadRateLimit = rateLimitMiddleware(redis, {
+  windowSeconds: config.rateLimits.userRead.windowSeconds,
+  maxRequests: config.rateLimits.userRead.maxRequests,
+  keyPrefix: "user-read",
+  failOpen: false,
+  identifierStrategy: "user",
+});
+
+app.use(globalIpRateLimit);
 
 // --- Public routes (no auth) ---
 app.get("/api/health", asyncHandler(healthHandler(pool, redis)));
 
 // --- Portal routes (session cookie auth) ---
 const portalSession = portalSessionMiddleware(redis, config);
-const portalUserRateLimit = rateLimitMiddleware(redis, {
-  windowSeconds: 60,
-  maxRequests: 60,
-  keyPrefix: "portal-user",
-  failOpen: false,
-});
-app.post("/api/session/consume", asyncHandler(sessionConsumeHandler(pool, redis, config)));
-app.get("/api/session/me", portalSession, portalUserRateLimit, asyncHandler(sessionMeHandler(pool)));
-app.post("/api/session/logout", portalSession, portalUserRateLimit, asyncHandler(sessionLogoutHandler(redis, config)));
+app.post(
+  "/api/session/consume",
+  userWriteRateLimit,
+  asyncHandler(sessionConsumeHandler(pool, redis, config))
+);
+app.get(
+  "/api/session/me",
+  portalSession,
+  userReadRateLimit,
+  asyncHandler(sessionMeHandler(pool))
+);
+app.post(
+  "/api/session/logout",
+  portalSession,
+  userWriteRateLimit,
+  asyncHandler(sessionLogoutHandler(redis, config))
+);
 
 // --- Add-on routes (Google token auth) ---
 const googleAuth = googleAuthMiddleware(pool, redis);
-const googleUserRateLimit = rateLimitMiddleware(redis, {
-  windowSeconds: 60,
-  maxRequests: 60,
-  keyPrefix: "google-user",
-  failOpen: false,
-});
-app.get("/api/entitlement", googleAuth, googleUserRateLimit, asyncHandler(entitlementHandler(pool)));
-app.post("/api/session/start", googleAuth, googleUserRateLimit, asyncHandler(sessionStartHandler(redis, config)));
-app.post("/api/jobs", googleAuth, googleUserRateLimit, asyncHandler(createJobHandler(pool, redis, config)));
-app.get("/api/jobs/:jobId", googleAuth, googleUserRateLimit, asyncHandler(getJobHandler(pool, redis)));
-app.post("/api/jobs/:jobId/cancel", googleAuth, googleUserRateLimit, asyncHandler(cancelJobHandler(pool, redis, config)));
+app.get(
+  "/api/entitlement",
+  googleAuth,
+  userReadRateLimit,
+  asyncHandler(entitlementHandler(pool))
+);
+app.post(
+  "/api/session/start",
+  googleAuth,
+  userWriteRateLimit,
+  asyncHandler(sessionStartHandler(redis, config))
+);
+app.post(
+  "/api/jobs",
+  googleAuth,
+  userWriteRateLimit,
+  asyncHandler(createJobHandler(pool, redis, config))
+);
+app.get(
+  "/api/jobs/:jobId",
+  googleAuth,
+  userReadRateLimit,
+  asyncHandler(getJobHandler(pool, redis))
+);
+app.post(
+  "/api/jobs/:jobId/cancel",
+  googleAuth,
+  userWriteRateLimit,
+  asyncHandler(cancelJobHandler(pool, redis, config))
+);
 
 // --- Internal maintenance routes ---
 app.post(

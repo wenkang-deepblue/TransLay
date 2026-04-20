@@ -77,6 +77,40 @@ test("loadConfig rejects MAX_GLOBAL_INFLIGHT_JOBS above the Track D ceiling", ()
   );
 });
 
+test("loadConfig provides Track D inbound rate limit defaults", () => {
+  const config = withEnv({}, () => loadConfig());
+  assert.deepEqual(config.rateLimits, {
+    global: { windowSeconds: 60, maxRequests: 1200 },
+    userWrite: { windowSeconds: 60, maxRequests: 30 },
+    userRead: { windowSeconds: 60, maxRequests: 120 },
+  });
+});
+
+test("loadConfig honors RATE_LIMIT_* overrides and validates bounds", () => {
+  const config = withEnv(
+    {
+      RATE_LIMIT_GLOBAL_MAX_REQUESTS: "300",
+      RATE_LIMIT_USER_WRITE_MAX_REQUESTS: "10",
+      RATE_LIMIT_USER_READ_MAX_REQUESTS: "240",
+      RATE_LIMIT_USER_READ_WINDOW_SECONDS: "30",
+    },
+    () => loadConfig()
+  );
+  assert.equal(config.rateLimits.global.maxRequests, 300);
+  assert.equal(config.rateLimits.userWrite.maxRequests, 10);
+  assert.equal(config.rateLimits.userRead.maxRequests, 240);
+  assert.equal(config.rateLimits.userRead.windowSeconds, 30);
+
+  assert.throws(
+    () =>
+      withEnv(
+        { RATE_LIMIT_GLOBAL_MAX_REQUESTS: "0" },
+        () => loadConfig()
+      ),
+    /RATE_LIMIT_GLOBAL_MAX_REQUESTS must be >= 1/
+  );
+});
+
 test("loadWorkerConfig prefers WORKER_DB_POOL_MAX and enforces bounds", () => {
   const config = withEnv(
     {

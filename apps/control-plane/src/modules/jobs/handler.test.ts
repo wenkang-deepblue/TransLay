@@ -764,6 +764,11 @@ test("createJobHandler returns JOB_QUEUE_BUSY when the global in-flight gate is 
     jobs: {
       maxGlobalInFlightJobs: 50,
     },
+    rateLimits: {
+      global: { windowSeconds: 60, maxRequests: 1200 },
+      userWrite: { windowSeconds: 60, maxRequests: 30 },
+      userRead: { windowSeconds: 60, maxRequests: 120 },
+    },
     security: {
       kmsKeyName: null,
       internalCronSecret: null,
@@ -901,6 +906,11 @@ test("createJobHandler returns CONCURRENT_JOB_RUNNING when atomic admission sees
     entitlementCacheTtl: 300,
     jobs: {
       maxGlobalInFlightJobs: 50,
+    },
+    rateLimits: {
+      global: { windowSeconds: 60, maxRequests: 1200 },
+      userWrite: { windowSeconds: 60, maxRequests: 30 },
+      userRead: { windowSeconds: 60, maxRequests: 120 },
     },
     security: {
       kmsKeyName: null,

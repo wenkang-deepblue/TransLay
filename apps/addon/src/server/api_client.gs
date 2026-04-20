@@ -91,6 +91,17 @@ function createPortalTicket(redirectPath, reason) {
 
 /**
  * Parses API response. Returns parsed JSON on success, throws on error.
+ *
+ * The control plane always emits a `Retry-After` header (in seconds) on
+ * 429 responses. We forward it inside the error message prefix so the
+ * sidebar — which can only observe `error.message` through
+ * `google.script.run.withFailureHandler` — can implement deterministic
+ * exponential backoff with jitter without guessing.
+ *
+ * Prefix grammar:
+ *   [<ERROR_CODE>] <message>
+ *   [<ERROR_CODE>:retry=<seconds>] <message>
+ *
  * @param {HTTPResponse} response
  * @returns {Object}
  */
@@ -109,7 +120,44 @@ function _handleResponse(response) {
 
   var errorCode = (body && body.error) ? body.error : 'UNKNOWN';
   var errorMsg = (body && body.message) ? body.message : 'Request failed (HTTP ' + code + ')';
-  // Prefix with error code so sidebar can detect specific errors
-  // google.script.run failure handlers only receive .message
-  throw new Error('[' + errorCode + '] ' + errorMsg);
+
+  var retryAfterSeconds = _extractRetryAfter(response);
+  var prefix = retryAfterSeconds > 0
+    ? '[' + errorCode + ':retry=' + retryAfterSeconds + ']'
+    : '[' + errorCode + ']';
+
+  throw new Error(prefix + ' ' + errorMsg);
+}
+
+/**
+ * Reads the Retry-After header (seconds) in a case-insensitive manner.
+ * Returns 0 when the header is absent or malformed.
+ * @param {HTTPResponse} response
+ * @returns {number}
+ */
+function _extractRetryAfter(response) {
+  try {
+    var headers = response.getAllHeaders();
+    if (!headers) {
+      return 0;
+    }
+    for (var key in headers) {
+      if (Object.prototype.hasOwnProperty.call(headers, key) &&
+          String(key).toLowerCase() === 'retry-after') {
+        var raw = headers[key];
+        // GAS may surface duplicate headers as arrays; take the first.
+        if (Array.isArray(raw)) {
+          raw = raw[0];
+        }
+        var parsed = parseInt(raw, 10);
+        if (!isNaN(parsed) && parsed > 0) {
+          // Keep client-side handling aligned with the server-side max window.
+          return Math.min(parsed, 3600);
+        }
+      }
+    }
+  } catch (e) {
+    // Header inspection is best-effort; fall through to default backoff.
+  }
+  return 0;
 }
