@@ -1215,16 +1215,17 @@
           if (resp.status === 'completed' || resp.status === 'completed_with_warnings') {
             stopPolling();
             setTranslating(false);
+            var isFullyBilledCompletion = shouldDisplayCompletedWithoutWarnings(resp);
             showProgress(
               100,
               resp.completion_code === 'PARTIAL_SUCCESS'
                 ? 'Partial success'
-                : (resp.status === 'completed_with_warnings' ? 'Completed with warnings' : 'Completed'),
+                : (isFullyBilledCompletion ? 'Completed' : (resp.status === 'completed_with_warnings' ? 'Completed with warnings' : 'Completed')),
               ''
             );
             showResult(
               true,
-              resp.message || 'Translation completed successfully.',
+              normalizeCompletionMessage(resp.message || 'Translation completed successfully.', resp),
               resolveOutputDocumentUrl(resp),
               resp.warnings || [],
               resp
@@ -1576,7 +1577,9 @@
     function showResult(success, message, url, warnings, resultMeta) {
       var area = document.getElementById('resultArea');
       area.className = 'result-area visible ' + (success ? 'success' : 'error');
-      document.getElementById('resultMessage').textContent = message;
+      document.getElementById('resultMessage').textContent = success
+        ? normalizeCompletionMessage(message, resultMeta)
+        : message;
       renderResultWarnings(Array.isArray(warnings) ? warnings : [], resultMeta || null);
       var link = document.getElementById('resultLink');
       if (url) {
@@ -1599,6 +1602,69 @@
         message += ' The generated file was kept, and the generated slides were counted toward your quota.';
       }
       showResult(false, message, resolveOutputDocumentUrl(resp), [], resp);
+    }
+
+    function shouldDisplayCompletedWithoutWarnings(resultMeta) {
+      if (!resultMeta) {
+        return false;
+      }
+
+      var selectedSlideCount = getSelectedSlideCount(resultMeta);
+      var billedSlides = getFinalBilledSlideCount(resultMeta);
+      return selectedSlideCount > 0 && billedSlides !== null && Math.abs(billedSlides - selectedSlideCount) < 0.0001;
+    }
+
+    function getSelectedSlideCount(resultMeta) {
+      if (!resultMeta) {
+        return 0;
+      }
+
+      var slideSet = {};
+      [
+        resultMeta.fully_delivered_body_slide_indices,
+        resultMeta.content_only_slide_indices,
+        resultMeta.notes_only_slide_indices,
+        resultMeta.body_partial_slide_indices,
+        resultMeta.skipped_slide_indices
+      ].forEach(function(indices) {
+        if (!Array.isArray(indices)) {
+          return;
+        }
+        indices.forEach(function(index) {
+          if (typeof index === 'number') {
+            slideSet[String(index)] = true;
+          }
+        });
+      });
+
+      return Object.keys(slideSet).length;
+    }
+
+    function getFinalBilledSlideCount(resultMeta) {
+      if (!resultMeta) {
+        return null;
+      }
+
+      if (typeof resultMeta.net_billed_slides === 'number') {
+        return resultMeta.net_billed_slides;
+      }
+
+      if (typeof resultMeta.total_billed_units === 'number') {
+        return resultMeta.total_billed_units;
+      }
+
+      return null;
+    }
+
+    function normalizeCompletionMessage(message, resultMeta) {
+      if (!shouldDisplayCompletedWithoutWarnings(resultMeta) || typeof message !== 'string' || message.length === 0) {
+        return message;
+      }
+
+      return message
+        .replace(/^Translation completed with warnings\.\s*/i, 'Translation completed. ')
+        .replace(/^Translation completed with \d+ warning\(s\)\.\s*/i, 'Translation completed. ')
+        .trim();
     }
 
     function hideResult() {
