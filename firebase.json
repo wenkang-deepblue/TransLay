@@ -1,0 +1,37 @@
+{
+  "hosting": {
+    "site": "YOUR_GCP_PROJECT_ID",
+    "public": "server",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "uploads/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/api/**",
+        "run": {
+          "serviceId": "YOUR_CONTROL_PLANE_SERVICE",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/pricing",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/terms",
+        "destination": "/terms.html"
+      },
+      {
+        "source": "/privacy",
+        "destination": "/privacy.html"
+      },
+      {
+        "source": "/success",
+        "destination": "/success.html"
+      }
+    ]
+  }
+}

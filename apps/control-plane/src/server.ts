@@ -27,7 +27,6 @@ const config = loadConfig();
 const app = express();
 const pool = getPool(config);
 const redis = getRedis(config);
-
 // Body parsing — limit size to prevent abuse
 app.use(express.json({ limit: "1mb" }));
 
