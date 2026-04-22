@@ -23,6 +23,8 @@ dist/
 .env.local
 .env.*.local
 .*aud*/
+.gitleaks.toml
+.githooks/
 
 #tmp
 tmp/

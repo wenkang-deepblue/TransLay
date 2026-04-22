@@ -434,6 +434,10 @@ body {
   padding: calc(120px * var(--space-scale)) 0;
   position: relative;
 }
+.section[id],
+#install {
+  scroll-margin-top: 92px;
+}
 .section-sm { padding: calc(72px * var(--space-scale)) 0; }
 .kicker {
   display: inline-flex;

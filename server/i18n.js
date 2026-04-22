@@ -1,7 +1,7 @@
 // Translations for TransLay landing page
 window.TRANSLATIONS = {
   en: {
-    nav: { features: "Features", pricing: "Pricing", faq: "FAQ", install: "Install Add-on" },
+    nav: { home: "Home", features: "Features", pricing: "Pricing", faq: "FAQ", install: "Install Add-on" },
     hero: {
       badge: "Now available on Google Workspace™",
       title1: "Translate Slides",
@@ -134,7 +134,7 @@ window.TRANSLATIONS = {
     },
   },
   zh: {
-    nav: { features: "功能", pricing: "定价", faq: "常见问题", install: "安装插件" },
+    nav: { home: "主页", features: "功能", pricing: "定价", faq: "常见问题", install: "安装插件" },
     hero: {
       badge: "现已登陆 Google Workspace™",
       title1: "翻译 Slides",
@@ -272,7 +272,7 @@ window.TRANSLATIONS = {
 // Fill other languages with English fallback + translated core strings
 const CORE_LOCALES = {
   "zh-TW": {
-    nav: { features: "功能", pricing: "定價", faq: "常見問題", install: "安裝外掛" },
+    nav: { home: "主頁", features: "功能", pricing: "定價", faq: "常見問題", install: "安裝外掛" },
     hero: { badge: "現已登陸 Google Workspace™", title1: "翻譯 Slides", title2: "保留一切", subtitle: "面向 Google Slides™ 的高品質 AI 翻譯，完整保留每一處字體、樣式與排版。", cta: "安裝外掛", cta_sub: "免費 — 贈送 20 張投影片", secondary: "觀看示範" },
     features: {
       title: "為重要的簡報而生",
@@ -311,91 +311,91 @@ const CORE_LOCALES = {
     hero2: { title: "您的簡報", title_accent: "任意語言", title_end: "原樣呈現" },
   },
   ja: {
-    nav: { features: "機能", pricing: "料金", faq: "よくある質問", install: "アドオンをインストール" },
+    nav: { home: "ホーム", features: "機能", pricing: "料金", faq: "よくある質問", install: "アドオンをインストール" },
     hero: { badge: "Google Workspace™ で提供中", title1: "スライドを翻訳。", title2: "すべてを保持。", subtitle: "Google Slides™ 向けの高品質 LLM 翻訳。フォント・スタイル・レイアウトをそのまま維持します。", cta: "アドオンをインストール", cta_sub: "無料 — 20 枚プレゼント", secondary: "デモを見る" },
     cta: { title: "最初の 20 枚を無料で翻訳。", subtitle: "30 秒でインストール。クレジットカード不要。", button: "アドオンをインストール" },
     footer: { tagline: "Google Slides™ のための LLM 翻訳ツール。", terms: "利用規約", privacy: "プライバシーポリシー", copyright: "© 2026 example.com All rights reserved." },
     settings: { title: "設定", theme: "テーマ", light: "ライト", dark: "ダーク", system: "システムに従う", language: "言語" },
   },
   ko: {
-    nav: { features: "기능", pricing: "가격", faq: "자주 묻는 질문", install: "부가기능 설치" },
+    nav: { home: "홈", features: "기능", pricing: "가격", faq: "자주 묻는 질문", install: "부가기능 설치" },
     hero: { badge: "Google Workspace™에서 사용 가능", title1: "슬라이드를 번역.", title2: "모든 것을 보존.", subtitle: "Google Slides™를 위한 고품질 LLM 번역. 모든 글꼴, 스타일, 레이아웃을 그대로 유지합니다.", cta: "부가기능 설치", cta_sub: "무료 — 20장 제공", secondary: "데모 보기" },
     cta: { title: "처음 20장을 무료로 번역.", subtitle: "30초 만에 설치. 신용카드 불필요.", button: "부가기능 설치" },
     footer: { tagline: "Google Slides™를 위한 LLM 번역 도구.", terms: "서비스 약관", privacy: "개인정보 처리방침", copyright: "© 2026 example.com All rights reserved." },
     settings: { title: "설정", theme: "테마", light: "라이트", dark: "다크", system: "시스템 설정", language: "언어" },
   },
   fr: {
-    nav: { features: "Fonctionnalités", pricing: "Tarifs", faq: "FAQ", install: "Installer le module" },
+    nav: { home: "Accueil", features: "Fonctionnalités", pricing: "Tarifs", faq: "FAQ", install: "Installer le module" },
     hero: { badge: "Disponible sur Google Workspace™", title1: "Traduisez vos Slides.", title2: "Sans rien perdre.", subtitle: "Traduction LLM de haute qualité pour Google Slides™ — polices, styles et mise en page restent intacts.", cta: "Installer le module", cta_sub: "Gratuit — 20 diapositives offertes", secondary: "Voir la démo" },
     cta: { title: "Traduisez vos 20 premières diapositives, gratuitement.", subtitle: "Installation en 30 secondes. Sans carte bancaire.", button: "Installer le module" },
     footer: { tagline: "Traduction LLM pour Google Slides™.", terms: "Conditions d'utilisation", privacy: "Politique de confidentialité", copyright: "© 2026 example.com Tous droits réservés." },
     settings: { title: "Paramètres", theme: "Thème", light: "Clair", dark: "Sombre", system: "Système", language: "Langue" },
   },
   de: {
-    nav: { features: "Funktionen", pricing: "Preise", faq: "FAQ", install: "Add-on installieren" },
+    nav: { home: "Startseite", features: "Funktionen", pricing: "Preise", faq: "FAQ", install: "Add-on installieren" },
     hero: { badge: "Jetzt in Google Workspace™", title1: "Slides übersetzen.", title2: "Alles beibehalten.", subtitle: "Hochwertige LLM-Übersetzung für Google Slides™ — Schriften, Stile und Layout bleiben unverändert.", cta: "Add-on installieren", cta_sub: "Gratis — 20 Folien inklusive", secondary: "Demo ansehen" },
     cta: { title: "Übersetzen Sie Ihre ersten 20 Folien kostenlos.", subtitle: "In 30 Sekunden installiert. Keine Kreditkarte erforderlich.", button: "Add-on installieren" },
     footer: { tagline: "LLM-Übersetzung für Google Slides™.", terms: "Nutzungsbedingungen", privacy: "Datenschutzerklärung", copyright: "© 2026 example.com Alle Rechte vorbehalten." },
     settings: { title: "Einstellungen", theme: "Design", light: "Hell", dark: "Dunkel", system: "System", language: "Sprache" },
   },
   it: {
-    nav: { features: "Funzionalità", pricing: "Prezzi", faq: "FAQ", install: "Installa l'add-on" },
+    nav: { home: "Home", features: "Funzionalità", pricing: "Prezzi", faq: "FAQ", install: "Installa l'add-on" },
     hero: { badge: "Disponibile su Google Workspace™", title1: "Traduci le Slides.", title2: "Mantieni tutto.", subtitle: "Traduzione LLM di alta qualità per Google Slides™ — font, stili e layout rimangono invariati.", cta: "Installa l'add-on", cta_sub: "Gratis — 20 slide in omaggio", secondary: "Guarda la demo" },
     cta: { title: "Traduci le tue prime 20 slide, gratis.", subtitle: "Installazione in 30 secondi. Nessuna carta di credito.", button: "Installa l'add-on" },
     footer: { tagline: "Traduzione LLM per Google Slides™.", terms: "Termini di servizio", privacy: "Informativa sulla privacy", copyright: "© 2026 example.com Tutti i diritti riservati." },
     settings: { title: "Impostazioni", theme: "Tema", light: "Chiaro", dark: "Scuro", system: "Sistema", language: "Lingua" },
   },
   es: {
-    nav: { features: "Funciones", pricing: "Precios", faq: "Preguntas frecuentes", install: "Instalar complemento" },
+    nav: { home: "Inicio", features: "Funciones", pricing: "Precios", faq: "Preguntas frecuentes", install: "Instalar complemento" },
     hero: { badge: "Disponible en Google Workspace™", title1: "Traduce tus Slides.", title2: "Conserva todo.", subtitle: "Traducción LLM de alta calidad para Google Slides™ — fuentes, estilos y diseño intactos.", cta: "Instalar complemento", cta_sub: "Gratis — 20 diapositivas incluidas", secondary: "Ver demo" },
     cta: { title: "Traduce tus primeras 20 diapositivas, gratis.", subtitle: "Instalación en 30 segundos. Sin tarjeta.", button: "Instalar complemento" },
     footer: { tagline: "Traducción LLM para Google Slides™.", terms: "Condiciones de servicio", privacy: "Política de privacidad", copyright: "© 2026 example.com Todos los derechos reservados." },
     settings: { title: "Ajustes", theme: "Tema", light: "Claro", dark: "Oscuro", system: "Sistema", language: "Idioma" },
   },
   pt: {
-    nav: { features: "Recursos", pricing: "Preços", faq: "Perguntas frequentes", install: "Instalar complemento" },
+    nav: { home: "Início", features: "Recursos", pricing: "Preços", faq: "Perguntas frequentes", install: "Instalar complemento" },
     hero: { badge: "Disponível no Google Workspace™", title1: "Traduza seus Slides.", title2: "Preserve tudo.", subtitle: "Tradução LLM de alta qualidade para o Google Slides™ — fontes, estilos e layout intactos.", cta: "Instalar complemento", cta_sub: "Grátis — 20 slides incluídos", secondary: "Ver demo" },
     cta: { title: "Traduza seus primeiros 20 slides, grátis.", subtitle: "Instalação em 30 segundos. Sem cartão.", button: "Instalar complemento" },
     footer: { tagline: "Tradução LLM para o Google Slides™.", terms: "Termos de serviço", privacy: "Política de privacidade", copyright: "© 2026 example.com Todos os direitos reservados." },
     settings: { title: "Configurações", theme: "Tema", light: "Claro", dark: "Escuro", system: "Sistema", language: "Idioma" },
   },
   ru: {
-    nav: { features: "Возможности", pricing: "Цены", faq: "Вопросы", install: "Установить дополнение" },
+    nav: { home: "Главная", features: "Возможности", pricing: "Цены", faq: "Вопросы", install: "Установить дополнение" },
     hero: { badge: "Доступно в Google Workspace™", title1: "Перевод слайдов.", title2: "Без потерь.", subtitle: "Качественный LLM-перевод для Google Slides™ — шрифты, стили и вёрстка остаются неизменными.", cta: "Установить дополнение", cta_sub: "Бесплатно — 20 слайдов в подарок", secondary: "Смотреть демо" },
     cta: { title: "Переведите первые 20 слайдов бесплатно.", subtitle: "Установка за 30 секунд. Без карты.", button: "Установить дополнение" },
     footer: { tagline: "LLM-перевод для Google Slides™.", terms: "Условия использования", privacy: "Политика конфиденциальности", copyright: "© 2026 example.com Все права защищены." },
     settings: { title: "Настройки", theme: "Тема", light: "Светлая", dark: "Тёмная", system: "Системная", language: "Язык" },
   },
   nl: {
-    nav: { features: "Functies", pricing: "Prijzen", faq: "Veelgestelde vragen", install: "Add-on installeren" },
+    nav: { home: "Home", features: "Functies", pricing: "Prijzen", faq: "Veelgestelde vragen", install: "Add-on installeren" },
     hero: { badge: "Nu in Google Workspace™", title1: "Slides vertalen.", title2: "Alles behouden.", subtitle: "Hoogwaardige LLM-vertaling voor Google Slides™ — lettertypen, stijlen en lay-out blijven ongewijzigd.", cta: "Add-on installeren", cta_sub: "Gratis — 20 slides cadeau", secondary: "Demo bekijken" },
     cta: { title: "Vertaal je eerste 20 slides gratis.", subtitle: "In 30 seconden geïnstalleerd. Geen creditcard.", button: "Add-on installeren" },
     footer: { tagline: "LLM-vertaling voor Google Slides™.", terms: "Servicevoorwaarden", privacy: "Privacybeleid", copyright: "© 2026 example.com Alle rechten voorbehouden." },
     settings: { title: "Instellingen", theme: "Thema", light: "Licht", dark: "Donker", system: "Systeem", language: "Taal" },
   },
   sv: {
-    nav: { features: "Funktioner", pricing: "Priser", faq: "Vanliga frågor", install: "Installera tillägg" },
+    nav: { home: "Hem", features: "Funktioner", pricing: "Priser", faq: "Vanliga frågor", install: "Installera tillägg" },
     hero: { badge: "Nu i Google Workspace™", title1: "Översätt Slides.", title2: "Behåll allt.", subtitle: "LLM-översättning av hög kvalitet för Google Slides™ — typsnitt, stilar och layout förblir oförändrade.", cta: "Installera tillägg", cta_sub: "Gratis — 20 bilder ingår", secondary: "Se demo" },
     cta: { title: "Översätt dina första 20 bilder gratis.", subtitle: "Installera på 30 sekunder. Inget kreditkort.", button: "Installera tillägg" },
     footer: { tagline: "LLM-översättning för Google Slides™.", terms: "Användarvillkor", privacy: "Integritetspolicy", copyright: "© 2026 example.com Alla rättigheter förbehållna." },
     settings: { title: "Inställningar", theme: "Tema", light: "Ljust", dark: "Mörkt", system: "System", language: "Språk" },
   },
   el: {
-    nav: { features: "Δυνατότητες", pricing: "Τιμές", faq: "Συχνές ερωτήσεις", install: "Εγκατάσταση" },
+    nav: { home: "Αρχική", features: "Δυνατότητες", pricing: "Τιμές", faq: "Συχνές ερωτήσεις", install: "Εγκατάσταση" },
     hero: { badge: "Τώρα στο Google Workspace™", title1: "Μεταφράστε Slides.", title2: "Διατηρήστε τα πάντα.", subtitle: "Υψηλής ποιότητας μετάφραση LLM για Google Slides™ — γραμματοσειρές, στυλ και διάταξη παραμένουν ακέραια.", cta: "Εγκατάσταση", cta_sub: "Δωρεάν — 20 διαφάνειες", secondary: "Δείτε demo" },
     cta: { title: "Μεταφράστε τις πρώτες 20 διαφάνειες δωρεάν.", subtitle: "Εγκατάσταση σε 30 δευτερόλεπτα.", button: "Εγκατάσταση" },
     footer: { tagline: "Μετάφραση LLM για Google Slides™.", terms: "Όροι χρήσης", privacy: "Πολιτική απορρήτου", copyright: "© 2026 example.com Με επιφύλαξη παντός δικαιώματος." },
     settings: { title: "Ρυθμίσεις", theme: "Θέμα", light: "Φωτεινό", dark: "Σκοτεινό", system: "Σύστημα", language: "Γλώσσα" },
   },
   ar: {
-    nav: { features: "الميزات", pricing: "الأسعار", faq: "الأسئلة الشائعة", install: "تثبيت الإضافة" },
+    nav: { home: "الرئيسية", features: "الميزات", pricing: "الأسعار", faq: "الأسئلة الشائعة", install: "تثبيت الإضافة" },
     hero: { badge: "متاح الآن على Google Workspace™", title1: "ترجم الشرائح.", title2: "احفظ كل شيء.", subtitle: "ترجمة عالية الجودة بتقنية LLM لـ Google Slides™ — الخطوط والأنماط والتخطيط كما هي.", cta: "تثبيت الإضافة", cta_sub: "مجاناً — 20 شريحة هدية", secondary: "شاهد العرض" },
     cta: { title: "ترجم أول 20 شريحة مجاناً.", subtitle: "التثبيت في 30 ثانية. بدون بطاقة ائتمان.", button: "تثبيت الإضافة" },
     footer: { tagline: "ترجمة LLM لـ Google Slides™.", terms: "شروط الخدمة", privacy: "سياسة الخصوصية", copyright: "© 2026 example.com جميع الحقوق محفوظة." },
     settings: { title: "الإعدادات", theme: "المظهر", light: "فاتح", dark: "داكن", system: "النظام", language: "اللغة" },
   },
   he: {
-    nav: { features: "תכונות", pricing: "תמחור", faq: "שאלות נפוצות", install: "התקן תוסף" },
+    nav: { home: "דף הבית", features: "תכונות", pricing: "תמחור", faq: "שאלות נפוצות", install: "התקן תוסף" },
     hero: { badge: "זמין כעת ב-Google Workspace™", title1: "תרגם שקופיות.", title2: "שמור על הכל.", subtitle: "תרגום LLM איכותי ל-Google Slides™ — גופנים, סגנונות ופריסה נשארים בדיוק כפי שהיו.", cta: "התקן תוסף", cta_sub: "חינם — 20 שקופיות במתנה", secondary: "צפה בהדגמה" },
     cta: { title: "תרגם את 20 השקופיות הראשונות שלך בחינם.", subtitle: "התקנה ב-30 שניות. ללא כרטיס אשראי.", button: "התקן תוסף" },
     footer: { tagline: "תרגום LLM ל-Google Slides™.", terms: "תנאי שירות", privacy: "מדיניות פרטיות", copyright: "© 2026 example.com כל הזכויות שמורות." },

@@ -43,6 +43,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --region "${REGION}" \
   --image "${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/worker:${IMAGE_TAG}" \
   --service-account "${WORKER_SERVICE_ACCOUNT}" \
+  --no-allow-unauthenticated \
   --quiet
 
 PROJECT_ID="${PROJECT_ID}" REGION="${REGION}" SERVICE_NAME="${SERVICE_NAME}" \
@@ -56,6 +57,17 @@ gcloud run services describe "${SERVICE_NAME}" \
   --project "${PROJECT_ID}" \
   --region "${REGION}" \
   --format='yaml(spec.template.metadata.annotations,spec.template.spec.containerConcurrency,status.latestReadyRevisionName)'
+
+echo "Verifying worker invoker IAM..."
+WORKER_IAM="$(gcloud run services get-iam-policy "${SERVICE_NAME}" \
+  --project "${PROJECT_ID}" \
+  --region "${REGION}" \
+  --format='json(bindings)')"
+echo "${WORKER_IAM}"
+if echo "${WORKER_IAM}" | grep -q '"allUsers"\|"allAuthenticatedUsers"'; then
+  echo "Error: worker service still exposes a public invoker binding." >&2
+  exit 1
+fi
 
 echo "Verifying Cloud Tasks queue..."
 gcloud tasks queues describe "${QUEUE_NAME}" \

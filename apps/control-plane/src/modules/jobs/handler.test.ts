@@ -756,7 +756,7 @@ test("createJobHandler returns JOB_QUEUE_BUSY when the global in-flight gate is 
     },
     session: {
       secret: "x".repeat(32),
-      cookieName: "__Host-translay_sid",
+      cookieName: "__session",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
     domain: "your-domain.example.com",
@@ -903,7 +903,7 @@ test("createJobHandler returns CONCURRENT_JOB_RUNNING when atomic admission sees
     },
     session: {
       secret: "x".repeat(32),
-      cookieName: "__Host-translay_sid",
+      cookieName: "__session",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
     domain: "your-domain.example.com",

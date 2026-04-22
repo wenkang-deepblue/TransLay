@@ -70,6 +70,7 @@
       });
     };
 
+    assignText("[data-legal-nav-home]", nav.home || "Home");
     assignText("[data-legal-nav-features]", nav.features);
     assignText("[data-legal-nav-pricing]", nav.pricing);
     assignText("[data-legal-nav-faq]", nav.faq);

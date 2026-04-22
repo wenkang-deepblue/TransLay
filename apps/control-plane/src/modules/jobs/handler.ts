@@ -907,7 +907,6 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
         userId: auth.user_id,
         hostType: body.host_type,
         sourceDocId: body.document_id,
-        sourceDocName: body.document_name,
         targetDocId: body.target_document_id ?? null,
         sourceLangMode: body.source_language_mode,
         targetLanguageInput: body.target_language_input,

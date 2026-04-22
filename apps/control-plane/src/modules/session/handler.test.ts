@@ -69,7 +69,7 @@ function makeConfig(): AppConfig {
     },
     session: {
       secret: "not-a-real-test-session-secret",
-      cookieName: "__Host-translay_sid",
+      cookieName: "__session",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
     domain: "your-domain.example.com",
@@ -196,7 +196,7 @@ test("sessionLoginHandler creates a portal session and returns avatar without ex
     writes[0]?.avatar_url,
     "https://lh3.googleusercontent.com/a/example-avatar"
   );
-  assert.match(String(state.headers["Set-Cookie"] ?? ""), /__Host-translay_sid=/);
+  assert.match(String(state.headers["Set-Cookie"] ?? ""), /__session=/);
   assert.equal(
     state.headers["Cache-Control"],
     "private, no-store, max-age=0"
@@ -230,7 +230,7 @@ test("sessionLoginHandler replaces an existing portal session cookie after issui
   const req = {
     headers: {
       authorization: "Bearer id-token-from-gis",
-      cookie: "__Host-translay_sid=old-session-id",
+      cookie: "__session=old-session-id",
     },
   } as unknown as Request;
   const { res } = makeResponse();

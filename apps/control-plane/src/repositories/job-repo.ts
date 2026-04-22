@@ -17,7 +17,7 @@ export interface JobRow {
   user_id: string;
   host_type: HostType;
   source_doc_id: string;
-  source_doc_name: string;
+  source_doc_name: string | null;
   target_doc_id: string | null;
   source_language_mode: string;
   source_language: string | null;
@@ -67,7 +67,6 @@ export async function createJob(
     userId: UserId;
     hostType: HostType;
     sourceDocId: string;
-    sourceDocName: string;
     targetDocId: string | null;
     sourceLangMode: SourceLanguageMode;
     targetLanguageInput: string;
@@ -82,18 +81,17 @@ export async function createJob(
 ): Promise<JobId> {
   const result = await client.query(
     `INSERT INTO translation_jobs
-       (user_id, host_type, source_doc_id, source_doc_name, target_doc_id,
+       (user_id, host_type, source_doc_id, target_doc_id,
         source_language_mode, target_language_input, target_language_code,
        output_mode, range_mode, range_expression, host_oauth_access_token_enc,
        host_oauth_token_expires_at, host_oauth_source,
        status, current_stage, stage_status, stage_cursor, stage_payload, stage_attempt)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending', 'extract', 'pending', '{}'::jsonb, '{}'::jsonb, 0)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'pending', 'extract', 'pending', '{}'::jsonb, '{}'::jsonb, 0)
      RETURNING id`,
     [
       params.userId,
       params.hostType,
       params.sourceDocId,
-      params.sourceDocName,
       params.targetDocId,
       params.sourceLangMode,
       params.targetLanguageInput,
