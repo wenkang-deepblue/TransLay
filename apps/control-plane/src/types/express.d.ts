@@ -7,6 +7,7 @@ declare global {
       portalSession?: {
         userId: string;
         createdAt: string;
+        avatarUrl?: string;
       };
     }
   }

@@ -23,6 +23,7 @@ export function portalSessionMiddleware(redis: Redis, config: AppConfig) {
         req.portalSession = {
           userId: data.user_id,
           createdAt: data.created_at ?? new Date().toISOString(),
+          avatarUrl: data.avatar_url || undefined,
         };
       }
     } catch (err) {

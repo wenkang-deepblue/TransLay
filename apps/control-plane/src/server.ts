@@ -8,7 +8,9 @@ import { googleAuthMiddleware } from "./middleware/auth";
 import { portalSessionMiddleware } from "./middleware/session";
 import { healthHandler } from "./modules/health/handler";
 import { entitlementHandler } from "./modules/entitlement/handler";
+import { landingConfigHandler } from "./modules/public/handler";
 import {
+  sessionLoginHandler,
   sessionStartHandler,
   sessionConsumeHandler,
   sessionMeHandler,
@@ -79,9 +81,15 @@ app.use(globalIpRateLimit);
 
 // --- Public routes (no auth) ---
 app.get("/api/health", asyncHandler(healthHandler(pool, redis)));
+app.get("/api/public/landing-config", asyncHandler(landingConfigHandler(config)));
 
 // --- Portal routes (session cookie auth) ---
 const portalSession = portalSessionMiddleware(redis, config);
+app.post(
+  "/api/session/login",
+  userWriteRateLimit,
+  asyncHandler(sessionLoginHandler(pool, redis, config))
+);
 app.post(
   "/api/session/consume",
   userWriteRateLimit,
@@ -101,7 +109,7 @@ app.post(
 );
 
 // --- Add-on routes (Google token auth) ---
-const googleAuth = googleAuthMiddleware(pool, redis);
+const googleAuth = googleAuthMiddleware(pool, redis, config);
 app.get(
   "/api/entitlement",
   googleAuth,

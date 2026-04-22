@@ -4,10 +4,15 @@ import type { Pool } from "pg";
 import type Redis from "ioredis";
 import type { AppConfig } from "@translay/shared-config";
 import type {
+  GoogleIdentity,
+  SessionLoginResponse,
   SessionStartResponse,
   SessionConsumeResponse,
   SessionMeResponse,
+  UserId,
 } from "@translay/shared-contracts";
+import { resolveGoogleIdentityWithCache } from "../../middleware/auth";
+import { upsertUser } from "../../repositories/user-repo";
 import { findUserById } from "../../repositories/user-repo";
 import { getActiveSubscription } from "../../repositories/subscription-repo";
 import { sendError } from "../../utils/errors";
@@ -23,8 +28,8 @@ function generateSecureId(): string {
 
 /**
  * C1: Lua script for atomic ticket consumption.
- * C3: Returns user_id directly to avoid TOCTOU with separate HGET after EXPIRE.
- * Returns: user_id string = consumed successfully, "0" = already consumed,
+ * C3: Returns the consumed user/session snapshot directly to avoid TOCTOU.
+ * Returns: JSON payload = consumed successfully, "0" = already consumed,
  * "-1" = ticket not found, "-2" = corrupted ticket payload
  */
 const CONSUME_TICKET_LUA = `
@@ -35,10 +40,133 @@ local consumed = redis.call('HGET', key, 'consumed')
 if consumed == '1' then return "0" end
 local user_id = redis.call('HGET', key, 'user_id')
 if not user_id then return "-2" end
+local avatar_url = redis.call('HGET', key, 'avatar_url')
 redis.call('HSET', key, 'consumed', '1')
 redis.call('EXPIRE', key, 5)
-return user_id
+return cjson.encode({ user_id = user_id, avatar_url = avatar_url or '' })
 `;
+
+interface PortalSessionSeed {
+  readonly userId: UserId | string;
+  readonly avatarUrl: string | null;
+}
+
+function buildPortalSessionCookieValue(
+  config: AppConfig,
+  sessionId: string,
+  maxAgeSeconds: number
+): string {
+  return `${config.session.cookieName}=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAgeSeconds}`;
+}
+
+function appendSetCookieHeader(res: Response, cookieValue: string): void {
+  const existing =
+    typeof res.getHeader === "function" ? res.getHeader("Set-Cookie") : undefined;
+  if (!existing) {
+    res.setHeader("Set-Cookie", cookieValue);
+    return;
+  }
+
+  if (Array.isArray(existing)) {
+    res.setHeader("Set-Cookie", [...existing, cookieValue]);
+    return;
+  }
+
+  res.setHeader("Set-Cookie", [String(existing), cookieValue]);
+}
+
+function buildPortalUserSummary(
+  user: {
+    google_subject_id: string;
+    email: string | null;
+    display_name: string | null;
+  },
+  avatarUrl: string | null
+) {
+  return {
+    google_subject_id: user.google_subject_id,
+    email: user.email,
+    display_name: user.display_name,
+    avatar_url: avatarUrl,
+  };
+}
+
+async function createPortalSession(
+  redis: Redis,
+  seed: PortalSessionSeed
+): Promise<string> {
+  const sessionId = generateSecureId();
+  const sessionKey = `portal_session:${sessionId}`;
+  const expiresAt = new Date(Date.now() + SESSION_TTL * 1000).toISOString();
+  const payload: Record<string, string> = {
+    user_id: seed.userId,
+    created_at: new Date().toISOString(),
+    expires_at: expiresAt,
+  };
+  if (seed.avatarUrl) {
+    payload.avatar_url = seed.avatarUrl;
+  }
+
+  const results = await redis
+    .multi()
+    .hset(sessionKey, payload)
+    .expire(sessionKey, SESSION_TTL)
+    .exec();
+  assertMultiOk(results, "portal session create");
+
+  return sessionId;
+}
+
+function setPortalSessionCookie(res: Response, config: AppConfig, sessionId: string): void {
+  appendSetCookieHeader(
+    res,
+    buildPortalSessionCookieValue(config, sessionId, SESSION_TTL)
+  );
+}
+
+function clearPortalSessionCookie(res: Response, config: AppConfig): void {
+  appendSetCookieHeader(res, buildPortalSessionCookieValue(config, "", 0));
+}
+
+async function deletePreviousPortalSession(
+  req: Request,
+  redis: Redis,
+  config: AppConfig,
+  nextSessionId: string
+): Promise<void> {
+  const cookies = parseCookies(req.headers?.cookie);
+  const previousSessionId = cookies[config.session.cookieName];
+  if (!previousSessionId || previousSessionId === nextSessionId) {
+    return;
+  }
+
+  try {
+    await redis.del(`portal_session:${previousSessionId}`);
+  } catch (err) {
+    console.warn(
+      "Failed to delete previous portal session:",
+      (err as Error).message
+    );
+  }
+}
+
+function buildPortalSessionResponse(
+  user: {
+    google_subject_id: string;
+    email: string | null;
+    display_name: string | null;
+  },
+  planType: string,
+  subscriptionStatus: string,
+  avatarUrl: string | null
+): SessionConsumeResponse | SessionLoginResponse {
+  return {
+    ok: true,
+    user: buildPortalUserSummary(user, avatarUrl),
+    plan_type: planType as SessionConsumeResponse["plan_type"],
+    subscription_status: subscriptionStatus as SessionConsumeResponse["subscription_status"],
+  };
+}
 
 export function sessionStartHandler(redis: Redis, config: AppConfig) {
   return async (req: Request, res: Response) => {
@@ -54,15 +182,19 @@ export function sessionStartHandler(redis: Redis, config: AppConfig) {
 
     const ticket = `ttk_${generateSecureId()}`;
     const ticketKey = `portal_ticket:${ticket}`;
+    const ticketPayload: Record<string, string> = {
+      user_id: auth.user_id,
+      redirect_path: path,
+      reason: ticketReason,
+      consumed: "0",
+    };
+    if (auth.identity.avatar_url) {
+      ticketPayload.avatar_url = auth.identity.avatar_url;
+    }
 
     const results = await redis
       .multi()
-      .hset(ticketKey, {
-        user_id: auth.user_id,
-        redirect_path: path,
-        reason: ticketReason,
-        consumed: "0",
-      })
+      .hset(ticketKey, ticketPayload)
       .expire(ticketKey, TICKET_TTL)
       .exec();
 
@@ -121,7 +253,24 @@ export function sessionConsumeHandler(pool: Pool, redis: Redis, config: AppConfi
       return;
     }
 
-    const userId = consumeResult;
+    let consumedTicket: { user_id: string; avatar_url?: string };
+    try {
+      consumedTicket = JSON.parse(consumeResult) as {
+        user_id: string;
+        avatar_url?: string;
+      };
+    } catch (err) {
+      console.error("Ticket consume payload parse error:", (err as Error).message);
+      sendError(res, "JOB_INTERNAL_ERROR", "Ticket payload is corrupted");
+      return;
+    }
+
+    if (!consumedTicket.user_id) {
+      sendError(res, "JOB_INTERNAL_ERROR", "Ticket payload is corrupted");
+      return;
+    }
+
+    const userId = consumedTicket.user_id;
 
     const user = await findUserById(pool, userId);
     if (!user) {
@@ -129,23 +278,28 @@ export function sessionConsumeHandler(pool: Pool, redis: Redis, config: AppConfi
       return;
     }
 
-    const sub = await getActiveSubscription(pool, user.id);
-
-    const sessionId = generateSecureId();
-    const sessionKey = `portal_session:${sessionId}`;
+    let sub;
+    try {
+      sub = await getActiveSubscription(pool, user.id);
+    } catch (err) {
+      console.error(
+        "Session consume subscription lookup DB error:",
+        (err as Error).stack
+      );
+      res.status(503).json({
+        error: "SERVICE_UNAVAILABLE",
+        message: "Service temporarily unavailable",
+      });
+      return;
+    }
 
     // I11: Wrap session creation in try-catch — ticket was already consumed
-    let results: Array<[Error | null, unknown]> | null;
+    let sessionId: string;
     try {
-      results = await redis
-        .multi()
-        .hset(sessionKey, {
-          user_id: user.id,
-          created_at: new Date().toISOString(),
-        })
-        .expire(sessionKey, SESSION_TTL)
-        .exec();
-      assertMultiOk(results, "session/consume session create");
+      sessionId = await createPortalSession(redis, {
+        userId: user.id,
+        avatarUrl: consumedTicket.avatar_url || null,
+      });
     } catch (err) {
       console.error("Session creation Redis error:", (err as Error).message);
       res.status(503).json({
@@ -155,19 +309,115 @@ export function sessionConsumeHandler(pool: Pool, redis: Redis, config: AppConfi
       return;
     }
 
-    const cookieValue = `${config.session.cookieName}=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}`;
-    res.setHeader("Set-Cookie", cookieValue);
+    await deletePreviousPortalSession(req, redis, config, sessionId);
+    setPortalSessionCookie(res, config, sessionId);
 
-    const response: SessionConsumeResponse = {
-      ok: true,
-      user: {
-        google_subject_id: user.google_subject_id,
-        email: user.email,
-        display_name: user.display_name,
-      },
-      plan_type: sub?.plan_type ?? "free",
-      subscription_status: sub?.status ?? "active",
-    };
+    const response = buildPortalSessionResponse(
+      user,
+      sub?.plan_type ?? "free",
+      sub?.status ?? "active",
+      consumedTicket.avatar_url || null
+    ) as SessionConsumeResponse;
+
+    res.json(response);
+  };
+}
+
+export function sessionLoginHandler(
+  pool: Pool,
+  redis: Redis,
+  config: AppConfig,
+  resolveIdentity: (
+    redis: Redis,
+    token: string,
+    options?: {
+      readonly allowedIdTokenAudiences: readonly string[];
+      readonly allowUnscopedIdTokens: boolean;
+    }
+  ) => Promise<GoogleIdentity | null> = resolveGoogleIdentityWithCache,
+  upsertUserFn: (pool: Pool, identity: GoogleIdentity) => Promise<UserId> = upsertUser
+) {
+  return async (req: Request, res: Response) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      sendError(res, "UNAUTHORIZED");
+      return;
+    }
+
+    const token = authHeader.slice(7);
+    if (!token) {
+      sendError(res, "UNAUTHORIZED");
+      return;
+    }
+
+    let identity: GoogleIdentity | null;
+    try {
+      identity = await resolveIdentity(redis, token, {
+        allowedIdTokenAudiences: config.publicAuth.googleIdTokenAudiences,
+        allowUnscopedIdTokens: config.nodeEnv !== "production",
+      });
+    } catch (err) {
+      console.error("Session login token verification error:", (err as Error).message);
+      sendError(res, "INVALID_TOKEN");
+      return;
+    }
+
+    if (!identity) {
+      sendError(res, "INVALID_TOKEN");
+      return;
+    }
+
+    let userId: UserId;
+    try {
+      userId = await upsertUserFn(pool, identity);
+    } catch (err) {
+      console.error("Session login user upsert DB error:", (err as Error).stack);
+      res.status(503).json({
+        error: "SERVICE_UNAVAILABLE",
+        message: "Service temporarily unavailable",
+      });
+      return;
+    }
+
+    let sub;
+    try {
+      sub = await getActiveSubscription(pool, userId);
+    } catch (err) {
+      console.error(
+        "Session login subscription lookup DB error:",
+        (err as Error).stack
+      );
+      res.status(503).json({
+        error: "SERVICE_UNAVAILABLE",
+        message: "Service temporarily unavailable",
+      });
+      return;
+    }
+
+    let sessionId: string;
+    try {
+      sessionId = await createPortalSession(redis, {
+        userId,
+        avatarUrl: identity.avatar_url,
+      });
+    } catch (err) {
+      console.error("Session login Redis error:", (err as Error).message);
+      res.status(503).json({
+        error: "SERVICE_UNAVAILABLE",
+        message: "Service temporarily unavailable",
+      });
+      return;
+    }
+
+    await deletePreviousPortalSession(req, redis, config, sessionId);
+    setPortalSessionCookie(res, config, sessionId);
+
+    const response = buildPortalSessionResponse(
+      identity,
+      sub?.plan_type ?? "free",
+      sub?.status ?? "active",
+      identity.avatar_url
+    ) as SessionLoginResponse;
 
     res.json(response);
   };
@@ -188,15 +438,21 @@ export function sessionMeHandler(pool: Pool) {
       return;
     }
 
-    const sub = await getActiveSubscription(pool, user.id);
+    let sub;
+    try {
+      sub = await getActiveSubscription(pool, user.id);
+    } catch (err) {
+      console.error("Session me subscription lookup DB error:", (err as Error).stack);
+      res.status(503).json({
+        error: "SERVICE_UNAVAILABLE",
+        message: "Service temporarily unavailable",
+      });
+      return;
+    }
 
     const response: SessionMeResponse = {
       signed_in: true,
-      user: {
-        google_subject_id: user.google_subject_id,
-        email: user.email,
-        display_name: user.display_name,
-      },
+      user: buildPortalUserSummary(user, req.portalSession.avatarUrl ?? null),
       plan_type: sub?.plan_type ?? "free",
       subscription_status: sub?.status ?? "active",
     };
@@ -208,15 +464,14 @@ export function sessionMeHandler(pool: Pool) {
 export function sessionLogoutHandler(redis: Redis, config: AppConfig) {
   return async (req: Request, res: Response) => {
     if (req.portalSession) {
-      const cookies = parseCookies(req.headers.cookie);
+      const cookies = parseCookies(req.headers?.cookie);
       const sessionId = cookies[config.session.cookieName];
       if (sessionId) {
         await redis.del(`portal_session:${sessionId}`);
       }
     }
 
-    const clearCookie = `${config.session.cookieName}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
-    res.setHeader("Set-Cookie", clearCookie);
+    clearPortalSessionCookie(res, config);
     res.json({ ok: true });
   };
 }

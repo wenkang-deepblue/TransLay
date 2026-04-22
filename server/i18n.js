@@ -106,6 +106,16 @@ window.TRANSLATIONS = {
       system: "System",
       language: "Language",
     },
+    auth: {
+      loading: "Checking session...",
+      consuming_ticket: "Signing you in...",
+      signing_in: "Completing sign-in...",
+      sign_out: "Sign out",
+      signed_in_as: "Signed in as",
+      plan_free: "Free",
+      plan_paid: "Pro",
+      google_client_missing: "Google sign-in is not configured yet.",
+    },
     hero2: {
       badge: "For Google Slides™",
       title: "Your deck.",
@@ -219,6 +229,16 @@ window.TRANSLATIONS = {
       dark: "深色",
       system: "跟随系统",
       language: "语言",
+    },
+    auth: {
+      loading: "正在检查会话...",
+      consuming_ticket: "正在为你登录...",
+      signing_in: "正在完成登录...",
+      sign_out: "退出登录",
+      signed_in_as: "当前登录账号",
+      plan_free: "免费版",
+      plan_paid: "Pro",
+      google_client_missing: "Google 登录尚未配置。",
     },
     hero2: {
       badge: "为 Google Slides™ 而生",

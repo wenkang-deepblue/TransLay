@@ -760,6 +760,10 @@ test("createJobHandler returns JOB_QUEUE_BUSY when the global in-flight gate is 
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
     domain: "your-domain.example.com",
+    publicAuth: {
+      googleWebClientId: "",
+      googleIdTokenAudiences: [],
+    },
     entitlementCacheTtl: 300,
     jobs: {
       maxGlobalInFlightJobs: 50,
@@ -903,6 +907,10 @@ test("createJobHandler returns CONCURRENT_JOB_RUNNING when atomic admission sees
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
     domain: "your-domain.example.com",
+    publicAuth: {
+      googleWebClientId: "",
+      googleIdTokenAudiences: [],
+    },
     entitlementCacheTtl: 300,
     jobs: {
       maxGlobalInFlightJobs: 50,

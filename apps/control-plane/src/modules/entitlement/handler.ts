@@ -47,6 +47,7 @@ export function entitlementHandler(pool: Pool) {
         google_subject_id: auth.identity.google_subject_id,
         email: auth.identity.email,
         display_name: auth.identity.display_name,
+        avatar_url: auth.identity.avatar_url,
       },
       access: entitlement.access,
       plan_type: sub.plan_type,

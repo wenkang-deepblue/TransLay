@@ -104,8 +104,107 @@ function BrandMark() {
   );
 }
 
+function getPlanLabel(t, planType) {
+  return planType === "free" ? t.auth.plan_free : t.auth.plan_paid;
+}
+
+function AccountShell({ t, authState, onGoogleCredential, onLogout }) {
+  const buttonSlotRef = useRef(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (authState.status !== "signed_out") {
+      return;
+    }
+
+    const slot = buttonSlotRef.current;
+    if (!slot) {
+      return;
+    }
+
+    let cancelled = false;
+    slot.innerHTML = "";
+    window.TransLayLandingAuth
+      .mountGoogleButton({
+        container: slot,
+        locale: document.documentElement.lang || "en",
+        onCredential: async (credential) => {
+          if (cancelled) return;
+          await onGoogleCredential(credential);
+        },
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        slot.innerHTML = `<button class="btn btn-ghost btn-sm" type="button" disabled>${t.auth.google_client_missing}</button>`;
+        console.warn("Google sign-in button mount failed:", error?.message || error);
+      });
+
+    return () => {
+      cancelled = true;
+      slot.innerHTML = "";
+    };
+  }, [authState.status, onGoogleCredential, t.auth.google_client_missing]);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    const onDocumentClick = (event) => {
+      if (!event.target.closest(".account-shell")) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("click", onDocumentClick);
+    return () => document.removeEventListener("click", onDocumentClick);
+  }, [menuOpen]);
+
+  if (authState.status === "loading" || authState.status === "consuming_ticket" || authState.status === "signing_in") {
+    const label = authState.status === "consuming_ticket"
+      ? t.auth.consuming_ticket
+      : authState.status === "signing_in"
+        ? t.auth.signing_in
+        : t.auth.loading;
+    return <div className="auth-status-chip">{label}</div>;
+  }
+
+  if (authState.status === "signed_out") {
+    return <div className="google-signin-slot" ref={buttonSlotRef} />;
+  }
+
+  const user = authState.user;
+  const displayName = user?.displayName || user?.email || "Account";
+  const avatarUrl = user?.avatarUrl || "";
+  const planLabel = getPlanLabel(t, authState.planType);
+
+  return (
+    <div className="account-shell">
+      <button className="account-trigger" type="button" onClick={() => setMenuOpen((open) => !open)}>
+        {avatarUrl ? (
+          <img className="account-avatar" src={avatarUrl} alt="" referrerPolicy="no-referrer" />
+        ) : (
+          <span className="account-avatar account-avatar-fallback">{displayName.slice(0, 1).toUpperCase()}</span>
+        )}
+        <span className="account-copy">
+          <span className="account-name">{displayName}</span>
+          <span className="account-plan">{planLabel}</span>
+        </span>
+      </button>
+      {menuOpen ? (
+        <div className="account-menu">
+          <div className="account-menu-label">{t.auth.signed_in_as}</div>
+          <div className="account-menu-email">{user?.email || displayName}</div>
+          <button className="account-menu-action" type="button" onClick={onLogout}>
+            {t.auth.sign_out}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 // ============ Top bar ============
-function TopBar({ t, onOpenSettings, onToggleTweaks, showTweaksToggle }) {
+function TopBar({ t, onOpenSettings, authState, onGoogleCredential, onLogout }) {
   return (
     <header className="topbar">
       <div className="container topbar-inner">
@@ -121,6 +220,12 @@ function TopBar({ t, onOpenSettings, onToggleTweaks, showTweaksToggle }) {
             {t.nav.install}
             <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </a>
+          <AccountShell
+            t={t}
+            authState={authState}
+            onGoogleCredential={onGoogleCredential}
+            onLogout={onLogout}
+          />
           <button className="icon-btn" aria-label="Settings" onClick={onOpenSettings} style={{marginInlineStart: 8}}>
             <svg viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.7"/>

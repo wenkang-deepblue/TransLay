@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import { OAuth2Client } from "google-auth-library";
 import type { Pool } from "pg";
 import type Redis from "ioredis";
+import type { AppConfig } from "@translay/shared-config";
 import type {
   GoogleIdentity,
   UserId,
@@ -17,6 +18,15 @@ const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
 const IDENTITY_CACHE_TTL = 90; // seconds
 const idTokenClient = new OAuth2Client();
 
+interface IdentityResolutionOptions {
+  readonly allowedIdTokenAudiences: readonly string[];
+  readonly allowUnscopedIdTokens: boolean;
+}
+
+function isLikelyJwt(token: string): boolean {
+  return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token);
+}
+
 async function fetchAsAccessToken(token: string): Promise<GoogleIdentity | null> {
   const res = await fetch(GOOGLE_USERINFO_URL, {
     headers: { Authorization: `Bearer ${token}` },
@@ -29,11 +39,28 @@ async function fetchAsAccessToken(token: string): Promise<GoogleIdentity | null>
     google_subject_id: sub as GoogleSubjectId,
     email: (data.email as string) ?? null,
     display_name: (data.name as string) ?? null,
+    avatar_url: (data.picture as string) ?? null,
   };
 }
 
-async function fetchAsIdToken(token: string): Promise<GoogleIdentity | null> {
-  const ticket = await idTokenClient.verifyIdToken({ idToken: token });
+async function fetchAsIdToken(
+  token: string,
+  options: IdentityResolutionOptions
+): Promise<GoogleIdentity | null> {
+  if (
+    options.allowedIdTokenAudiences.length === 0 &&
+    !options.allowUnscopedIdTokens
+  ) {
+    return null;
+  }
+
+  const ticket = await idTokenClient.verifyIdToken({
+    idToken: token,
+    audience:
+      options.allowedIdTokenAudiences.length > 0
+        ? [...options.allowedIdTokenAudiences]
+        : undefined,
+  });
   const data = ticket.getPayload();
   if (!data) return null;
   const sub = data.sub as string | undefined;
@@ -42,6 +69,7 @@ async function fetchAsIdToken(token: string): Promise<GoogleIdentity | null> {
     google_subject_id: sub as GoogleSubjectId,
     email: (data.email as string) ?? null,
     display_name: (data.name as string) ?? null,
+    avatar_url: (data.picture as string) ?? null,
   };
 }
 
@@ -50,8 +78,18 @@ async function fetchAsIdToken(token: string): Promise<GoogleIdentity | null> {
  * Network errors on the first attempt do NOT prevent the ID Token fallback (I8).
  */
 async function resolveGoogleIdentity(
-  token: string
+  token: string,
+  options: IdentityResolutionOptions
 ): Promise<GoogleIdentity | null> {
+  if (isLikelyJwt(token)) {
+    try {
+      return await fetchAsIdToken(token, options);
+    } catch (err) {
+      console.error("Google ID Token verification failed:", (err as Error).message);
+      return null;
+    }
+  }
+
   let identity: GoogleIdentity | null = null;
 
   try {
@@ -64,7 +102,7 @@ async function resolveGoogleIdentity(
   if (identity) return identity;
 
   try {
-    identity = await fetchAsIdToken(token);
+    identity = await fetchAsIdToken(token, options);
   } catch (err) {
     // C4: Both verification paths failed — log at error level
     console.error("Google ID Token verification also failed:", (err as Error).message);
@@ -77,9 +115,13 @@ async function resolveGoogleIdentity(
  * S1: Check Redis cache before calling Google APIs. Cache valid identities briefly
  * to reduce latency on repeated requests within the same session.
  */
-async function resolveWithCache(
+export async function resolveGoogleIdentityWithCache(
   redis: Redis,
-  token: string
+  token: string,
+  options: IdentityResolutionOptions = {
+    allowedIdTokenAudiences: [],
+    allowUnscopedIdTokens: true,
+  }
 ): Promise<GoogleIdentity | null> {
   // C1: Hash full token to prevent cache key collision / spoofing
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
@@ -94,7 +136,7 @@ async function resolveWithCache(
     console.warn("Auth cache read error:", (err as Error).message);
   }
 
-  const identity = await resolveGoogleIdentity(token);
+  const identity = await resolveGoogleIdentity(token, options);
 
   if (identity) {
     try {
@@ -112,7 +154,11 @@ async function resolveWithCache(
  * Express middleware: validates Google token, upserts user, attaches AuthContext.
  * C3: Distinguishes auth failures (401) from infrastructure failures (503).
  */
-export function googleAuthMiddleware(pool: Pool, redis: Redis) {
+export function googleAuthMiddleware(
+  pool: Pool,
+  redis: Redis,
+  config: Pick<AppConfig, "publicAuth" | "nodeEnv">
+) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -128,7 +174,10 @@ export function googleAuthMiddleware(pool: Pool, redis: Redis) {
 
     let identity: GoogleIdentity | null;
     try {
-      identity = await resolveWithCache(redis, token);
+      identity = await resolveGoogleIdentityWithCache(redis, token, {
+        allowedIdTokenAudiences: config.publicAuth.googleIdTokenAudiences,
+        allowUnscopedIdTokens: config.nodeEnv !== "production",
+      });
     } catch (err) {
       console.error("Google token verification error:", (err as Error).message);
       sendError(res, "INVALID_TOKEN");

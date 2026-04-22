@@ -26,6 +26,9 @@ export interface SessionConsumeResponse {
   readonly subscription_status: SubscriptionStatus;
 }
 
+/** POST /api/session/login response. */
+export type SessionLoginResponse = SessionConsumeResponse;
+
 /** GET /api/session/me response. */
 export type SessionMeResponse =
   | {

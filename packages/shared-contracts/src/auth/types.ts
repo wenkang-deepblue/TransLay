@@ -10,6 +10,7 @@ export interface UserSummary {
   readonly google_subject_id: string;
   readonly email: string | null;
   readonly display_name: string | null;
+  readonly avatar_url: string | null;
 }
 
 /** Verified Google identity extracted from token validation. */
@@ -17,6 +18,7 @@ export interface GoogleIdentity {
   readonly google_subject_id: GoogleSubjectId;
   readonly email: string | null;
   readonly display_name: string | null;
+  readonly avatar_url: string | null;
 }
 
 /** Authenticated request context attached after token verification. */

@@ -3,8 +3,11 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="translay-google-client-id" content="" />
 <title>Terms of Service — TransLay</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://accounts.google.com">
+<link rel="preconnect" href="https://accounts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css" />
 </head>
@@ -28,6 +31,7 @@
       </span>
       <span>TransLay</span>
     </a>
+    <div data-legal-auth-slot class="google-signin-slot"></div>
   </div>
 </header>
 
@@ -80,5 +84,9 @@
     </div>
   </div>
 </footer>
+<script src="js/landing-config.js?v=2"></script>
+<script src="js/landing-session.js?v=2"></script>
+<script src="js/landing-auth.js?v=2"></script>
+<script src="js/legal-auth-shell.js?v=1"></script>
 </body>
 </html>

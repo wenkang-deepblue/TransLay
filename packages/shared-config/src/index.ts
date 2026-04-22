@@ -28,6 +28,18 @@ function optionalBooleanEnv(name: string, fallback: boolean): boolean {
   throw new Error(`Environment variable ${name} must be a boolean, got: ${raw}`);
 }
 
+function optionalListEnv(name: string, fallback: readonly string[] = []): readonly string[] {
+  const raw = process.env[name];
+  if (raw === undefined) {
+    return fallback;
+  }
+
+  return raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
+
 function optionalIntEnv(name: string, fallback: number): number {
   const raw = process.env[name];
   if (raw === undefined) {
@@ -96,6 +108,13 @@ export function loadConfig() {
   const sessionSecret = requireEnv("SESSION_SECRET");
   const kmsKeyName = process.env.KMS_KEY_NAME ?? null;
   const internalCronSecret = process.env.INTERNAL_CRON_SECRET ?? null;
+  const googleWebClientId = optionalEnv("LANDING_GOOGLE_WEB_CLIENT_ID", "").trim();
+  const googleIdTokenAudiences = Array.from(
+    new Set([
+      googleWebClientId,
+      ...optionalListEnv("GOOGLE_ID_TOKEN_ALLOWED_AUDIENCES"),
+    ].filter((value) => value.length > 0))
+  );
 
   // S10: SESSION_SECRET must be at least 32 characters
   if (sessionSecret.length < 32) {
@@ -112,6 +131,10 @@ export function loadConfig() {
   // S10: WORKER_URL must be set in production
   if (nodeEnv === "production" && !workerUrl) {
     throw new Error("WORKER_URL is required in production");
+  }
+
+  if (nodeEnv === "production" && !googleWebClientId) {
+    throw new Error("LANDING_GOOGLE_WEB_CLIENT_ID is required in production");
   }
 
   return {
@@ -153,6 +176,11 @@ export function loadConfig() {
     },
 
     domain: optionalEnv("PRODUCTION_DOMAIN", "your-domain.example.com"),
+
+    publicAuth: {
+      googleWebClientId,
+      googleIdTokenAudiences,
+    },
 
     entitlementCacheTtl: 300, // seconds, frozen decision
 
