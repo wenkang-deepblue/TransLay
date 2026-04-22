@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://accounts.google.com">
 <link rel="preconnect" href="https://accounts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="styles.css?v=8" />
 </head>
 <body>
 <div class="bg-stage" aria-hidden>
@@ -24,14 +24,15 @@
   <div class="container topbar-inner">
     <a class="brand" href="/">
       <span class="brand-mark">
-        <svg viewBox="0 0 24 24" fill="none">
-          <path d="M5 7h6M8 5v2M6 13l4-6 4 6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M12 17l3-3 4 4 3-3" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>
-        </svg>
+        <img class="brand-mark-image" src="assets/TransLay-logo_48px.png" alt="">
       </span>
       <span>TransLay</span>
     </a>
-    <div data-legal-auth-slot class="google-signin-slot"></div>
+    <div class="nav-links" aria-hidden="true"></div>
+    <div class="topbar-actions">
+      <div data-legal-auth-slot class="google-signin-slot"></div>
+      <div data-legal-settings-slot></div>
+    </div>
   </div>
 </header>
 
@@ -53,18 +54,23 @@
 
 <footer class="footer">
   <div class="container">
-    <div class="footer-bottom" style="border-top:none;padding-top:0">
-      <div>© 2026 TransLay. All rights reserved.</div>
+      <div class="footer-bottom footer-bottom-single">
+      <div class="footer-left-group">
+        <a class="brand footer-brand" href="/"><span class="brand-mark"><img class="brand-mark-image" src="assets/TransLay-logo_48px.png" alt=""></span><span>TransLay</span></a>
+        <div data-legal-footer-copyright>© 2026 example.com All rights reserved.</div>
+        <a class="footer-support-link" href="mailto:support@example.com?subject=TransLay%20Support%20Needed">support@example.com</a>
+      </div>
       <div class="footer-legal">
-        <a href="/terms">Terms of Service</a>
-        <a href="/privacy">Privacy Policy</a>
+        <a href="/terms" data-legal-footer-terms>Terms of Service</a>
+        <a href="/privacy" data-legal-footer-privacy>Privacy Policy</a>
       </div>
     </div>
   </div>
 </footer>
+<script src="i18n.js?v=9"></script>
 <script src="js/landing-config.js?v=2"></script>
-<script src="js/landing-session.js?v=2"></script>
+<script src="js/landing-session.js?v=4"></script>
 <script src="js/landing-auth.js?v=2"></script>
-<script src="js/legal-auth-shell.js?v=1"></script>
+<script src="js/legal-auth-shell.js?v=6"></script>
 </body>
 </html>

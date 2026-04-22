@@ -1,4 +1,6 @@
 // Features, demo, pricing, FAQ, CTA sections
+const FAQ_SUPPORT_EMAIL = "support@example.com";
+const FAQ_SUPPORT_SUBJECT = "TransLay Support Needed";
 
 function FeatureIcon({ name }) {
   const icons = {
@@ -60,7 +62,7 @@ function DemoSection({ t }) {
         <div className="section-head">
           <Reveal><span className="kicker"><span className="dot" />{t.demo.kicker}</span></Reveal>
           <Reveal delay={60}><h2 className="section-title">{t.demo.title}</h2></Reveal>
-          <Reveal delay={120}><p className="section-sub">{t.demo.subtitle}</p></Reveal>
+          {t.demo.subtitle ? <Reveal delay={120}><p className="section-sub">{t.demo.subtitle}</p></Reveal> : null}
         </div>
         <Reveal delay={180}>
           <div className="card" style={{padding: 20, maxWidth: 1020, margin: "0 auto"}}>
@@ -153,8 +155,37 @@ function PricingSection({ t }) {
   );
 }
 
+function renderFaqAnswer(answer) {
+  const supportEmail =
+    typeof window.SUPPORT_EMAIL === "string" && window.SUPPORT_EMAIL.trim()
+      ? window.SUPPORT_EMAIL.trim()
+      : FAQ_SUPPORT_EMAIL;
+  const supportSubject =
+    typeof window.SUPPORT_SUBJECT === "string" && window.SUPPORT_SUBJECT.trim()
+      ? window.SUPPORT_SUBJECT.trim()
+      : FAQ_SUPPORT_SUBJECT;
+  const mailtoHref = `mailto:${supportEmail}?subject=${encodeURIComponent(supportSubject)}`;
+
+  const parts = String(answer || "").split(supportEmail);
+  if (parts.length === 1) {
+    return answer;
+  }
+
+  return parts.flatMap((part, index) => {
+    if (index === parts.length - 1) {
+      return part;
+    }
+    return [
+      part,
+      <a key={`support-${index}`} href={mailtoHref} style={{color: "var(--accent-2)"}}>
+        {supportEmail}
+      </a>,
+    ];
+  });
+}
+
 function FAQItem({ q, a, idx }) {
-  const [open, setOpen] = useState(idx === 0);
+  const [open, setOpen] = useState(false);
   return (
     <Reveal delay={idx * 50}>
       <div className="card" style={{padding: 0, overflow: "hidden", marginBottom: 12}}>
@@ -168,8 +199,8 @@ function FAQItem({ q, a, idx }) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="var(--accent-2)" strokeWidth="2" strokeLinecap="round"/></svg>
           </span>
         </button>
-        <div style={{maxHeight: open ? 280 : 0, overflow: "hidden", transition: "max-height 0.4s ease"}}>
-          <div style={{padding: "0 26px 22px", color: "var(--text-soft)", fontSize: 15, lineHeight: 1.65}}>{a}</div>
+        <div style={{maxHeight: open ? 420 : 0, overflow: "hidden", transition: "max-height 0.4s ease"}}>
+          <div style={{padding: "0 26px 22px", color: "var(--text-soft)", fontSize: 15, lineHeight: 1.65}}>{renderFaqAnswer(a)}</div>
         </div>
       </div>
     </Reveal>
@@ -182,6 +213,9 @@ function FAQSection({ t }) {
     { q: t.faq.q2, a: t.faq.a2 },
     { q: t.faq.q3, a: t.faq.a3 },
     { q: t.faq.q4, a: t.faq.a4 },
+    { q: t.faq.q5, a: t.faq.a5 },
+    { q: t.faq.q6, a: t.faq.a6 },
+    { q: t.faq.q7, a: t.faq.a7 },
   ];
   return (
     <section id="faq" className="section">

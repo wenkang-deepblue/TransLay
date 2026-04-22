@@ -16,6 +16,7 @@
       padding: 16px;
       background: #fff;
       min-height: 100vh;
+      overflow-x: hidden;
     }
 
     /* ── Header ── */
@@ -148,7 +149,9 @@
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
-      transition: background 0.15s, opacity 0.15s;
+      transition: background 0.15s, opacity 0.15s, transform 0.15s;
+      transform-origin: center center;
+      will-change: transform;
     }
     .btn:disabled {
       opacity: 0.5;
@@ -158,24 +161,24 @@
       background: #4285f4;
       color: #fff;
     }
-    .btn-primary:hover:not(:disabled) { background: #3367d6; }
+    .btn-primary:hover:not(:disabled) { background: #3367d6; transform: scale(1.02); }
     .btn-secondary {
       background: #f1f3f4;
       color: #202124;
       margin-top: 8px;
     }
-    .btn-secondary:hover:not(:disabled) { background: #e8eaed; }
+    .btn-secondary:hover:not(:disabled) { background: #e8eaed; transform: scale(1.02); }
     #resubmitBtn {
       background: #f9ba02;
       color: #fff;
     }
-    #resubmitBtn:hover:not(:disabled) { background: #e0a700; }
+    #resubmitBtn:hover:not(:disabled) { background: #e0a700; transform: scale(1.02); }
     .btn-danger {
       background: #d93025;
       color: #fff;
       margin-top: 10px;
     }
-    .btn-danger:hover:not(:disabled) { background: #b3261e; }
+    .btn-danger:hover:not(:disabled) { background: #b3261e; transform: scale(1.02); }
     .btn-inline {
       width: auto;
       min-width: 120px;
@@ -249,8 +252,11 @@
       color: #1967d2;
       text-decoration: none;
       font-weight: 500;
+      transition: transform 0.15s, text-decoration-color 0.15s;
+      transform-origin: center center;
+      will-change: transform;
     }
-    .result-link:hover { text-decoration: underline; }
+    .result-link:hover { text-decoration: underline; transform: scale(1.02); }
     .result-task-id {
       display: none;
       margin-top: 10px;
@@ -286,10 +292,12 @@
       cursor: pointer;
       opacity: 0.8;
       transition: opacity 0.15s, transform 0.15s;
+      transform-origin: center center;
+      will-change: transform;
     }
     .copy-task-id-btn:hover {
       opacity: 1;
-      transform: scale(1.05);
+      transform: scale(1.02);
     }
     .copy-task-id-btn svg {
       width: 14px;
@@ -449,11 +457,17 @@
       font-size: 12px;
       color: #1967d2;
       text-decoration: none;
-      transition: color 0.15s, text-decoration-color 0.15s;
+      transition: color 0.15s, text-decoration-color 0.15s, transform 0.15s;
+      transform-origin: center center;
+      will-change: transform;
     }
     .support-link:hover {
       color: #174ea6;
       text-decoration: underline;
+      transform: scale(1.02);
+    }
+    .support-link-secondary {
+      margin-top: 8px;
     }
   </style>
 </head>
@@ -606,6 +620,14 @@
         target="_blank"
       >
         Questions? Support Needed.
+      </a>
+      <a
+        id="officialWebsiteLink"
+        class="support-link support-link-secondary"
+        href="#"
+        onclick="handleVisitOfficialWebsite(event)"
+      >
+        Visit TransLay Official Website
       </a>
     </div>
 
@@ -1409,6 +1431,20 @@
 
     function handleManageSubscription() {
       openPortal('manage_subscription');
+    }
+
+    function handleVisitOfficialWebsite(event) {
+      if (event) {
+        event.preventDefault();
+      }
+      google.script.run
+        .withSuccessHandler(function(url) {
+          window.open(url, '_blank');
+        })
+        .withFailureHandler(function(err) {
+          showError('Failed to open official website: ' + err.message);
+        })
+        .getOfficialWebsiteUrl();
     }
 
     function openPortal(reason) {

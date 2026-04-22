@@ -197,6 +197,12 @@ test("sessionLoginHandler creates a portal session and returns avatar without ex
     "https://lh3.googleusercontent.com/a/example-avatar"
   );
   assert.match(String(state.headers["Set-Cookie"] ?? ""), /__Host-translay_sid=/);
+  assert.equal(
+    state.headers["Cache-Control"],
+    "private, no-store, max-age=0"
+  );
+  assert.equal(state.headers.Pragma, "no-cache");
+  assert.equal(state.headers.Vary, "Cookie, Authorization");
 
   assert.deepEqual(state.body, {
     ok: true,
@@ -395,6 +401,12 @@ test("sessionMeHandler returns avatar_url from the current portal session snapsh
   await handler(req, res);
 
   assert.equal(state.statusCode, 200);
+  assert.equal(
+    state.headers["Cache-Control"],
+    "private, no-store, max-age=0"
+  );
+  assert.equal(state.headers.Pragma, "no-cache");
+  assert.equal(state.headers.Vary, "Cookie, Authorization");
   assert.deepEqual(state.body, {
     signed_in: true,
     user: {
@@ -405,5 +417,25 @@ test("sessionMeHandler returns avatar_url from the current portal session snapsh
     },
     plan_type: "free",
     subscription_status: "active",
+  });
+});
+
+test("sessionMeHandler returns signed out with no-store headers when there is no portal session", async () => {
+  const pool = makePool();
+  const handler = sessionMeHandler(pool);
+  const req = {} as Request;
+  const { res, state } = makeResponse();
+
+  await handler(req, res);
+
+  assert.equal(state.statusCode, 200);
+  assert.equal(
+    state.headers["Cache-Control"],
+    "private, no-store, max-age=0"
+  );
+  assert.equal(state.headers.Pragma, "no-cache");
+  assert.equal(state.headers.Vary, "Cookie, Authorization");
+  assert.deepEqual(state.body, {
+    signed_in: false,
   });
 });

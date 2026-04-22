@@ -100,6 +100,15 @@ function getPortalUrl(reason) {
 }
 
 /**
+ * Returns the TransLay official website URL with a one-time ticket.
+ * @returns {string} portal_url
+ */
+function getOfficialWebsiteUrl() {
+  var ticket = createPortalTicket('/', 'official_website');
+  return ticket.portal_url;
+}
+
+/**
  * C7: Idempotency key generation uses google_subject_id from the control plane.
  * The Add-on generates a client-side key for deduplication, but the real
  * idempotency enforcement happens server-side with google_subject_id.

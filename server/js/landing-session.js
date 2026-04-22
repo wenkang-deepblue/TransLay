@@ -1,4 +1,8 @@
 (() => {
+  const AUTH_SNAPSHOT_KEY = "translay.portal-auth.snapshot.v1";
+  const AUTH_SNAPSHOT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  const SNAPSHOT_TEXT_MAX_LENGTH = 256;
+
   function getApiBaseUrl() {
     const apiBaseUrl = window.TransLayLandingConfig?.apiBaseUrl;
     return typeof apiBaseUrl === "string" && apiBaseUrl.trim() ? apiBaseUrl.trim() : "/api";
@@ -20,6 +24,7 @@
   async function request(path, { method = "GET", headers = {}, body } = {}) {
     const response = await fetch(buildApiUrl(path), {
       method,
+      cache: "no-store",
       headers: {
         ...(body ? { "Content-Type": "application/json" } : {}),
         ...headers,
@@ -44,6 +49,22 @@
       subscriptionStatus: "active",
       errorMessage,
     };
+  }
+
+  function getSnapshotStorage() {
+    try {
+      return window.localStorage;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function sanitizeSnapshotText(value) {
+    if (typeof value !== "string") {
+      return null;
+    }
+
+    return value.slice(0, SNAPSHOT_TEXT_MAX_LENGTH);
   }
 
   function normalizeSignedInState(payload) {
@@ -71,6 +92,118 @@
     }
 
     return buildSignedOutState("Unable to determine sign-in state.");
+  }
+
+  function buildStoredSnapshot(state) {
+    if (state?.status !== "signed_in" || !state.user?.googleSubjectId) {
+      return null;
+    }
+
+    return {
+      version: 1,
+      expiresAtMs: Date.now() + AUTH_SNAPSHOT_TTL_MS,
+      user: {
+        googleSubjectId: state.user.googleSubjectId,
+        email: state.user.email ?? null,
+        displayName: state.user.displayName ?? null,
+        avatarUrl: state.user.avatarUrl ?? null,
+      },
+      planType: state.planType ?? "free",
+      subscriptionStatus: state.subscriptionStatus ?? "active",
+    };
+  }
+
+  function readAuthSnapshot() {
+    const storage = getSnapshotStorage();
+    if (!storage) {
+      return null;
+    }
+
+    try {
+      const raw = storage.getItem(AUTH_SNAPSHOT_KEY);
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = JSON.parse(raw);
+      if (parsed?.version !== 1) {
+        storage.removeItem(AUTH_SNAPSHOT_KEY);
+        return null;
+      }
+
+      const expiresAtMs = Number(parsed?.expiresAtMs ?? 0);
+      if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+        storage.removeItem(AUTH_SNAPSHOT_KEY);
+        return null;
+      }
+
+      const googleSubjectId =
+        typeof parsed?.user?.googleSubjectId === "string"
+          ? parsed.user.googleSubjectId.trim()
+          : "";
+      if (!googleSubjectId) {
+        storage.removeItem(AUTH_SNAPSHOT_KEY);
+        return null;
+      }
+
+      return {
+        status: "signed_in",
+        user: {
+          googleSubjectId,
+          email: sanitizeSnapshotText(parsed?.user?.email),
+          displayName: sanitizeSnapshotText(parsed?.user?.displayName),
+          avatarUrl: sanitizeSnapshotText(parsed?.user?.avatarUrl),
+        },
+        planType: typeof parsed?.planType === "string" ? parsed.planType : "free",
+        subscriptionStatus:
+          typeof parsed?.subscriptionStatus === "string"
+            ? parsed.subscriptionStatus
+            : "active",
+        errorMessage: "",
+      };
+    } catch (_) {
+      try {
+        storage.removeItem(AUTH_SNAPSHOT_KEY);
+      } catch (_) {}
+      return null;
+    }
+  }
+
+  function writeAuthSnapshot(state) {
+    const storage = getSnapshotStorage();
+    const snapshot = buildStoredSnapshot(state);
+    if (!storage || !snapshot) {
+      return;
+    }
+
+    try {
+      storage.setItem(AUTH_SNAPSHOT_KEY, JSON.stringify(snapshot));
+    } catch (_) {
+      // Best-effort UI hydration only.
+    }
+  }
+
+  function clearAuthSnapshot() {
+    const storage = getSnapshotStorage();
+    if (!storage) {
+      return;
+    }
+
+    try {
+      storage.removeItem(AUTH_SNAPSHOT_KEY);
+    } catch (_) {
+      // Best-effort UI hydration only.
+    }
+  }
+
+  function rememberSessionState(payload) {
+    const state = normalizeSessionState(payload);
+    if (state.status === "signed_in") {
+      writeAuthSnapshot(state);
+    } else {
+      clearAuthSnapshot();
+    }
+    return state;
   }
 
   function getTicketFromLocation(locationLike = window.location) {
@@ -120,6 +253,10 @@
   window.TransLayLandingSession = {
     buildSignedOutState,
     normalizeSessionState,
+    rememberSessionState,
+    readAuthSnapshot,
+    writeAuthSnapshot,
+    clearAuthSnapshot,
     getTicketFromLocation,
     stripTicketFromUrl,
     fetchSessionMe,

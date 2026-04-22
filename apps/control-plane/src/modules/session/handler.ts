@@ -22,6 +22,12 @@ import { assertMultiOk } from "../../utils/redis-helpers";
 const TICKET_TTL = 60;
 const SESSION_TTL = 7 * 24 * 60 * 60; // 7 days
 
+function setSessionNoStoreHeaders(res: Response): void {
+  res.setHeader("Cache-Control", "private, no-store, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Vary", "Cookie, Authorization");
+}
+
 function generateSecureId(): string {
   return crypto.randomBytes(32).toString("hex");
 }
@@ -170,6 +176,7 @@ function buildPortalSessionResponse(
 
 export function sessionStartHandler(redis: Redis, config: AppConfig) {
   return async (req: Request, res: Response) => {
+    setSessionNoStoreHeaders(res);
     const auth = req.authContext;
     if (!auth) {
       sendError(res, "UNAUTHORIZED");
@@ -213,6 +220,7 @@ export function sessionStartHandler(redis: Redis, config: AppConfig) {
 
 export function sessionConsumeHandler(pool: Pool, redis: Redis, config: AppConfig) {
   return async (req: Request, res: Response) => {
+    setSessionNoStoreHeaders(res);
     const { ticket } = req.body ?? {};
     if (!ticket || typeof ticket !== "string") {
       sendError(res, "INVALID_TICKET", "Ticket is required");
@@ -338,6 +346,7 @@ export function sessionLoginHandler(
   upsertUserFn: (pool: Pool, identity: GoogleIdentity) => Promise<UserId> = upsertUser
 ) {
   return async (req: Request, res: Response) => {
+    setSessionNoStoreHeaders(res);
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       sendError(res, "UNAUTHORIZED");
@@ -425,6 +434,7 @@ export function sessionLoginHandler(
 
 export function sessionMeHandler(pool: Pool) {
   return async (req: Request, res: Response) => {
+    setSessionNoStoreHeaders(res);
     if (!req.portalSession) {
       const response: SessionMeResponse = { signed_in: false };
       res.json(response);
@@ -463,6 +473,7 @@ export function sessionMeHandler(pool: Pool) {
 
 export function sessionLogoutHandler(redis: Redis, config: AppConfig) {
   return async (req: Request, res: Response) => {
+    setSessionNoStoreHeaders(res);
     if (req.portalSession) {
       const cookies = parseCookies(req.headers?.cookie);
       const sessionId = cookies[config.session.cookieName];
