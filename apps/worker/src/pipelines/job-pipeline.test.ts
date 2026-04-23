@@ -5,6 +5,7 @@ import {
   __buildSlideBillingSettlementForTests,
   __computeProviderRetryDelayMsForTests,
   __hasPartialDeliveryForTests,
+  __resolveModelTargetLanguageForTests,
   __hasSlideExecutionWarningsForTests,
   __isRetryableProviderErrorForTests,
   __orderTranslatedNodesForWriteForTests,
@@ -13,6 +14,7 @@ import {
   __shouldFinalizeAsPartialSuccessForTests,
   __summarizeSlideExecutionForTests,
   __toSafePipelineMessageForTests,
+  __validateTargetLanguageOutputForTests,
 } from "./job-pipeline";
 import {
   initializeJobSlideResults,
@@ -222,6 +224,37 @@ test("write stage preserves available translated nodes when some nodes are missi
   assert.deepEqual(
     ordered.map((node) => node.node_id),
     ["n1", "n3"]
+  );
+});
+
+test("worker resolves preset target language to a natural-language label for model prompts", () => {
+  assert.equal(__resolveModelTargetLanguageForTests("Greek"), "Greek");
+  assert.equal(__resolveModelTargetLanguageForTests("EL"), "Greek");
+  assert.equal(__resolveModelTargetLanguageForTests("Tibetan"), "Tibetan");
+});
+
+test("target-language validation flags obvious Greek-to-English mismatches", () => {
+  assert.deepEqual(
+    __validateTargetLanguageOutputForTests("Greek", [
+      "Hello team, this slide stayed in English instead of the requested language.",
+    ]),
+    {
+      ok: false,
+      checked: true,
+      reason: "Translated output does not appear to be in Greek.",
+    }
+  );
+});
+
+test("target-language validation does not block valid Greek script output", () => {
+  assert.deepEqual(
+    __validateTargetLanguageOutputForTests("Greek", [
+      "Γεια σας ομάδα, αυτή η διαφάνεια μεταφράστηκε σωστά στα ελληνικά.",
+    ]),
+    {
+      ok: true,
+      checked: true,
+    }
   );
 });
 

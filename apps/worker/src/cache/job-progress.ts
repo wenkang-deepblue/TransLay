@@ -1,5 +1,5 @@
 import type Redis from "ioredis";
-import type { JobStatus } from "@translay/shared-contracts";
+import type { JobPauseStatus, JobStatus } from "@translay/shared-contracts";
 
 const PROGRESS_TTL = 86400; // 24 hours
 
@@ -7,7 +7,7 @@ export async function setJobProgress(
   redis: Redis,
   jobId: string,
   data: {
-    status: JobStatus;
+    status: JobStatus | JobPauseStatus;
     progress_percent: number;
     current_step?: string;
     details?: string;

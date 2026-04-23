@@ -26,8 +26,12 @@ export const JOB_STATUSES = [
 ] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
 
+export const JOB_PAUSE_STATUSES = ["pausing", "paused"] as const;
+export type JobPauseStatus = (typeof JOB_PAUSE_STATUSES)[number];
+
 /** Statuses that indicate a job is still in progress (not terminal). */
 export type JobInProgressStatus = "pending" | "queued" | "extracting" | "translating" | "writing";
+export type JobLiveStatus = JobInProgressStatus | JobPauseStatus;
 
 export const JOB_EXECUTION_STAGES = [
   "extract",
@@ -178,7 +182,7 @@ export interface CreateJobResponse {
 /** GET /api/jobs/:jobId — in-progress response (status is NOT completed or failed). */
 export interface JobProgressResponse {
   readonly job_id: string;
-  readonly status: JobInProgressStatus;
+  readonly status: JobLiveStatus;
   readonly progress_percent: number;
   readonly current_stage?: JobExecutionStage;
   readonly stage_status?: JobStageStatus;
@@ -249,6 +253,30 @@ export type JobStatusResponse =
 export interface CancelJobResponse {
   readonly job_id: string;
   readonly status: "cancel_requested" | "canceled" | "already_completed" | "already_failed" | "already_canceled";
+  readonly message: string;
+}
+
+/** POST /api/jobs/:jobId/pause response. */
+export interface PauseJobResponse {
+  readonly job_id: string;
+  readonly status:
+    | "pause_requested"
+    | "paused"
+    | "already_completed"
+    | "already_failed"
+    | "already_canceled";
+  readonly message: string;
+}
+
+/** POST /api/jobs/:jobId/resume response. */
+export interface ResumeJobResponse {
+  readonly job_id: string;
+  readonly status:
+    | "resumed"
+    | "already_running"
+    | "already_completed"
+    | "already_failed"
+    | "already_canceled";
   readonly message: string;
 }
 

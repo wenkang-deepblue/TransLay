@@ -20,6 +20,8 @@ import {
   cancelJobHandler,
   createJobHandler,
   getJobHandler,
+  pauseJobHandler,
+  resumeJobHandler,
   sweepHostOauthTokensHandler,
 } from "./modules/jobs/handler";
 import { asyncHandler } from "./utils/async-handler";
@@ -133,6 +135,18 @@ app.get(
   googleAuth,
   userReadRateLimit,
   asyncHandler(getJobHandler(pool, redis))
+);
+app.post(
+  "/api/jobs/:jobId/pause",
+  googleAuth,
+  userWriteRateLimit,
+  asyncHandler(pauseJobHandler(pool, redis, config))
+);
+app.post(
+  "/api/jobs/:jobId/resume",
+  googleAuth,
+  userWriteRateLimit,
+  asyncHandler(resumeJobHandler(pool, redis, config))
 );
 app.post(
   "/api/jobs/:jobId/cancel",

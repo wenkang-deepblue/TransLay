@@ -560,6 +560,96 @@ test("job handler returns in-progress billed slide count for cancel warnings", (
   });
 });
 
+test("job handler surfaces pausing progress from redis without losing billed-unit progress", () => {
+  const response = __buildJobStatusResponseForTests(
+    {
+      ...createBaseJob(),
+      status: "translating",
+      provisionally_billed_units: 2.5,
+      total_units_billed: 2.5,
+      completed_at: null,
+    },
+    [],
+    {
+      status: "pausing",
+      progress_percent: "64",
+      current_step: "pausing",
+      details: "Pause requested. The worker will pause at the next safe checkpoint.",
+    }
+  );
+
+  assert.deepEqual(response, {
+    job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+    status: "pausing",
+    progress_percent: 64,
+    translated_units_billed: 2.5,
+    current_step: "pausing",
+    details: "Pause requested. The worker will pause at the next safe checkpoint.",
+  });
+});
+
+test("job handler surfaces paused progress from redis while keeping current stage metadata", () => {
+  const response = __buildJobStatusResponseForTests(
+    {
+      ...createBaseJob(),
+      status: "translating",
+      current_stage: "authority",
+      stage_status: "running",
+      stage_attempt: 4,
+      provisionally_billed_units: 5,
+      total_units_billed: 5,
+      completed_at: null,
+    },
+    [],
+    {
+      status: "paused",
+      progress_percent: "82",
+      current_step: "paused",
+      details: "Translation paused. Confirm cancellation or continue to resume.",
+    }
+  );
+
+  assert.deepEqual(response, {
+    job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+    status: "paused",
+    progress_percent: 82,
+    translated_units_billed: 5,
+    current_stage: "authority",
+    stage_status: "running",
+    stage_attempt: 4,
+    current_step: "paused",
+    details: "Translation paused. Confirm cancellation or continue to resume.",
+  });
+});
+
+test("job handler ignores terminal redis status until the database job is terminal", () => {
+  const response = __buildJobStatusResponseForTests(
+    {
+      ...createBaseJob(),
+      status: "translating",
+      provisionally_billed_units: 5,
+      total_units_billed: 5,
+      completed_at: null,
+    },
+    [],
+    {
+      status: "completed_with_warnings",
+      progress_percent: "100",
+      current_step: "finalize",
+      details: "Translation completed with warnings.",
+    }
+  );
+
+  assert.deepEqual(response, {
+    job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+    status: "translating",
+    progress_percent: 100,
+    translated_units_billed: 5,
+    current_step: "finalize",
+    details: "Translation completed with warnings.",
+  });
+});
+
 test("job handler returns canceled payload with translated-slide billing message", () => {
   const response = __buildJobStatusResponseForTests({
     ...createBaseJob(),

@@ -209,10 +209,10 @@ function normalizeLanguageInput(input: string): string {
     .replace(/[_\s-]+/g, " ");
 }
 
-/** Attempts to match a natural-language input to a preset language code. */
-export function matchPresetLanguage(input: string): PresetLanguageCode | null {
-  const normalized = normalizeLanguageInput(input);
-  if (!normalized) {
+function findPresetLanguageByNormalizedInput(
+  normalizedInput: string
+): (typeof PRESET_LANGUAGES)[number] | null {
+  if (!normalizedInput) {
     return null;
   }
 
@@ -224,10 +224,162 @@ export function matchPresetLanguage(input: string): PresetLanguageCode | null {
       lang.bcp47_tag,
       ...lang.aliases,
     ];
-    if (candidates.some((candidate) => normalizeLanguageInput(candidate) === normalized)) {
-      return lang.language_code;
+    if (
+      candidates.some((candidate) => normalizeLanguageInput(candidate) === normalizedInput)
+    ) {
+      return lang;
     }
   }
 
   return null;
+}
+
+/** Attempts to match a natural-language input to a preset language code. */
+export function matchPresetLanguage(input: string): PresetLanguageCode | null {
+  const normalized = normalizeLanguageInput(input);
+  return findPresetLanguageByNormalizedInput(normalized)?.language_code ?? null;
+}
+
+/** Resolves the user-facing language label that should be passed to the model. */
+export function resolveModelTargetLanguage(input: string): string {
+  const normalized = normalizeLanguageInput(input);
+  const preset = findPresetLanguageByNormalizedInput(normalized);
+  if (preset) {
+    return preset.display_name_en;
+  }
+
+  return input.trim();
+}
+
+type ScriptValidationProfile = {
+  readonly labels: readonly string[];
+  readonly targetScriptPattern: RegExp;
+  readonly fallbackScriptPattern?: RegExp;
+};
+
+const SCRIPT_VALIDATION_PROFILES: readonly ScriptValidationProfile[] = [
+  {
+    labels: ["arabic", "ar", "阿拉伯语"],
+    targetScriptPattern: /\p{Script=Arabic}/gu,
+    fallbackScriptPattern: /\p{Script=Latin}/gu,
+  },
+  {
+    labels: ["greek", "el", "希腊语"],
+    targetScriptPattern: /\p{Script=Greek}/gu,
+    fallbackScriptPattern: /\p{Script=Latin}/gu,
+  },
+  {
+    labels: ["hebrew", "he", "希伯来语"],
+    targetScriptPattern: /\p{Script=Hebrew}/gu,
+    fallbackScriptPattern: /\p{Script=Latin}/gu,
+  },
+  {
+    labels: ["russian", "ru", "俄语"],
+    targetScriptPattern: /\p{Script=Cyrillic}/gu,
+    fallbackScriptPattern: /\p{Script=Latin}/gu,
+  },
+  {
+    labels: [
+      "simplified chinese",
+      "traditional chinese",
+      "zh hans",
+      "zh hant",
+      "简体中文",
+      "繁体中文",
+    ],
+    targetScriptPattern: /\p{Script=Han}/gu,
+    fallbackScriptPattern: /\p{Script=Latin}/gu,
+  },
+  {
+    labels: ["japanese", "ja", "日语", "日文"],
+    targetScriptPattern: /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/gu,
+    fallbackScriptPattern: /\p{Script=Latin}/gu,
+  },
+  {
+    labels: ["korean", "ko", "韩语", "韩文"],
+    targetScriptPattern: /\p{Script=Hangul}/gu,
+    fallbackScriptPattern: /\p{Script=Latin}/gu,
+  },
+  {
+    labels: ["tibetan", "bo", "藏语", "藏文"],
+    targetScriptPattern: /\p{Script=Tibetan}/gu,
+    fallbackScriptPattern: /\p{Script=Latin}/gu,
+  },
+] as const;
+
+function countMatches(text: string, pattern: RegExp): number {
+  const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+  const regex = new RegExp(pattern.source, flags);
+  return [...text.matchAll(regex)].length;
+}
+
+function findScriptValidationProfile(input: string): ScriptValidationProfile | null {
+  const normalized = normalizeLanguageInput(input);
+  if (!normalized) {
+    return null;
+  }
+
+  return (
+    SCRIPT_VALIDATION_PROFILES.find((profile) =>
+      profile.labels.some((label) => normalizeLanguageInput(label) === normalized)
+    ) ?? null
+  );
+}
+
+export type TargetLanguageValidationResult =
+  | {
+      readonly ok: true;
+      readonly checked: boolean;
+    }
+  | {
+      readonly ok: false;
+      readonly checked: true;
+      readonly reason: string;
+    };
+
+/**
+ * Performs a lightweight script-based validation to catch obvious target-language mismatches
+ * without blocking custom languages that do not have a reliable script profile.
+ */
+export function validateTargetLanguageOutput(
+  targetLanguageInput: string,
+  translatedTexts: readonly string[]
+): TargetLanguageValidationResult {
+  const profile = findScriptValidationProfile(targetLanguageInput);
+  if (!profile) {
+    return { ok: true, checked: false };
+  }
+
+  const sample = translatedTexts
+    .map((text) => text.trim())
+    .filter((text) => text.length > 0)
+    .join("\n")
+    .slice(0, 4_000);
+  if (!sample) {
+    return { ok: true, checked: true };
+  }
+
+  const targetScriptChars = countMatches(sample, profile.targetScriptPattern);
+  const fallbackScriptChars = profile.fallbackScriptPattern
+    ? countMatches(sample, profile.fallbackScriptPattern)
+    : 0;
+  const significantChars = targetScriptChars + fallbackScriptChars;
+
+  if (targetScriptChars >= 4) {
+    return { ok: true, checked: true };
+  }
+
+  if (significantChars < 12) {
+    return { ok: true, checked: true };
+  }
+
+  if (targetScriptChars === 0 && fallbackScriptChars >= Math.ceil(significantChars * 0.6)) {
+    return {
+      ok: false,
+      checked: true,
+      reason: `Translated output does not appear to be in ${resolveModelTargetLanguage(targetLanguageInput)}.`,
+    };
+  }
+
+  return { ok: true, checked: true };
 }

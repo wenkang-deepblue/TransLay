@@ -3,7 +3,7 @@ import type { AppConfig } from "@translay/shared-config";
 import type { JobExecutionStage, TaskPayload, JobId } from "@translay/shared-contracts";
 
 let tasksClient: CloudTasksClient | null = null;
-type StageTaskKind = "stage" | "lease-retry";
+type StageTaskKind = "stage" | "lease-retry" | "resume";
 
 function getClient(): CloudTasksClient {
   if (!tasksClient) {
@@ -31,6 +31,8 @@ function buildStageTaskId(
   const normalizedStage = stage.replace(/_/g, "-");
   return taskKind === "lease-retry"
     ? `${String(jobId)}-${normalizedStage}-${stageAttempt}-lease-retry`
+    : taskKind === "resume"
+      ? `${String(jobId)}-${normalizedStage}-${stageAttempt}-resume`
     : `${String(jobId)}-${normalizedStage}-${stageAttempt}`;
 }
 

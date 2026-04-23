@@ -59,6 +59,7 @@
     const nav = translations?.nav || {};
     const footer = translations?.footer || {};
     const legal = translations?.legal || {};
+    const legalPages = translations?.legalPages || {};
 
     const assignText = (selector, value) => {
       if (typeof value !== "string" || !value.trim()) {
@@ -79,6 +80,35 @@
     assignText("[data-legal-footer-privacy]", footer.privacy);
     assignText("[data-legal-footer-copyright]", footer.copyright);
     assignText("[data-legal-back-home]", legal.back_home);
+
+    const documentRoot = document.querySelector("[data-legal-document]");
+    const page = documentRoot?.getAttribute("data-legal-page");
+    const doc = page ? legalPages?.[page] : null;
+    if (!documentRoot || !doc) {
+      return;
+    }
+
+    const introHtml = Array.isArray(doc.intro)
+      ? doc.intro.map((paragraph) => `<p>${paragraph}</p>`).join("")
+      : "";
+    const sectionsHtml = Array.isArray(doc.sections)
+      ? doc.sections.map((section) => {
+        const paragraphs = Array.isArray(section.paragraphs)
+          ? section.paragraphs.map((paragraph) => `<p>${paragraph}</p>`).join("")
+          : "";
+        return `<h2>${section.title || ""}</h2>${paragraphs}`;
+      }).join("")
+      : "";
+
+    documentRoot.innerHTML = `
+      <h1>${doc.title || ""}</h1>
+      <div class="meta">${doc.last_updated || ""}</div>
+      ${introHtml}
+      ${sectionsHtml}
+    `;
+    if (typeof doc.title === "string" && doc.title.trim()) {
+      document.title = doc.title;
+    }
   }
 
   function buildSignedInMarkup(state, translations) {

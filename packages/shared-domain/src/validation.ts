@@ -13,6 +13,70 @@ import {
 const MAX_TOTAL_PAGES = 500;
 /** Max comma-separated parts in a range expression. */
 const MAX_RANGE_PARTS = 50;
+/** Max length for target language input. */
+const MAX_TARGET_LANGUAGE_INPUT_LENGTH = 100;
+/** Keep custom language descriptions phrase-like rather than sentence-like. */
+const MAX_TARGET_LANGUAGE_TOKENS = 8;
+
+const TARGET_LANGUAGE_HARD_BLOCK_PATTERNS: readonly RegExp[] = [
+  /\b(ignore|disregard|forget|override|bypass)\b.{0,80}\b(previous|prior|above|all)\b.{0,60}\b(instruction|prompt|message|rule)s?\b/i,
+  /\b(reveal|show|print|display|dump|leak|expose)\b.{0,80}\b(system prompt|developer message|hidden instructions?|internal instructions?)\b/i,
+  /\b(role\s*:\s*(system|assistant|developer|user)|system prompt|developer message)\b.{0,80}\b(ignore|follow|respond|output|act as)\b/i,
+  /\b(return|output|respond)\b.{0,40}\b(only|exactly)\b.{0,20}\b(json|yaml|xml|markdown)\b/i,
+  /\b(do not translate|instead of translating|ignore the translation task)\b/i,
+  /\b(act as|you are now|pretend to be)\b.{0,60}\b(ai|assistant|language model|translator|gemini|chatgpt)\b/i,
+  /(忽略|无视|無視).{0,20}(之前|先前|以上|上面|前面).{0,20}(指令|说明|說明|提示|消息|讯息|訊息|规则|規則)/u,
+  /(系统提示|系統提示|开发者消息|開發者消息|隐藏指令|隱藏指令|内部指令|內部指令)/u,
+  /(只输出|只輸出|仅输出|僅輸出).{0,20}(json|yaml|xml|markdown)/iu,
+];
+
+const TARGET_LANGUAGE_DISALLOWED_CHARS = /[`"=:;{}[\]\\<>|]/u;
+const TARGET_LANGUAGE_ALLOWED_CHARS = /^[\p{L}\p{M}\p{N}\s\-()\/,&'.]+$/u;
+
+export function validateTargetLanguageInput(input: unknown): string | null {
+  if (typeof input !== "string" || input.length === 0) {
+    return "target_language_input is required";
+  }
+
+  if (input.length > MAX_TARGET_LANGUAGE_INPUT_LENGTH) {
+    return "target_language_input exceeds maximum length";
+  }
+
+  const normalized = normalizeTargetLanguageInput(input);
+  if (normalized.length === 0) {
+    return "target_language_input is required";
+  }
+
+  if (normalized.length < 2) {
+    return "target_language_input must be at least 2 characters";
+  }
+
+  if (/[\r\n\t]/u.test(input)) {
+    return "target_language_input must be a single-line language name or dialect description";
+  }
+
+  if (!/\p{L}/u.test(normalized)) {
+    return "target_language_input must contain letter characters";
+  }
+
+  if (TARGET_LANGUAGE_DISALLOWED_CHARS.test(normalized) || !TARGET_LANGUAGE_ALLOWED_CHARS.test(normalized)) {
+    return "target_language_input contains unsupported punctuation or control characters";
+  }
+
+  const tokenCount = normalized
+    .split(/[\s/,&()'.-]+/u)
+    .map((token) => token.trim())
+    .filter(Boolean).length;
+  if (tokenCount > MAX_TARGET_LANGUAGE_TOKENS) {
+    return "target_language_input must be a short language name or dialect description";
+  }
+
+  if (TARGET_LANGUAGE_HARD_BLOCK_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    return "target_language_input looks like prompt instructions, not a language name";
+  }
+
+  return null;
+}
 
 export const PAGE_RANGE_VALIDATION_ERROR_CODES = [
   "empty_input",
@@ -83,11 +147,10 @@ export function validateCreateJobRequest(body: unknown): string | null {
     return `source_language_mode must be one of: ${SOURCE_LANGUAGE_MODES.join(", ")}`;
   }
 
-  if (!req.target_language_input || typeof req.target_language_input !== "string")
-    return "target_language_input is required";
-
-  if (typeof req.target_language_input === "string" && req.target_language_input.length > 100)
-    return "target_language_input exceeds maximum length";
+  const targetLanguageError = validateTargetLanguageInput(req.target_language_input);
+  if (targetLanguageError) {
+    return targetLanguageError;
+  }
 
   if (!req.output_mode || !OUTPUT_MODES.includes(req.output_mode as OutputMode))
     return `output_mode must be one of: ${OUTPUT_MODES.join(", ")}`;
@@ -367,4 +430,12 @@ export function parsePageRangeDetailed(expr: string): PageRangeParseResult {
     sorted: true,
     validation_errors: [],
   };
+}
+
+function normalizeTargetLanguageInput(input: string): string {
+  return input
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
 }

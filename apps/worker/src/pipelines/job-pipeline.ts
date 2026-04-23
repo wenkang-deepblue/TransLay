@@ -17,6 +17,9 @@ import {
   billingPeriodKey,
   parsePageRange,
   buildJobCancelKey,
+  buildJobPauseKey,
+  resolveModelTargetLanguage,
+  validateTargetLanguageOutput,
 } from "@translay/shared-domain";
 import {
   claimJobStageLease,
@@ -124,6 +127,8 @@ const PROVIDER_RETRY_BASE_DELAY_MS = 500;
 const PROVIDER_RETRY_MAX_DELAY_MS = 2_000;
 const SPEAKER_NOTES_MAX_CHARS_PER_SLIDE = 5_000;
 const AUTHORITY_CHUNK_HEARTBEAT_INTERVAL_MS = 20_000;
+const PAUSE_POLL_INTERVAL_MS = 1_000;
+const PAUSE_HEARTBEAT_INTERVAL_MS = 15_000;
 
 type SlideBillingSettlementMode = "successful" | "failed" | "canceled";
 
@@ -693,6 +698,7 @@ async function runAuthorityStage(
     job.target_language_code ??
     matchPresetLanguage(job.target_language_input) ??
     job.target_language_input;
+  const targetLanguageForModel = resolveModelTargetLanguage(job.target_language_input);
   console.log(`Job ${job_id} route selected: ${route.provider}/${route.model}`);
   const llmDebugCapture = createLlmDebugCapture(pool, config, job_id);
   if (config.debug.captureLlmOutputs) {
@@ -905,7 +911,7 @@ async function runAuthorityStage(
           translateDeckAuthorityWithVertexGemini(config, {
             model: route.model,
             source_language: "auto",
-            target_language: targetLangCode,
+            target_language: targetLanguageForModel,
             deck_title: extractionWithLayoutHints.title,
             deck_plaintext_context: deckPlaintextContext,
             glossary_candidates: glossaryCandidates,
@@ -1012,7 +1018,7 @@ async function runAuthorityStage(
                 fillMissingAuthorityWithVertexGemini(config, {
                   model: route.model,
                   source_language: "auto",
-                  target_language: targetLangCode,
+                  target_language: targetLanguageForModel,
                   deck_title: extractionWithLayoutHints.title,
                   slide_index: slideIndex,
                   slide_plaintext_context: buildSlidePlaintextContext(slide),
@@ -1062,7 +1068,7 @@ async function runAuthorityStage(
     const notesTranslationTasks = startSpeakerNotesTranslationTasks(
       config,
       route.model,
-      targetLangCode,
+      targetLanguageForModel,
       extractionWithLayoutHints.title,
       glossaryCandidates,
       preparedSlides,
@@ -1121,7 +1127,7 @@ async function runAuthorityStage(
             materializeTranslatedNodesWithVertexGemini(config, {
               model: route.model,
               source_language: "auto",
-              target_language: targetLangCode,
+              target_language: targetLanguageForModel,
               deck_title: extractionWithLayoutHints.title,
               glossary_candidates: glossaryCandidates,
               node_summaries: group.node_summaries,
@@ -1226,6 +1232,14 @@ async function runAuthorityStage(
           `${provisionallyBilledUnits} slide(s) have been provisionally billed.`,
       });
       await assertNotCanceled(pool, redis, job, writeResult, provisionallyBilledUnits);
+    }
+
+    const bodyLanguageValidation = validateTargetLanguageOutput(
+      targetLanguageForModel,
+      translatedNodes.map((node) => node.translated_full_text)
+    );
+    if (!bodyLanguageValidation.ok) {
+      throw new PipelineError("TARGET_LANGUAGE_VALIDATION_FAILED", bodyLanguageValidation.reason);
     }
 
     let writableSlides = selectSlidesReadyForWrite(authorityReadySlides, slideResults, nodeResults!);
@@ -1355,6 +1369,25 @@ async function runAuthorityStage(
       if ("failure_reason_code" in outcome) {
         for (const noteNode of outcome.prepared_slide.note_nodes) {
           markNodeTranslationFailed(nodeResults!, noteNode.node_id, outcome.failure_reason_code);
+        }
+        markNotesFailure(
+          slideResults,
+          outcome.slide_index,
+          "slide_notes_translation_failed"
+        );
+        continue;
+      }
+      const notesLanguageValidation = validateTargetLanguageOutput(
+        targetLanguageForModel,
+        outcome.translated_nodes.map((node) => node.translated_full_text)
+      );
+      if (!notesLanguageValidation.ok) {
+        for (const noteNode of outcome.prepared_slide.note_nodes) {
+          markNodeTranslationFailed(
+            nodeResults!,
+            noteNode.node_id,
+            "TARGET_LANGUAGE_VALIDATION_FAILED"
+          );
         }
         markNotesFailure(
           slideResults,
@@ -1653,6 +1686,160 @@ async function assertNotCanceled(
   if (await isCancelRequested(pool, job.id)) {
     throw new CancellationRequestedError(writeResult, billedUnits);
   }
+
+  if (await redis.get(buildJobPauseKey(job.id))) {
+    await waitWhilePaused(pool, redis, job, writeResult, billedUnits);
+  }
+}
+
+async function waitWhilePaused(
+  pool: Pool,
+  redis: Redis,
+  job: NonNullable<Awaited<ReturnType<typeof getJobById>>>,
+  writeResult: WriteBackResult,
+  billedUnits: number
+): Promise<void> {
+  const progressKey = `job_progress:${job.id}`;
+  const snapshot = await redis.hgetall(progressKey);
+  const fallbackStatus = resolvePauseFallbackStatus(job.status, job.current_stage);
+  const progressPercent = parseProgressPercent(snapshot.progress_percent, fallbackStatus);
+  const resumeStatus = resolvePausedResumeStatus(snapshot.status, fallbackStatus);
+  const resumeStep = resolvePausedResumeStep(snapshot.current_step, job.current_stage, fallbackStatus);
+  const pauseDetail = "Translation paused. Confirm cancellation or continue to resume.";
+  const resumeDetail = "Resuming translation...";
+
+  await setJobProgress(redis, job.id, {
+    status: "paused",
+    progress_percent: progressPercent,
+    current_step: "paused",
+    details: pauseDetail,
+  });
+
+  let lastHeartbeatAt = 0;
+  while (true) {
+    if (await redis.get(buildJobCancelKey(job.id))) {
+      throw new CancellationRequestedError(writeResult, billedUnits);
+    }
+    if (await isCancelRequested(pool, job.id)) {
+      throw new CancellationRequestedError(writeResult, billedUnits);
+    }
+
+    const pauseRequested = await redis.get(buildJobPauseKey(job.id));
+    if (!pauseRequested) {
+      break;
+    }
+
+    if (
+      job.current_stage &&
+      job.stage_attempt > 0 &&
+      Date.now() - lastHeartbeatAt >= PAUSE_HEARTBEAT_INTERVAL_MS
+    ) {
+      await heartbeatJobStage(
+        pool,
+        job.id,
+        job.current_stage,
+        job.stage_attempt,
+        getStageLeaseSeconds(job.current_stage)
+      );
+      lastHeartbeatAt = Date.now();
+    }
+
+    await delay(PAUSE_POLL_INTERVAL_MS);
+  }
+
+  await setJobProgress(redis, job.id, {
+    status: resumeStatus,
+    progress_percent: progressPercent,
+    current_step: resumeStep,
+    details: resumeDetail,
+  });
+}
+
+function parseProgressPercent(rawValue: string | undefined, fallbackStatus: string): number {
+  const parsed = rawValue ? Number.parseInt(rawValue, 10) : Number.NaN;
+  if (Number.isFinite(parsed)) {
+    return parsed;
+  }
+
+  switch (fallbackStatus) {
+    case "extracting":
+      return 10;
+    case "translating":
+      return 45;
+    case "writing":
+      return 80;
+    case "queued":
+      return 0;
+    case "pending":
+    default:
+      return 0;
+  }
+}
+
+function resolvePauseFallbackStatus(
+  jobStatus: string,
+  currentStage: JobExecutionStage | null
+): "pending" | "queued" | "extracting" | "translating" | "writing" {
+  if (
+    jobStatus === "pending" ||
+    jobStatus === "queued" ||
+    jobStatus === "extracting" ||
+    jobStatus === "translating" ||
+    jobStatus === "writing"
+  ) {
+    return jobStatus;
+  }
+
+  switch (currentStage) {
+    case "extract":
+      return "extracting";
+    case "layout_semantics":
+    case "authority":
+      return "translating";
+    case "finalize":
+      return "writing";
+    default:
+      return "translating";
+  }
+}
+
+function resolvePausedResumeStatus(
+  snapshotStatus: string | undefined,
+  fallbackStatus: "pending" | "queued" | "extracting" | "translating" | "writing"
+): "pending" | "queued" | "extracting" | "translating" | "writing" {
+  if (
+    snapshotStatus === "pending" ||
+    snapshotStatus === "queued" ||
+    snapshotStatus === "extracting" ||
+    snapshotStatus === "translating" ||
+    snapshotStatus === "writing"
+  ) {
+    return snapshotStatus;
+  }
+  return fallbackStatus;
+}
+
+function resolvePausedResumeStep(
+  snapshotStep: string | undefined,
+  currentStage: JobExecutionStage | null,
+  fallbackStatus: "pending" | "queued" | "extracting" | "translating" | "writing"
+): string {
+  if (snapshotStep && snapshotStep !== "paused" && snapshotStep !== "pausing") {
+    return snapshotStep;
+  }
+
+  switch (currentStage) {
+    case "extract":
+      return "extracting_content";
+    case "layout_semantics":
+      return "layout_semantics";
+    case "authority":
+      return fallbackStatus === "writing" ? "writing_back" : "authority_pass";
+    case "finalize":
+      return "finalize";
+    default:
+      return fallbackStatus;
+  }
 }
 
 async function finalizeSuccessfulJob(
@@ -1669,10 +1856,8 @@ async function finalizeSuccessfulJob(
 ): Promise<void> {
   const client = await pool.connect();
   const finalWarnings = [...pipelineWarnings, ...writeResult.warnings];
-  const completedStatus = finalWarnings.length > 0 || hasSlideExecutionWarnings(slideResults) || hasPartialDelivery(slideResults)
-    ? "completed_with_warnings"
-    : "completed";
-  const completionDetail = buildSuccessfulCompletionDetail(finalWarnings.length, slideResults);
+  let completedStatus: "completed" | "completed_with_warnings" = "completed";
+  let completionDetail = "Translation completed successfully.";
   try {
     await client.query("BEGIN");
     if (nodeResults) {
@@ -1680,6 +1865,19 @@ async function finalizeSuccessfulJob(
     }
     const settlement = await settleSlideBilling(client, job, slideResults, "successful");
     const settledSlideResults = materializeSettledSlideResults(slideResults, settlement);
+    const settledSlideResultsMap = new Map(
+      settledSlideResults.map((slideResult) => [slideResult.slide_index, slideResult])
+    ) as ReturnType<typeof initializeJobSlideResults>;
+    completedStatus =
+      finalWarnings.length > 0 ||
+      hasSlideExecutionWarnings(settledSlideResultsMap) ||
+      hasPartialDelivery(settledSlideResultsMap)
+        ? "completed_with_warnings"
+        : "completed";
+    completionDetail = buildSuccessfulCompletionDetail(
+      finalWarnings.length,
+      settledSlideResultsMap
+    );
     await upsertJobSlideResults(client, jobId, settledSlideResults);
     if (nodeResults) {
       await upsertJobNodeResults(client, jobId, listJobNodeResults(nodeResults));
@@ -2345,6 +2543,17 @@ export function __orderTranslatedNodesForWriteForTests(
   return orderTranslatedNodes(sourceNodes, translatedNodes);
 }
 
+export function __resolveModelTargetLanguageForTests(targetLanguageInput: string): string {
+  return resolveModelTargetLanguage(targetLanguageInput);
+}
+
+export function __validateTargetLanguageOutputForTests(
+  targetLanguageInput: string,
+  translatedTexts: readonly string[]
+) {
+  return validateTargetLanguageOutput(targetLanguageInput, translatedTexts);
+}
+
 function uniqueSlideIndices(
   items: readonly { readonly slide_index: number }[]
 ): number[] {
@@ -2522,6 +2731,8 @@ function toSafeErrorMessage(code: string): string {
       return "Google Slides™ API quota was temporarily exhausted. Please retry shortly.";
     case "LLM_PROVIDER_ERROR":
       return "The translation provider returned an invalid response.";
+    case "TARGET_LANGUAGE_VALIDATION_FAILED":
+      return "The translated output did not match the requested target language. Please retry.";
     case "VERTEX_QUOTA_EXHAUSTED":
       return "Vertex AI quota was temporarily exhausted. Please retry shortly.";
     case "UNSAFE_LLM_INPUT":
@@ -3139,4 +3350,3 @@ function validateTranslatedGroup(
     }
   }
 }
-

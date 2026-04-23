@@ -314,7 +314,7 @@
       transform: none;
     }
 
-    /* ── Coming Soon overlay ── */
+    /* ── In-development overlay ── */
     .coming-soon-overlay {
       display: none;
       text-align: center;
@@ -479,13 +479,13 @@
     <p style="margin-top:12px;">Loading TransLay...</p>
   </div>
 
-  <!-- Coming Soon (Docs/Sheets) -->
+  <!-- In Development (Docs/Sheets) -->
   <div id="comingSoonView" class="coming-soon-overlay">
     <div class="coming-soon-icon">&#128218;</div>
-    <div class="coming-soon-title">Coming Soon</div>
+    <div class="coming-soon-title">In Development</div>
     <div class="coming-soon-text">
       TransLay support for <span id="comingSoonHost">this document type</span>
-      is coming soon. Currently, only Google Slides™ is supported.
+      is in development. Currently, only Google Slides™ is supported.
     </div>
   </div>
 
@@ -662,6 +662,10 @@
       currentOutputDocumentId: null,
       lastResultTaskId: null,
       translatedUnitsBilled: 0,
+      pauseRequested: false,
+      pauseRequestInFlight: false,
+      resumeRequestInFlight: false,
+      awaitingCancelDecision: false,
       cancelRequested: false,
       cancelRequestInFlight: false,
       isTranslating: false,
@@ -714,7 +718,7 @@
         return;
       }
 
-      // Docs/Sheets → Coming Soon
+      // Docs/Sheets → In Development
       if (!data.isSupported) {
         hideLoading();
         var hostLabel = data.hostType === 'docs' ? 'Google Docs™' : 'Google Sheets™';
@@ -1096,6 +1100,10 @@
             return;
           }
           clearActiveSubmission();
+          state.pauseRequested = false;
+          state.pauseRequestInFlight = false;
+          state.resumeRequestInFlight = false;
+          state.awaitingCancelDecision = false;
           state.cancelRequested = false;
           state.cancelRequestInFlight = false;
           showProgress(5, 'Job accepted', 'Waiting to start...');
@@ -1221,6 +1229,10 @@
       }
       state.currentJobId = null;
       state.currentJobOutputMode = null;
+      state.pauseRequested = false;
+      state.pauseRequestInFlight = false;
+      state.resumeRequestInFlight = false;
+      state.awaitingCancelDecision = false;
       state.cancelRequested = false;
       state.cancelRequestInFlight = false;
       state.translatedUnitsBilled = 0;
@@ -1234,6 +1246,17 @@
         .withSuccessHandler(function(resp) {
           state.lastPollActivityAt = Date.now();
           state.consecutivePollFailures = 0;
+          if (resp.status === 'pausing') {
+            state.pauseRequested = true;
+            state.pauseRequestInFlight = false;
+          } else if (resp.status === 'paused') {
+            state.pauseRequested = true;
+            state.pauseRequestInFlight = false;
+          } else {
+            if (!state.awaitingCancelDecision) {
+              state.pauseRequested = false;
+            }
+          }
           if (resp.status === 'completed' || resp.status === 'completed_with_warnings') {
             stopPolling();
             setTranslating(false);
@@ -1298,7 +1321,12 @@
     }
 
     function handleCancelJob() {
-      if (state.cancelRequested || state.cancelRequestInFlight) {
+      if (
+        state.pauseRequestInFlight ||
+        state.resumeRequestInFlight ||
+        state.cancelRequested ||
+        state.cancelRequestInFlight
+      ) {
         return;
       }
 
@@ -1318,31 +1346,107 @@
         return;
       }
 
-      if (state.translatedUnitsBilled > 0) {
-        showConfirmationDialog(
-          'Cancel Translation',
-          [
-            state.translatedUnitsBilled + ' slide(s) have already been translated.',
-            'If you cancel now, successfully translated slides will still count toward your quota.',
-            '',
-            'Cancel this task?'
-          ].join('\n'),
-          'Cancel Task',
-          'Continue',
-          function() {
-            requestJobCancellation(
-              state.currentJobId,
-              state.currentJobOutputMode || document.getElementById('outputMode').value
-            );
-          }
-        );
-        return;
-      }
-
-      requestJobCancellation(
+      requestJobPauseForDecision(
         state.currentJobId,
         state.currentJobOutputMode || document.getElementById('outputMode').value
       );
+    }
+
+    function requestJobPauseForDecision(jobId, outputMode) {
+      if (state.pauseRequestInFlight || state.cancelRequestInFlight || state.resumeRequestInFlight) {
+        return;
+      }
+
+      state.pauseRequestInFlight = true;
+      state.pauseRequested = true;
+      updateCancelButton();
+
+      google.script.run
+        .withSuccessHandler(function(resp) {
+          state.pauseRequestInFlight = false;
+          if (resp.status === 'already_completed' || resp.status === 'already_failed' || resp.status === 'already_canceled') {
+            state.pauseRequested = false;
+            state.awaitingCancelDecision = false;
+            updateCancelButton();
+            if (!state.pollTimer) {
+              startPolling(jobId);
+            }
+            return;
+          }
+
+          state.pauseRequested = true;
+          state.awaitingCancelDecision = true;
+          updateCancelButton();
+
+          showProgress(
+            parseInt(document.getElementById('progressBarFill').style.width, 10) || 0,
+            resp.status === 'paused' ? 'Paused' : 'Pausing...',
+            resp.message || 'Pause requested. The worker will pause at the next safe checkpoint.'
+          );
+
+          showConfirmationDialog(
+            'Cancel Translation',
+            buildCancellationDecisionBody(state.translatedUnitsBilled),
+            'Cancel Task',
+            'Continue',
+            function() {
+              state.awaitingCancelDecision = false;
+              requestJobCancellation(jobId, outputMode);
+            },
+            false,
+            function() {
+              state.awaitingCancelDecision = false;
+              requestJobResume(jobId);
+            }
+          );
+
+          if (!state.pollTimer) {
+            startPolling(jobId);
+          }
+        })
+        .withFailureHandler(function(err) {
+          state.pauseRequestInFlight = false;
+          state.pauseRequested = false;
+          state.awaitingCancelDecision = false;
+          updateCancelButton();
+          showError('Failed to pause the translation job: ' + err.message);
+        })
+        .pauseJob(jobId);
+    }
+
+    function requestJobResume(jobId) {
+      if (state.resumeRequestInFlight || state.cancelRequestInFlight) {
+        return;
+      }
+
+      state.resumeRequestInFlight = true;
+      updateCancelButton();
+
+      google.script.run
+        .withSuccessHandler(function(resp) {
+          state.resumeRequestInFlight = false;
+          state.awaitingCancelDecision = false;
+          state.pauseRequestInFlight = false;
+          state.pauseRequested = false;
+          updateCancelButton();
+
+          showProgress(
+            parseInt(document.getElementById('progressBarFill').style.width, 10) || 0,
+            'Resuming...',
+            resp.message || 'Translation resumed.'
+          );
+
+          if (!state.pollTimer) {
+            startPolling(jobId);
+          }
+        })
+        .withFailureHandler(function(err) {
+          state.resumeRequestInFlight = false;
+          state.awaitingCancelDecision = false;
+          updateCancelButton();
+          showError('Failed to resume the translation job: ' + err.message);
+        })
+        .resumeJob(jobId);
     }
 
     function requestJobCancellation(jobId, outputMode) {
@@ -1352,6 +1456,9 @@
 
       state.cancelRequestInFlight = true;
       state.cancelRequested = true;
+      state.pauseRequestInFlight = false;
+      state.resumeRequestInFlight = false;
+      state.awaitingCancelDecision = false;
       updateCancelButton();
 
       google.script.run
@@ -1370,12 +1477,24 @@
             setTranslating(false);
             hideProgress();
             showCanceledResult({
+              job_id: resp.job_id || jobId,
               status: 'canceled',
               message: resp.message || 'Translation canceled.',
               total_units_billed: 0,
-              output_mode: outputMode
+              output_mode: outputMode,
+              output_document_url: resp.output_document_url || null
             });
             refreshEntitlement(true);
+          } else if (
+            resp.status === 'already_completed' ||
+            resp.status === 'already_failed' ||
+            resp.status === 'already_canceled'
+          ) {
+            state.cancelRequested = false;
+            updateCancelButton();
+            if (!state.pollTimer) {
+              startPolling(jobId);
+            }
           } else if (!state.pollTimer) {
             startPolling(jobId);
           }
@@ -1393,6 +1512,8 @@
       var labels = {
         'pending': 'Preparing...',
         'queued': 'Waiting in queue...',
+        'pausing': 'Pausing...',
+        'paused': 'Paused',
         'extracting': 'Extracting content...',
         'extracting_content': 'Extracting slide content...',
         'translating': 'Translating...',
@@ -1411,6 +1532,24 @@
         return labels[step];
       }
       return humanizeStepLabel(step);
+    }
+
+    function buildCancellationDecisionBody(translatedUnitsBilled) {
+      if (translatedUnitsBilled > 0) {
+        return [
+          translatedUnitsBilled + ' slide(s) have already been translated.',
+          'If you confirm cancellation now, successfully translated slides will still count toward your quota.',
+          '',
+          'Cancel this task?'
+        ].join('\n');
+      }
+
+      return [
+        'The job is pausing so you can safely decide what to do next.',
+        'If you confirm cancellation before any slide translation succeeds, no slide quota will be charged.',
+        '',
+        'Cancel this task?'
+      ].join('\n');
     }
 
     function humanizeStepLabel(step) {
@@ -1465,6 +1604,7 @@
       var cancelBtn = document.getElementById('confirmDialogCancelBtn');
       var confirmBtn = document.getElementById('confirmDialogConfirmBtn');
       var bodyIsHtml = arguments[5] === true;
+      var onCancel = arguments[6];
 
       titleEl.textContent = title || 'Confirmation';
       if (bodyIsHtml) {
@@ -1477,6 +1617,9 @@
 
       cancelBtn.onclick = function() {
         hideConfirmationDialog();
+        if (typeof onCancel === 'function') {
+          onCancel();
+        }
       };
       confirmBtn.onclick = function() {
         hideConfirmationDialog();
@@ -1942,6 +2085,10 @@
     function resetSubmissionUiState() {
       clearError();
       hideResult();
+      state.pauseRequested = false;
+      state.pauseRequestInFlight = false;
+      state.resumeRequestInFlight = false;
+      state.awaitingCancelDecision = false;
       state.cancelRequested = false;
       state.cancelRequestInFlight = false;
       state.currentOutputDocumentId = null;
@@ -1968,9 +2115,20 @@
       var isVisible = document.getElementById('progressArea').classList.contains('visible') &&
         document.getElementById('translateBtn').disabled &&
         (!!state.currentJobId || !!state.activeSubmission);
+      var busy = state.pauseRequestInFlight || state.resumeRequestInFlight || state.cancelRequestInFlight;
       btn.style.display = isVisible ? 'inline-block' : 'none';
-      btn.disabled = !isVisible || state.cancelRequested || state.cancelRequestInFlight;
-      btn.textContent = (state.cancelRequested || state.cancelRequestInFlight) ? 'Canceling...' : 'Cancel';
+      btn.disabled = !isVisible || busy || state.awaitingCancelDecision;
+      if (state.cancelRequestInFlight || state.cancelRequested) {
+        btn.textContent = 'Canceling...';
+      } else if (state.pauseRequestInFlight) {
+        btn.textContent = 'Pausing...';
+      } else if (state.resumeRequestInFlight) {
+        btn.textContent = 'Resuming...';
+      } else if (state.pauseRequested || state.awaitingCancelDecision) {
+        btn.textContent = 'Paused';
+      } else {
+        btn.textContent = 'Cancel';
+      }
     }
 
     function beginSubmission(outputMode) {
@@ -1998,6 +2156,10 @@
 
     function finishSubmissionCanceled(outputMode) {
       clearActiveSubmission();
+      state.pauseRequested = false;
+      state.pauseRequestInFlight = false;
+      state.resumeRequestInFlight = false;
+      state.awaitingCancelDecision = false;
       state.cancelRequested = false;
       state.cancelRequestInFlight = false;
       setTranslating(false);

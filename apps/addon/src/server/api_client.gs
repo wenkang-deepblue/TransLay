@@ -54,6 +54,36 @@ function getJobStatus(jobId) {
 }
 
 /**
+ * Requests cooperative pause of an existing translation job.
+ * @param {string} jobId
+ * @returns {Object} PauseJobResponse
+ */
+function pauseJob(jobId) {
+  var token = getGoogleToken();
+  var response = UrlFetchApp.fetch(API_BASE_URL + '/jobs/' + jobId + '/pause', {
+    method: 'post',
+    headers: _authHeaders(token),
+    muteHttpExceptions: true
+  });
+  return _handleResponse(response);
+}
+
+/**
+ * Requests resuming a paused translation job.
+ * @param {string} jobId
+ * @returns {Object} ResumeJobResponse
+ */
+function resumeJob(jobId) {
+  var token = getGoogleToken();
+  var response = UrlFetchApp.fetch(API_BASE_URL + '/jobs/' + jobId + '/resume', {
+    method: 'post',
+    headers: _authHeaders(token),
+    muteHttpExceptions: true
+  });
+  return _handleResponse(response);
+}
+
+/**
  * Requests cancellation of an existing translation job.
  * @param {string} jobId
  * @returns {Object} CancelJobResponse

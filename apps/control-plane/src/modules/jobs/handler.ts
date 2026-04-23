@@ -11,6 +11,8 @@ import type {
   JobCanceledResponse,
   JobCompletedResponse,
   JobFailedResponse,
+  JobLiveStatus,
+  JobPauseStatus,
   JobProgressResponse,
   JobInProgressStatus,
   JobId,
@@ -18,6 +20,8 @@ import type {
   JobSlideResult,
   JobStatus,
   JobStatusResponse,
+  PauseJobResponse,
+  ResumeJobResponse,
   JobWarning,
 } from "@translay/shared-contracts";
 import {
@@ -25,6 +29,7 @@ import {
   matchPresetLanguage,
   billingPeriodKey,
   buildJobCancelKey,
+  buildJobPauseKey,
   getRemainingQuota,
   computeEntitlement,
   FREE_TIER_MAX_JOBS_PER_PERIOD,
@@ -53,6 +58,7 @@ import { sendError } from "../../utils/errors";
 import { assertMultiOk } from "../../utils/redis-helpers";
 
 const CANCEL_KEY_TTL_SECONDS = 24 * 60 * 60;
+const PAUSE_KEY_TTL_SECONDS = 24 * 60 * 60;
 const HOST_OAUTH_TOKEN_LIFETIME_MS = 55 * 60 * 1000;
 const MAX_HOST_OAUTH_TOKEN_BYTES = 8 * 1024;
 const HOST_OAUTH_SWEEP_GRACE_PERIOD_MINUTES = 60;
@@ -134,6 +140,10 @@ function isValidJobStatus(s: string): s is JobStatus {
   );
 }
 
+function isValidJobLiveStatus(s: string): s is JobLiveStatus | JobStatus {
+  return isValidJobStatus(s) || s === "pausing" || s === "paused";
+}
+
 function isRunningStatus(status: JobStatus): status is JobInProgressStatus {
   return (
     status === "pending" ||
@@ -142,6 +152,20 @@ function isRunningStatus(status: JobStatus): status is JobInProgressStatus {
     status === "translating" ||
     status === "writing"
   );
+}
+
+function isRunningLiveStatus(status: string | null | undefined): status is JobInProgressStatus {
+  return (
+    status === "pending" ||
+    status === "queued" ||
+    status === "extracting" ||
+    status === "translating" ||
+    status === "writing"
+  );
+}
+
+function isPauseStatus(status: string | undefined): status is JobPauseStatus {
+  return status === "pausing" || status === "paused";
 }
 
 function buildCanceledMessage(job: {
@@ -579,6 +603,49 @@ function buildSynthesizedProgress(job: JobRow): {
   }
 }
 
+function readProgressStatus(progress?: Record<string, string>): JobLiveStatus | JobStatus | null {
+  const status = progress?.status;
+  if (!status || !isValidJobLiveStatus(status)) {
+    return null;
+  }
+  return status;
+}
+
+function buildPausedProgressResponse(
+  job: JobRow,
+  progress: Record<string, string> | undefined,
+  status: JobPauseStatus
+): JobProgressResponse {
+  const synthesizedProgress = buildSynthesizedProgress(job);
+  const progressPercent = progress?.progress_percent
+    ? parseInt(progress.progress_percent, 10)
+    : synthesizedProgress.progress_percent;
+  return {
+    job_id: job.id,
+    status,
+    progress_percent: Number.isFinite(progressPercent) ? progressPercent : synthesizedProgress.progress_percent,
+    translated_units_billed: job.provisionally_billed_units,
+    ...(job.current_stage ? { current_stage: job.current_stage } : {}),
+    ...(job.stage_status ? { stage_status: job.stage_status } : {}),
+    ...(job.stage_attempt > 0 ? { stage_attempt: job.stage_attempt } : {}),
+    ...((progress?.current_step ?? (status === "paused" ? "paused" : "pausing"))
+      ? { current_step: progress?.current_step ?? (status === "paused" ? "paused" : "pausing") }
+      : {}),
+    ...((progress?.details ??
+      (status === "paused"
+        ? "Translation paused. Confirm cancellation or continue to resume."
+        : "Pause requested. The worker will pause at the next safe checkpoint."))
+      ? {
+          details:
+            progress?.details ??
+            (status === "paused"
+              ? "Translation paused. Confirm cancellation or continue to resume."
+              : "Pause requested. The worker will pause at the next safe checkpoint."),
+        }
+      : {}),
+  };
+}
+
 function toNumber(value: unknown): number {
   if (typeof value === "number") {
     return value;
@@ -722,9 +789,13 @@ function buildJobStatusResponse(
     return response;
   }
 
-  const redisStatus = progress?.status;
-  const resolvedStatus: JobStatus = (redisStatus && isValidJobStatus(redisStatus))
-    ? redisStatus
+  const liveStatus = readProgressStatus(progress);
+  if (liveStatus === "paused" || liveStatus === "pausing") {
+    return buildPausedProgressResponse(job, progress, liveStatus);
+  }
+
+  const resolvedStatus: JobStatus = isRunningLiveStatus(liveStatus)
+    ? liveStatus
     : job.status;
   const synthesizedProgress = buildSynthesizedProgress(job);
 
@@ -1098,6 +1169,266 @@ export function getJobHandler(pool: Pool, redis: Redis) {
   };
 }
 
+export function pauseJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
+  return async (req: Request, res: Response) => {
+    const auth = req.authContext;
+    if (!auth) {
+      sendError(res, "UNAUTHORIZED");
+      return;
+    }
+
+    const jobId = req.params.jobId as string;
+    if (!jobId || !UUID_RE.test(jobId)) {
+      sendError(res, "VALIDATION_ERROR", "Invalid job ID format");
+      return;
+    }
+
+    const job = await getJobById(pool, jobId, auth.user_id);
+    if (!job) {
+      sendError(res, "NOT_FOUND", "Job not found");
+      return;
+    }
+
+    if (job.status === "completed" || job.status === "completed_with_warnings") {
+      const response: PauseJobResponse = {
+        job_id: job.id,
+        status: "already_completed",
+        message: "This translation job has already completed.",
+      };
+      res.json(response);
+      return;
+    }
+
+    if (job.status === "failed" || job.status === "rolled_back") {
+      const response: PauseJobResponse = {
+        job_id: job.id,
+        status: "already_failed",
+        message:
+          job.status === "rolled_back"
+            ? "This translation job has already been rolled back."
+            : "This translation job has already failed.",
+      };
+      res.json(response);
+      return;
+    }
+
+    if (job.status === "canceled") {
+      const response: PauseJobResponse = {
+        job_id: job.id,
+        status: "already_canceled",
+        message: buildCanceledMessage(job),
+      };
+      res.json(response);
+      return;
+    }
+
+    const progressKey = `job_progress:${job.id}`;
+    const progress = await redis.hgetall(progressKey);
+    const liveStatus = readProgressStatus(progress);
+    if (liveStatus === "paused") {
+      const response: PauseJobResponse = {
+        job_id: job.id,
+        status: "paused",
+        message: "Translation is already paused. Confirm cancellation or continue to resume.",
+      };
+      res.json(response);
+      return;
+    }
+
+    const pauseKey = buildJobPauseKey(job.id);
+    if (job.status === "pending" || job.status === "queued") {
+      await deleteQueuedJob(config, job.queued_task_name);
+      await updateJobStatus(pool, job.id, job.status, {
+        stageAttempt: job.stage_attempt > 0 ? job.stage_attempt + 1 : 1,
+        stageStatus: "queued",
+        stageLeaseExpiresAt: null,
+        stageLastHeartbeatAt: null,
+        queuedTaskName: null,
+      });
+
+      const results = await redis
+        .multi()
+        .set(pauseKey, new Date().toISOString(), "EX", PAUSE_KEY_TTL_SECONDS)
+        .del(buildJobCancelKey(job.id))
+        .hset(progressKey, {
+          status: "paused",
+          progress_percent: progress.progress_percent || "0",
+          current_step: "paused",
+          details: "Translation paused before processing started. Confirm cancellation or continue to resume.",
+        })
+        .expire(progressKey, PAUSE_KEY_TTL_SECONDS)
+        .exec();
+
+      assertMultiOk(results, "jobs/pause queued progress");
+
+      const response: PauseJobResponse = {
+        job_id: job.id,
+        status: "paused",
+        message: "Translation paused before processing started.",
+      };
+      res.json(response);
+      return;
+    }
+
+    const results = await redis
+      .multi()
+      .set(pauseKey, new Date().toISOString(), "EX", PAUSE_KEY_TTL_SECONDS)
+      .hset(progressKey, {
+        status: "pausing",
+        details: "Pause requested. The worker will pause at the next safe checkpoint.",
+      })
+      .expire(progressKey, PAUSE_KEY_TTL_SECONDS)
+      .exec();
+
+    assertMultiOk(results, "jobs/pause request");
+
+    const response: PauseJobResponse = {
+      job_id: job.id,
+      status: "pause_requested",
+      message: "Pause requested. The worker will pause at the next safe checkpoint.",
+    };
+    res.json(response);
+  };
+}
+
+export function resumeJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
+  return async (req: Request, res: Response) => {
+    const auth = req.authContext;
+    if (!auth) {
+      sendError(res, "UNAUTHORIZED");
+      return;
+    }
+
+    const jobId = req.params.jobId as string;
+    if (!jobId || !UUID_RE.test(jobId)) {
+      sendError(res, "VALIDATION_ERROR", "Invalid job ID format");
+      return;
+    }
+
+    const job = await getJobById(pool, jobId, auth.user_id);
+    if (!job) {
+      sendError(res, "NOT_FOUND", "Job not found");
+      return;
+    }
+
+    if (job.status === "completed" || job.status === "completed_with_warnings") {
+      const response: ResumeJobResponse = {
+        job_id: job.id,
+        status: "already_completed",
+        message: "This translation job has already completed.",
+      };
+      res.json(response);
+      return;
+    }
+
+    if (job.status === "failed" || job.status === "rolled_back") {
+      const response: ResumeJobResponse = {
+        job_id: job.id,
+        status: "already_failed",
+        message:
+          job.status === "rolled_back"
+            ? "This translation job has already been rolled back."
+            : "This translation job has already failed.",
+      };
+      res.json(response);
+      return;
+    }
+
+    if (job.status === "canceled") {
+      const response: ResumeJobResponse = {
+        job_id: job.id,
+        status: "already_canceled",
+        message: buildCanceledMessage(job),
+      };
+      res.json(response);
+      return;
+    }
+
+    const progressKey = `job_progress:${job.id}`;
+    const progress = await redis.hgetall(progressKey);
+    const liveStatus = readProgressStatus(progress);
+    const pauseKey = buildJobPauseKey(job.id);
+
+    if (liveStatus !== "paused" && liveStatus !== "pausing") {
+      const response: ResumeJobResponse = {
+        job_id: job.id,
+        status: "already_running",
+        message: "Translation is already running.",
+      };
+      res.json(response);
+      return;
+    }
+
+    if (job.status === "pending" || job.status === "queued") {
+      await updateJobStatus(pool, job.id, "queued", {
+        stageStatus: "queued",
+        stageLeaseExpiresAt: null,
+        stageLastHeartbeatAt: null,
+        queuedTaskName: null,
+      });
+      const queuedTaskName = await enqueueJob(
+        config,
+        job.id,
+        job.current_stage ?? "extract",
+        job.stage_attempt > 0 ? job.stage_attempt : 1,
+        { taskKind: "resume" }
+      );
+      await updateJobStatus(pool, job.id, "queued", {
+        queuedTaskName,
+      });
+
+      const results = await redis
+        .multi()
+        .del(pauseKey)
+        .del(buildJobCancelKey(job.id))
+        .hset(progressKey, {
+          status: "queued",
+          progress_percent: progress.progress_percent || "0",
+          current_step: "queued",
+          details: "Job resumed and re-queued for processing.",
+        })
+        .expire(progressKey, PAUSE_KEY_TTL_SECONDS)
+        .exec();
+
+      assertMultiOk(results, "jobs/resume queued progress");
+
+      const response: ResumeJobResponse = {
+        job_id: job.id,
+        status: "resumed",
+        message: "Translation resumed.",
+      };
+      res.json(response);
+      return;
+    }
+
+    const synthesizedProgress = buildSynthesizedProgress(job);
+    const results = await redis
+      .multi()
+      .del(pauseKey)
+      .del(buildJobCancelKey(job.id))
+      .hset(progressKey, {
+        status: job.status,
+        progress_percent: progress.progress_percent || String(synthesizedProgress.progress_percent),
+        current_step:
+          progress.current_step && progress.current_step !== "paused" && progress.current_step !== "pausing"
+            ? progress.current_step
+            : (synthesizedProgress.current_step ?? job.status),
+        details: "Resuming translation...",
+      })
+      .expire(progressKey, PAUSE_KEY_TTL_SECONDS)
+      .exec();
+
+    assertMultiOk(results, "jobs/resume running progress");
+
+    const response: ResumeJobResponse = {
+      job_id: job.id,
+      status: "resumed",
+      message: "Translation resumed.",
+    };
+    res.json(response);
+  };
+}
+
 export function cancelJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
   return async (req: Request, res: Response) => {
     const auth = req.authContext;
@@ -1151,6 +1482,11 @@ export function cancelJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
       return;
     }
 
+    const progressKey = `job_progress:${job.id}`;
+    const progress = await redis.hgetall(progressKey);
+    const liveStatus = readProgressStatus(progress);
+    const pauseKey = buildJobPauseKey(job.id);
+
     if (job.status === "pending" || job.status === "queued") {
       await deleteQueuedJob(config, job.queued_task_name);
       await updateJobStatus(pool, job.id, "canceled", {
@@ -1160,10 +1496,10 @@ export function cancelJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
         stageLastHeartbeatAt: null,
         queuedTaskName: null,
       });
-      const progressKey = `job_progress:${job.id}`;
       const results = await redis
         .multi()
         .del(buildJobCancelKey(job.id))
+        .del(pauseKey)
         .hset(progressKey, {
           status: "canceled",
           progress_percent: "0",
@@ -1195,12 +1531,16 @@ export function cancelJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
       return;
     }
 
-    const progressKey = `job_progress:${job.id}`;
     const results = await redis
       .multi()
       .set(buildJobCancelKey(job.id), new Date().toISOString(), "EX", CANCEL_KEY_TTL_SECONDS)
+      .del(pauseKey)
       .hset(progressKey, {
-        details: "Cancellation requested. The worker will stop at the next safe checkpoint.",
+        status:
+          liveStatus === "paused" || liveStatus === "pausing"
+            ? job.status
+            : (progress.status || job.status),
+        details: "Cancellation confirmed. The worker will stop at the next safe checkpoint.",
       })
       .expire(progressKey, CANCEL_KEY_TTL_SECONDS)
       .exec();
@@ -1210,7 +1550,7 @@ export function cancelJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
     const response: CancelJobResponse = {
       job_id: job.id,
       status: "cancel_requested",
-      message: "Cancellation requested. The current step will stop as soon as possible.",
+      message: "Cancellation confirmed. The current step will stop as soon as possible.",
     };
     res.json(response);
   };
