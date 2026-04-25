@@ -786,14 +786,11 @@
       populateLanguages(data.presetLanguages);
       updateRangeHint(data);
 
-      hideLoading();
-      var mainView = document.getElementById('mainView');
-      mainView.style.display = 'flex';
-      mainView.style.flexDirection = 'column';
-      mainView.style.minHeight = 'calc(100vh - 32px)';
-
-      // Fetch entitlement
-      refreshEntitlement();
+      // Fetch entitlement before revealing the form so the user never sees the
+      // static fallback FREE badge before the real account state arrives.
+      refreshEntitlement(false, {
+        onSettled: showMainView
+      });
     }
 
     // ── Language dropdown ──
@@ -842,10 +839,12 @@
     }
 
     // ── Entitlement ──
-    function refreshEntitlement(force) {
+    function refreshEntitlement(force, callbacks) {
+      callbacks = callbacks || {};
       var now = Date.now() / 1000;
       if (!force && state.entitlement && (now - state.entitlementFetchedAt) < state.entitlementCacheTtl) {
         renderEntitlement(state.entitlement);
+        if (callbacks.onSettled) callbacks.onSettled();
         return;
       }
 
@@ -854,9 +853,11 @@
           state.entitlement = data;
           state.entitlementFetchedAt = Date.now() / 1000;
           renderEntitlement(data);
+          if (callbacks.onSettled) callbacks.onSettled();
         })
         .withFailureHandler(function(err) {
           showError('Failed to load account info: ' + err.message);
+          if (callbacks.onSettled) callbacks.onSettled();
         })
         .fetchEntitlement();
     }
@@ -1988,6 +1989,14 @@
     // ── UI helpers ──
     function hideLoading() {
       document.getElementById('loadingView').style.display = 'none';
+    }
+
+    function showMainView() {
+      hideLoading();
+      var mainView = document.getElementById('mainView');
+      mainView.style.display = 'flex';
+      mainView.style.flexDirection = 'column';
+      mainView.style.minHeight = 'calc(100vh - 32px)';
     }
 
     function setTranslating(active) {
