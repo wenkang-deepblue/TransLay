@@ -7,6 +7,8 @@ import {
   matchPresetLanguage,
   parsePageRange,
   parsePageRangeDetailed,
+  truncateSlideRangeExpressionToQuota,
+  truncateSlidesToQuota,
   validateCreateJobRequest,
   validateTargetLanguageInput,
 } from "./index";
@@ -58,7 +60,59 @@ test("parsePageRange rejects chinese punctuation, decimals, and zero pages", () 
 
 test("parsePageRange keeps legacy null-or-pages behavior while using richer parsing", () => {
   assert.deepEqual(parsePageRange("3,1,2-3"), [1, 2, 3]);
+  assert.deepEqual(parsePageRange("2~4, 6"), [2, 3, 4, 6]);
   assert.equal(parsePageRange("1,,3"), null);
+});
+
+test("truncateSlidesToQuota returns allowed and excluded compact ranges", () => {
+  assert.deepEqual(
+    truncateSlidesToQuota([2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 14, 15, 20, 21, 22], 9),
+    {
+      allowed_indices: [2, 3, 4, 5, 8, 9, 10, 11, 12],
+      excluded_indices: [13, 14, 15, 20, 21, 22],
+      allowed_range_expression: "2~5, 8~12",
+      excluded_range_expression: "13~15, 20~22",
+    }
+  );
+});
+
+test("truncateSlideRangeExpressionToQuota preserves user range boundaries", () => {
+  assert.deepEqual(
+    truncateSlideRangeExpressionToQuota("2~5, 8, 9~15, 20~22", 9),
+    {
+      required_units: 15,
+      allowed_indices: [2, 3, 4, 5, 8, 9, 10, 11, 12],
+      excluded_indices: [13, 14, 15, 20, 21, 22],
+      allowed_range_expression: "2~5, 8, 9~12",
+      excluded_range_expression: "13~15, 20~22",
+    }
+  );
+});
+
+test("truncateSlideRangeExpressionToQuota truncates comma and hyphen ranges by selected slide order", () => {
+  assert.deepEqual(
+    truncateSlideRangeExpressionToQuota("2, 5-7, 9-11, 14, 18-22", 8),
+    {
+      required_units: 13,
+      allowed_indices: [2, 5, 6, 7, 9, 10, 11, 14],
+      excluded_indices: [18, 19, 20, 21, 22],
+      allowed_range_expression: "2, 5~7, 9~11, 14",
+      excluded_range_expression: "18~22",
+    }
+  );
+});
+
+test("truncateSlideRangeExpressionToQuota does not fill duplicate-created gaps inside a range token", () => {
+  assert.deepEqual(
+    truncateSlideRangeExpressionToQuota("2, 4, 1~5", 4),
+    {
+      required_units: 5,
+      allowed_indices: [2, 4, 1, 3],
+      excluded_indices: [5],
+      allowed_range_expression: "2, 4, 1, 3",
+      excluded_range_expression: "5",
+    }
+  );
 });
 
 test("validateCreateJobRequest surfaces detailed page-range validation for slides/docs", () => {
@@ -77,7 +131,7 @@ test("validateCreateJobRequest surfaces detailed page-range validation for slide
 
   assert.equal(
     error,
-    "Range expression must use ASCII commas (,) and hyphens (-) only."
+    "Range expression must use ASCII commas (,), hyphens (-), or tildes (~) only."
   );
 });
 

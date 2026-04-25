@@ -22,7 +22,31 @@ function useI18n() {
     return stored;
   });
   const actualLang = lang === "system" ? getBrowserLang() : lang;
-  const t = useMemo(() => window.TRANSLATIONS[actualLang] || window.TRANSLATIONS.en, [actualLang]);
+  const t = useMemo(() => {
+    const base = window.TRANSLATIONS.en || {};
+    const current = window.TRANSLATIONS[actualLang] || {};
+
+    function mergeObjects(baseValue, currentValue) {
+      if (
+        !baseValue
+        || typeof baseValue !== "object"
+        || Array.isArray(baseValue)
+        || !currentValue
+        || typeof currentValue !== "object"
+        || Array.isArray(currentValue)
+      ) {
+        return currentValue === undefined ? baseValue : currentValue;
+      }
+
+      const merged = { ...baseValue };
+      for (const key of Object.keys(currentValue)) {
+        merged[key] = mergeObjects(baseValue[key], currentValue[key]);
+      }
+      return merged;
+    }
+
+    return mergeObjects(base, current);
+  }, [actualLang]);
 
   useEffect(() => {
     document.documentElement.lang = actualLang;

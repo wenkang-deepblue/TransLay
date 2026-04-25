@@ -40,6 +40,26 @@ function optionalListEnv(name: string, fallback: readonly string[] = []): readon
     .filter((part) => part.length > 0);
 }
 
+function optionalEnumEnv<const T extends readonly string[]>(
+  name: string,
+  allowedValues: T,
+  fallback: T[number]
+): T[number] {
+  const raw = process.env[name];
+  if (raw === undefined) {
+    return fallback;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  const matchedValue = allowedValues.find((value) => value === normalized);
+  if (!matchedValue) {
+    throw new Error(
+      `Environment variable ${name} must be one of ${allowedValues.join(", ")}, got: ${raw}`
+    );
+  }
+  return matchedValue;
+}
+
 function optionalIntEnv(name: string, fallback: number): number {
   const raw = process.env[name];
   if (raw === undefined) {
@@ -137,6 +157,36 @@ export function loadConfig() {
     throw new Error("LANDING_GOOGLE_WEB_CLIENT_ID is required in production");
   }
 
+  const paddleEnvironment = optionalEnumEnv(
+    "PADDLE_ENVIRONMENT",
+    ["sandbox", "production"] as const,
+    nodeEnv === "production" ? "production" : "sandbox"
+  );
+  const paddleClientToken = optionalEnv("PADDLE_CLIENT_TOKEN", "").trim();
+  const paddleApiKey = optionalEnv("PADDLE_API_KEY", "").trim();
+  const paddlePriceMonthly = optionalEnv("PADDLE_PRICE_ID_PRO_MONTHLY", "").trim();
+  const paddlePriceYearly = optionalEnv("PADDLE_PRICE_ID_PRO_YEARLY", "").trim();
+  const paddleMonthlyAmountCents = optionalBoundedIntEnv("PADDLE_PRICE_AMOUNT_PRO_MONTHLY_CENTS", 999, { min: 1 });
+  const paddleYearlyAmountCents = optionalBoundedIntEnv("PADDLE_PRICE_AMOUNT_PRO_YEARLY_CENTS", 11999, { min: 1 });
+  const paddleWebhookSecret = optionalEnv("PADDLE_WEBHOOK_SECRET", "").trim();
+
+  if (nodeEnv === "production") {
+    if (!paddleClientToken) {
+      throw new Error("PADDLE_CLIENT_TOKEN is required in production");
+    }
+    if (!paddleApiKey) {
+      throw new Error("PADDLE_API_KEY is required in production");
+    }
+    if (!paddlePriceMonthly || !paddlePriceYearly) {
+      throw new Error(
+        "PADDLE_PRICE_ID_PRO_MONTHLY and PADDLE_PRICE_ID_PRO_YEARLY are required in production"
+      );
+    }
+    if (!paddleWebhookSecret) {
+      throw new Error("PADDLE_WEBHOOK_SECRET is required in production");
+    }
+  }
+
   return {
     port: optionalIntEnv("PORT", 8080),
     nodeEnv,
@@ -180,6 +230,29 @@ export function loadConfig() {
     publicAuth: {
       googleWebClientId,
       googleIdTokenAudiences,
+    },
+
+    billing: {
+      providerName: "paddle" as const,
+      paddle: {
+        environment: paddleEnvironment,
+        clientToken: paddleClientToken,
+        apiKey: paddleApiKey,
+        webhookSecret: paddleWebhookSecret,
+        priceIds: {
+          pro_monthly: paddlePriceMonthly,
+          pro_yearly: paddlePriceYearly,
+        },
+        priceAmounts: {
+          pro_monthly: paddleMonthlyAmountCents,
+          pro_yearly: paddleYearlyAmountCents,
+        },
+        webhookToleranceSeconds: optionalBoundedIntEnv(
+          "PADDLE_WEBHOOK_TOLERANCE_SECONDS",
+          300,
+          { min: 1, max: 3600 }
+        ),
+      },
     },
 
     entitlementCacheTtl: 300, // seconds, frozen decision

@@ -10,6 +10,12 @@ import { healthHandler } from "./modules/health/handler";
 import { entitlementHandler } from "./modules/entitlement/handler";
 import { landingConfigHandler } from "./modules/public/handler";
 import {
+  cancelSubscriptionHandler,
+  changeSubscriptionPlanHandler,
+  checkoutHandler,
+  paddleWebhookHandler,
+} from "./modules/billing/handler";
+import {
   sessionLoginHandler,
   sessionStartHandler,
   sessionConsumeHandler,
@@ -21,6 +27,7 @@ import {
   createJobHandler,
   getJobHandler,
   pauseJobHandler,
+  previewJobHandler,
   resumeJobHandler,
   sweepHostOauthTokensHandler,
 } from "./modules/jobs/handler";
@@ -32,7 +39,14 @@ const app = express();
 const pool = getPool(config);
 const redis = getRedis(config);
 // Body parsing — limit size to prevent abuse
-app.use(express.json({ limit: "1mb" }));
+app.use(
+  express.json({
+    limit: "1mb",
+    verify(req, _res, buf) {
+      (req as Request).rawBody = Buffer.from(buf);
+    },
+  })
+);
 
 // Trust proxy headers (Cloud Run sits behind a load balancer)
 app.set("trust proxy", 1);
@@ -79,6 +93,14 @@ const userReadRateLimit = rateLimitMiddleware(redis, {
   identifierStrategy: "user",
 });
 
+const paddleWebhookRateLimit = rateLimitMiddleware(redis, {
+  windowSeconds: 60,
+  maxRequests: 60,
+  keyPrefix: "webhook-paddle-ip",
+  failOpen: false,
+  identifierStrategy: "ip",
+});
+
 app.use(globalIpRateLimit);
 
 // --- Public routes (no auth) ---
@@ -104,6 +126,24 @@ app.get(
   asyncHandler(sessionMeHandler(pool))
 );
 app.post(
+  "/api/checkout",
+  portalSession,
+  userWriteRateLimit,
+  asyncHandler(checkoutHandler(pool, config))
+);
+app.post(
+  "/api/subscription/change-plan",
+  portalSession,
+  userWriteRateLimit,
+  asyncHandler(changeSubscriptionPlanHandler(pool, redis, config))
+);
+app.post(
+  "/api/subscription/cancel",
+  portalSession,
+  userWriteRateLimit,
+  asyncHandler(cancelSubscriptionHandler(pool, redis, config))
+);
+app.post(
   "/api/session/logout",
   portalSession,
   userWriteRateLimit,
@@ -123,6 +163,12 @@ app.post(
   googleAuth,
   userWriteRateLimit,
   asyncHandler(sessionStartHandler(redis, config))
+);
+app.post(
+  "/api/jobs/preview",
+  googleAuth,
+  userWriteRateLimit,
+  asyncHandler(previewJobHandler(pool))
 );
 app.post(
   "/api/jobs",
@@ -159,6 +205,11 @@ app.post(
 app.post(
   "/internal/sweep-oauth-tokens",
   asyncHandler(sweepHostOauthTokensHandler(pool, config))
+);
+app.post(
+  "/api/webhooks/paddle",
+  paddleWebhookRateLimit,
+  asyncHandler(paddleWebhookHandler(pool, redis, config))
 );
 
 // I9: Generic error code in response, stack trace logged server-side only

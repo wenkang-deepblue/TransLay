@@ -94,17 +94,19 @@ function getInitData() {
  * @returns {string} portal_url
  */
 function getPortalUrl(reason) {
-  var redirectPath = reason === 'manage_subscription' ? '/billing' : '/pricing';
+  var redirectPath = '/#pricing';
   var ticket = createPortalTicket(redirectPath, reason);
   return ticket.portal_url;
 }
 
 /**
  * Returns the TransLay official website URL with a one-time ticket.
+ * @param {string=} redirectPath - Portal path, defaults to "/".
  * @returns {string} portal_url
  */
-function getOfficialWebsiteUrl() {
-  var ticket = createPortalTicket('/', 'official_website');
+function getOfficialWebsiteUrl(redirectPath) {
+  var safeRedirectPath = redirectPath || '/';
+  var ticket = createPortalTicket(safeRedirectPath, 'official_website');
   return ticket.portal_url;
 }
 

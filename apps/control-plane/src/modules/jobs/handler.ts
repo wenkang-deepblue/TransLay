@@ -23,6 +23,10 @@ import type {
   PauseJobResponse,
   ResumeJobResponse,
   JobWarning,
+  JobQuotaPartialOption,
+  JobQuotaPreviewResponse,
+  RangeMode,
+  UserId,
 } from "@translay/shared-contracts";
 import {
   validateCreateJobRequest,
@@ -33,6 +37,8 @@ import {
   getRemainingQuota,
   computeEntitlement,
   FREE_TIER_MAX_JOBS_PER_PERIOD,
+  parsePageRange,
+  truncateSlideRangeExpressionToQuota,
 } from "@translay/shared-domain";
 import { getActiveSubscription } from "../../repositories/subscription-repo";
 import { getUsageSummary } from "../../repositories/usage-repo";
@@ -847,6 +853,167 @@ function getHostUsed(
   }
 }
 
+type SlidesQuotaRequest = {
+  readonly host_type: HostType;
+  readonly range_mode: RangeMode;
+  readonly range_expression?: string | null;
+};
+
+function resolveSlidesRangeExpression(body: SlidesQuotaRequest): string | null {
+  if (body.host_type !== "slides") {
+    return null;
+  }
+  if (body.range_mode === "custom" && body.range_expression) {
+    return body.range_expression;
+  }
+  if (body.range_mode === "current" && body.range_expression) {
+    return body.range_expression;
+  }
+  return null;
+}
+
+function buildQuotaPartialOption(
+  rangeExpression: string,
+  availableUnits: number
+): JobQuotaPartialOption | null {
+  const truncated = truncateSlideRangeExpressionToQuota(rangeExpression, availableUnits);
+  if (!truncated || truncated.allowed_indices.length === 0 || truncated.excluded_indices.length === 0) {
+    return null;
+  }
+
+  return {
+    ok: false,
+    error: "QUOTA_INSUFFICIENT_WITH_PARTIAL_OPTION",
+    message: "Usage quota is insufficient, but part of the selected Slides range can continue",
+    required_units: truncated.required_units,
+    available_units: truncated.allowed_indices.length,
+    allowed_range_expression: truncated.allowed_range_expression,
+    excluded_range_expression: truncated.excluded_range_expression,
+    cta: {
+      upgrade_subscription: true,
+      buy_credits: true,
+    },
+  };
+}
+
+function previewSlidesQuota(
+  body: SlidesQuotaRequest,
+  availableUnits: number
+): JobQuotaPreviewResponse | null {
+  const rangeExpression = resolveSlidesRangeExpression(body);
+  if (!rangeExpression) {
+    return null;
+  }
+
+  const selected = parsePageRange(rangeExpression);
+  if (!selected) {
+    return null;
+  }
+
+  if (selected.length <= availableUnits) {
+    return {
+      ok: true,
+      required_units: selected.length,
+      available_units: Math.max(0, Math.floor(availableUnits)),
+      accepted_range_expression: rangeExpression,
+    };
+  }
+
+  return buildQuotaPartialOption(rangeExpression, availableUnits);
+}
+
+function validateJobPreviewRequest(body: unknown): string | null {
+  if (!body || typeof body !== "object") {
+    return "request body must be an object";
+  }
+  const req = body as Partial<SlidesQuotaRequest>;
+  if (req.host_type !== "slides") {
+    return "quota partial preview is currently supported for Slides only";
+  }
+  if (req.range_mode !== "custom" && req.range_mode !== "current") {
+    return "Slides quota preview requires an explicit range";
+  }
+  if (!req.range_expression || typeof req.range_expression !== "string") {
+    return "range_expression is required";
+  }
+  if (!parsePageRange(req.range_expression)) {
+    return "Invalid range expression";
+  }
+  return null;
+}
+
+async function getEntitledUsageSnapshot(pool: Pool, userId: string) {
+  const sub = await getActiveSubscription(pool, userId as UserId);
+  if (!sub) {
+    return { error: "Subscription state is not initialized" as const };
+  }
+
+  const entitlement = computeEntitlement({
+    plan_type: sub.plan_type,
+    subscription_status: sub.status,
+    cancel_at_period_end: sub.cancel_at_period_end,
+    current_period_end: sub.current_period_end,
+  });
+
+  if (!entitlement.active) {
+    return { error: "inactive" as const };
+  }
+
+  const periodKey = billingPeriodKey();
+  const usage = await getUsageSummary(pool, userId as UserId, periodKey);
+  return { sub, usage };
+}
+
+export function previewJobHandler(pool: Pool) {
+  return async (req: Request, res: Response) => {
+    const auth = req.authContext;
+    if (!auth) {
+      sendError(res, "UNAUTHORIZED");
+      return;
+    }
+
+    const validationError = validateJobPreviewRequest(req.body);
+    if (validationError) {
+      sendError(res, "VALIDATION_ERROR", validationError);
+      return;
+    }
+
+    const snapshot = await getEntitledUsageSnapshot(pool, auth.user_id);
+    if ("error" in snapshot && snapshot.error === "Subscription state is not initialized") {
+      sendError(res, "ACCESS_DENIED", "Subscription state is not initialized");
+      return;
+    }
+    if ("error" in snapshot) {
+      sendError(res, "ACCESS_DENIED");
+      return;
+    }
+
+    const { sub, usage } = snapshot;
+    if (sub.plan_type === "free" && usage.total_jobs >= FREE_TIER_MAX_JOBS_PER_PERIOD) {
+      sendError(res, "QUOTA_EXCEEDED");
+      return;
+    }
+
+    const remaining = getRemainingQuota(
+      sub.plan_type,
+      "slides",
+      getHostUsed(usage, "slides")
+    );
+    if (remaining <= 0) {
+      sendError(res, "QUOTA_EXCEEDED");
+      return;
+    }
+
+    const preview = previewSlidesQuota(req.body as SlidesQuotaRequest, remaining);
+    if (!preview) {
+      sendError(res, "VALIDATION_ERROR", "Invalid range expression");
+      return;
+    }
+
+    res.status(200).json(preview);
+  };
+}
+
 export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
   return async (req: Request, res: Response) => {
     const auth = req.authContext;
@@ -894,26 +1061,16 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
       return;
     }
 
-    const sub = await getActiveSubscription(pool, auth.user_id);
-    if (!sub) {
+    const snapshot = await getEntitledUsageSnapshot(pool, auth.user_id);
+    if ("error" in snapshot && snapshot.error === "Subscription state is not initialized") {
       sendError(res, "ACCESS_DENIED", "Subscription state is not initialized");
       return;
     }
-
-    const entitlement = computeEntitlement({
-      plan_type: sub.plan_type,
-      subscription_status: sub.status,
-      cancel_at_period_end: sub.cancel_at_period_end,
-      current_period_end: sub.current_period_end,
-    });
-
-    if (!entitlement.active) {
+    if ("error" in snapshot) {
       sendError(res, "ACCESS_DENIED");
       return;
     }
-
-    const periodKey = billingPeriodKey();
-    const usage = await getUsageSummary(pool, auth.user_id, periodKey);
+    const { sub, usage } = snapshot;
 
     if (sub.plan_type === "free" && usage.total_jobs >= FREE_TIER_MAX_JOBS_PER_PERIOD) {
       sendError(res, "QUOTA_EXCEEDED");
@@ -923,6 +1080,11 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
     const remaining = getRemainingQuota(sub.plan_type, body.host_type, getHostUsed(usage, body.host_type));
     if (remaining <= 0) {
       sendError(res, "QUOTA_EXCEEDED");
+      return;
+    }
+    const quotaPreview = previewSlidesQuota(body, remaining);
+    if (quotaPreview && !quotaPreview.ok) {
+      res.status(403).json(quotaPreview);
       return;
     }
 

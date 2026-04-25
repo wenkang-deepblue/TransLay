@@ -4,6 +4,7 @@ declare global {
   namespace Express {
     interface Request {
       authContext?: AuthContext;
+      rawBody?: Buffer;
       portalSession?: {
         userId: string;
         createdAt: string;

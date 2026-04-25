@@ -6,6 +6,7 @@ export type PlanType = (typeof PLAN_TYPES)[number];
 export const SUBSCRIPTION_STATUSES = [
   "active",
   "past_due",
+  "paused",
   "canceled",
   "expired",
   "grace_period",
@@ -40,6 +41,7 @@ export interface EntitlementResponse {
   readonly subscription_status: SubscriptionStatus;
   readonly subscription?: {
     readonly provider_name: string;
+    readonly current_period_start: string;
     readonly current_period_end: string;
     readonly cancel_at_period_end: boolean;
   };
@@ -49,13 +51,24 @@ export interface EntitlementResponse {
 
 /** POST /api/checkout request body. */
 export interface CheckoutRequest {
+  readonly product_type?: "subscription";
   readonly plan_type: "pro_monthly" | "pro_yearly";
+}
+
+export interface ChangeSubscriptionPlanRequest {
+  readonly plan_type: "pro_monthly" | "pro_yearly";
+  readonly confirm_upgrade_charge?: boolean;
 }
 
 /** POST /api/checkout response. */
 export interface CheckoutResponse {
-  readonly provider_name: string;
-  readonly checkout_url: string;
+  readonly provider_name: "paddle";
+  readonly price_id: string;
+  readonly custom_data: {
+    readonly user_id: string;
+    readonly product_type: "subscription";
+    readonly sku: "pro_monthly" | "pro_yearly";
+  };
 }
 
 /** GET /api/subscription response. */

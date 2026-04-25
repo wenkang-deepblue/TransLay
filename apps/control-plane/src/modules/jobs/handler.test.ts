@@ -10,6 +10,7 @@ import {
   __extractBearerTokenForTests,
   __resolveHostOauthPersistenceForTests,
   createJobHandler,
+  previewJobHandler,
 } from "./handler";
 
 function createBaseJob() {
@@ -759,6 +760,250 @@ test("KMS test hooks are disabled in production-like environments", () => {
   }
 });
 
+test("createJobHandler returns a partial quota option when selected slides exceed remaining quota", async () => {
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("FROM idempotency_records")) {
+        return { rows: [] };
+      }
+      if (sql.includes("status IN ('completed', 'completed_with_warnings')")) {
+        return { rows: [] };
+      }
+      if (sql.includes("status IN ('pending', 'queued', 'extracting', 'translating', 'writing')")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM subscriptions")) {
+        return {
+          rows: [{
+            id: "sub-1",
+            user_id: "user-1",
+            plan_type: "pro_yearly",
+            status: "active",
+            provider_name: "paddle",
+            provider_customer_id: "ctm_123",
+            provider_subscription_id: "sub_123",
+            current_period_start: new Date("2026-04-24T09:37:58.441Z"),
+            current_period_end: new Date("2027-04-24T09:37:58.441Z"),
+            cancel_at_period_end: false,
+          }],
+        };
+      }
+      if (sql.includes("FROM usage_ledgers")) {
+        return {
+          rows: [{
+            slides_used: "495.0",
+            docs_pages_used: "0",
+            sheets_cells_used: "0",
+            total_jobs: 1,
+          }],
+        };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    },
+    connect: async () => {
+      throw new Error("job admission should not run when quota is exceeded");
+    },
+  } as unknown as Pool;
+
+  let statusCode = 200;
+  let payload: Record<string, unknown> | null = null;
+  const res = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    json(body: Record<string, unknown>) {
+      payload = body;
+      return this;
+    },
+  } as never;
+
+  const req = {
+    authContext: { user_id: "user-1" as UserId },
+    headers: { authorization: "Bearer host-token" },
+    body: {
+      host_type: "slides",
+      document_id: "source-doc",
+      document_name: "Quarterly deck",
+      source_language_mode: "auto",
+      target_language_input: "French",
+      output_mode: "append_in_file",
+      range_mode: "custom",
+      range_expression: "1~10",
+      idempotency_key: "idem-1",
+    },
+  } as never;
+
+  await createJobHandler(
+    pool,
+    {} as Redis,
+    { jobs: { maxGlobalInFlightJobs: 50 } } as AppConfig
+  )(req, res);
+
+  assert.equal(statusCode, 403);
+  assert.deepEqual(payload, {
+    ok: false,
+    error: "QUOTA_INSUFFICIENT_WITH_PARTIAL_OPTION",
+    message: "Usage quota is insufficient, but part of the selected Slides range can continue",
+    required_units: 10,
+    available_units: 5,
+    allowed_range_expression: "1~5",
+    excluded_range_expression: "6~10",
+    cta: {
+      upgrade_subscription: true,
+      buy_credits: true,
+    },
+  });
+});
+
+test("previewJobHandler returns allowed and excluded ranges for partial quota continuation", async () => {
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("FROM subscriptions")) {
+        return {
+          rows: [{
+            id: "sub-1",
+            user_id: "user-1",
+            plan_type: "pro_yearly",
+            status: "active",
+            provider_name: "paddle",
+            provider_customer_id: "ctm_123",
+            provider_subscription_id: "sub_123",
+            current_period_start: new Date("2026-04-24T09:37:58.441Z"),
+            current_period_end: new Date("2027-04-24T09:37:58.441Z"),
+            cancel_at_period_end: false,
+          }],
+        };
+      }
+      if (sql.includes("FROM usage_ledgers")) {
+        return {
+          rows: [{
+            slides_used: "491.0",
+            docs_pages_used: "0",
+            sheets_cells_used: "0",
+            total_jobs: 1,
+          }],
+        };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    },
+  } as unknown as Pool;
+
+  let statusCode = 200;
+  let payload: Record<string, unknown> | null = null;
+  const res = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    json(body: Record<string, unknown>) {
+      payload = body;
+      return this;
+    },
+  } as never;
+
+  await previewJobHandler(pool)(
+    {
+      authContext: { user_id: "user-1" as UserId },
+      body: {
+        host_type: "slides",
+        range_mode: "custom",
+        range_expression: "2~5, 8, 9~15, 20~22",
+      },
+    } as never,
+    res
+  );
+
+  assert.equal(statusCode, 200);
+  assert.deepEqual(payload, {
+    ok: false,
+    error: "QUOTA_INSUFFICIENT_WITH_PARTIAL_OPTION",
+    message: "Usage quota is insufficient, but part of the selected Slides range can continue",
+    required_units: 15,
+    available_units: 9,
+    allowed_range_expression: "2~5, 8, 9~12",
+    excluded_range_expression: "13~15, 20~22",
+    cta: {
+      upgrade_subscription: true,
+      buy_credits: true,
+    },
+  });
+});
+
+test("previewJobHandler truncates sparse custom Slides ranges to the remaining quota", async () => {
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("FROM subscriptions")) {
+        return {
+          rows: [{
+            id: "sub-1",
+            user_id: "user-1",
+            plan_type: "pro_yearly",
+            status: "active",
+            provider_name: "paddle",
+            provider_customer_id: "ctm_123",
+            provider_subscription_id: "sub_123",
+            current_period_start: new Date("2026-04-24T09:37:58.441Z"),
+            current_period_end: new Date("2027-04-24T09:37:58.441Z"),
+            cancel_at_period_end: false,
+          }],
+        };
+      }
+      if (sql.includes("FROM usage_ledgers")) {
+        return {
+          rows: [{
+            slides_used: "492.0",
+            docs_pages_used: "0",
+            sheets_cells_used: "0",
+            total_jobs: 1,
+          }],
+        };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    },
+  } as unknown as Pool;
+
+  let statusCode = 200;
+  let payload: Record<string, unknown> | null = null;
+  const res = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    json(body: Record<string, unknown>) {
+      payload = body;
+      return this;
+    },
+  } as never;
+
+  await previewJobHandler(pool)(
+    {
+      authContext: { user_id: "user-1" as UserId },
+      body: {
+        host_type: "slides",
+        range_mode: "custom",
+        range_expression: "2, 5-7, 9-11, 14, 18-22",
+      },
+    } as never,
+    res
+  );
+
+  assert.equal(statusCode, 200);
+  assert.deepEqual(payload, {
+    ok: false,
+    error: "QUOTA_INSUFFICIENT_WITH_PARTIAL_OPTION",
+    message: "Usage quota is insufficient, but part of the selected Slides range can continue",
+    required_units: 13,
+    available_units: 8,
+    allowed_range_expression: "2, 5~7, 9~11, 14",
+    excluded_range_expression: "18~22",
+    cta: {
+      upgrade_subscription: true,
+      buy_credits: true,
+    },
+  });
+});
+
 test("createJobHandler returns JOB_QUEUE_BUSY when the global in-flight gate is full", async () => {
   const pool = {
     query: async (sql: string) => {
@@ -854,6 +1099,24 @@ test("createJobHandler returns JOB_QUEUE_BUSY when the global in-flight gate is 
       googleWebClientId: "",
       googleIdTokenAudiences: [],
     },
+    billing: {
+      providerName: "paddle",
+      paddle: {
+        environment: "sandbox",
+        clientToken: "test_client_token",
+        apiKey: "pdl_test_api_key",
+        webhookSecret: "whsec_test_secret",
+        priceIds: {
+          pro_monthly: "pri_monthly_123",
+          pro_yearly: "pri_yearly_456",
+        },
+        priceAmounts: {
+          pro_monthly: 999,
+          pro_yearly: 11999,
+        },
+        webhookToleranceSeconds: 300,
+      },
+    },
     entitlementCacheTtl: 300,
     jobs: {
       maxGlobalInFlightJobs: 50,
@@ -892,7 +1155,8 @@ test("createJobHandler returns JOB_QUEUE_BUSY when the global in-flight gate is 
       source_language_mode: "auto",
       target_language_input: "French",
       output_mode: "append_in_file",
-      range_mode: "entire",
+      range_mode: "custom",
+      range_expression: "1",
       idempotency_key: "idem-1",
     },
   } as never;
@@ -1001,6 +1265,24 @@ test("createJobHandler returns CONCURRENT_JOB_RUNNING when atomic admission sees
       googleWebClientId: "",
       googleIdTokenAudiences: [],
     },
+    billing: {
+      providerName: "paddle",
+      paddle: {
+        environment: "sandbox",
+        clientToken: "test_client_token",
+        apiKey: "pdl_test_api_key",
+        webhookSecret: "whsec_test_secret",
+        priceIds: {
+          pro_monthly: "pri_monthly_123",
+          pro_yearly: "pri_yearly_456",
+        },
+        priceAmounts: {
+          pro_monthly: 999,
+          pro_yearly: 11999,
+        },
+        webhookToleranceSeconds: 300,
+      },
+    },
     entitlementCacheTtl: 300,
     jobs: {
       maxGlobalInFlightJobs: 50,
@@ -1039,7 +1321,8 @@ test("createJobHandler returns CONCURRENT_JOB_RUNNING when atomic admission sees
       source_language_mode: "auto",
       target_language_input: "French",
       output_mode: "append_in_file",
-      range_mode: "entire",
+      range_mode: "custom",
+      range_expression: "1",
       idempotency_key: "idem-1",
     },
   } as never;

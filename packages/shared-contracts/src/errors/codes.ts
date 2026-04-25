@@ -5,13 +5,19 @@ export const ERROR_CODES = {
   INVALID_RANGE: { status: 400, message: "Invalid range expression" },
   UNSUPPORTED_LANGUAGE: { status: 400, message: "Language could not be recognized" },
   INVALID_TICKET: { status: 400, message: "Ticket is invalid, expired, or malformed" },
+  INVALID_CHECKOUT_REQUEST: { status: 400, message: "Checkout request is invalid" },
 
   // 401
   UNAUTHORIZED: { status: 401, message: "Authentication required" },
   INVALID_TOKEN: { status: 401, message: "Token verification failed" },
+  WEBHOOK_SIGNATURE_INVALID: { status: 401, message: "Webhook signature verification failed" },
 
   // 403
   QUOTA_EXCEEDED: { status: 403, message: "Usage quota exceeded" },
+  QUOTA_INSUFFICIENT_WITH_PARTIAL_OPTION: {
+    status: 403,
+    message: "Usage quota is insufficient, but part of the selected Slides range can continue",
+  },
   ACCESS_DENIED: { status: 403, message: "Current subscription does not permit this operation" },
 
   // 404
@@ -39,7 +45,6 @@ export const ERROR_CODES = {
 
   // 502
   HOST_ADAPTER_ERROR: { status: 502, message: "Document extraction or write-back error" },
-  WEBHOOK_SIGNATURE_INVALID: { status: 502, message: "Webhook signature verification failed" },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

@@ -42,6 +42,7 @@ export function computeEntitlement(input: EntitlementInput): EntitlementResult {
       isPro = true;
       break;
     case "past_due":
+    case "paused":
     case "canceled":
     case "expired":
       isPro = false;

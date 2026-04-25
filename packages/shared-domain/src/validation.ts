@@ -165,6 +165,10 @@ export function validateCreateJobRequest(body: unknown): string | null {
   if (req.range_mode === "custom" && !req.range_expression)
     return "range_expression is required when range_mode is 'custom'";
 
+  if (req.host_type === "slides" && req.range_mode === "entire") {
+    return "Slides jobs must use an explicit range before submission";
+  }
+
   if (
     req.range_mode === "custom" &&
     typeof req.range_expression === "string" &&
@@ -186,7 +190,7 @@ export function validateCreateJobRequest(body: unknown): string | null {
 }
 
 /**
- * Parse Slides/Docs page range expression (e.g. "1,3,5-7").
+ * Parse Slides/Docs page range expression (e.g. "1,3,5-7" or "1,3,5~7").
  * Returns sorted unique page numbers, or null if invalid.
  * Capped at MAX_TOTAL_PAGES to prevent DoS via large ranges.
  */
@@ -294,7 +298,7 @@ export function parsePageRangeDetailed(expr: string): PageRangeParseResult {
     return {
       ...buildPageRangeError(
         "non_ascii_punctuation",
-        "Range expression must use ASCII commas (,) and hyphens (-) only."
+        "Range expression must use ASCII commas (,), hyphens (-), or tildes (~) only."
       ),
       input_raw: inputRaw,
     };
@@ -324,12 +328,12 @@ export function parsePageRangeDetailed(expr: string): PageRangeParseResult {
       };
     }
 
-    const hyphenCount = [...token].filter((char) => char === "-").length;
-    if (hyphenCount > 1) {
+    const separatorCount = [...token].filter((char) => char === "-" || char === "~").length;
+    if (separatorCount > 1) {
       return {
         ...buildPageRangeError(
           "invalid_range_segment",
-          "Each range segment must contain at most one hyphen.",
+          "Each range segment must contain at most one range separator.",
           token
         ),
         input_raw: inputRaw,
@@ -337,13 +341,13 @@ export function parsePageRangeDetailed(expr: string): PageRangeParseResult {
       };
     }
 
-    if (token.includes("-")) {
-      const [rawStart, rawEnd] = token.split("-");
+    if (token.includes("-") || token.includes("~")) {
+      const [rawStart, rawEnd] = token.split(/[~-]/);
       if (rawStart === undefined || rawEnd === undefined) {
         return {
           ...buildPageRangeError(
             "invalid_range_segment",
-            "Range segment must be in the form start-end.",
+            "Range segment must be in the form start-end or start~end.",
             token
           ),
           input_raw: inputRaw,
@@ -429,6 +433,124 @@ export function parsePageRangeDetailed(expr: string): PageRangeParseResult {
     deduplicated: resolvedPages.length !== rawPageCount,
     sorted: true,
     validation_errors: [],
+  };
+}
+
+export function compactIndicesToRangeExpression(indices: readonly number[]): string {
+  if (indices.length === 0) {
+    return "";
+  }
+
+  const sorted = Array.from(new Set(indices))
+    .filter((value) => Number.isInteger(value) && value > 0)
+    .sort((a, b) => a - b);
+  const ranges: string[] = [];
+  let start = sorted[0] ?? 0;
+  let previous = start;
+
+  for (let i = 1; i <= sorted.length; i += 1) {
+    const current = sorted[i];
+    if (current === previous + 1) {
+      previous = current;
+      continue;
+    }
+
+    ranges.push(start === previous ? String(start) : `${start}~${previous}`);
+    if (current !== undefined) {
+      start = current;
+      previous = current;
+    }
+  }
+
+  return ranges.join(", ");
+}
+
+export function truncateSlidesToQuota(
+  indices: readonly number[],
+  availableUnits: number
+): {
+  readonly allowed_indices: readonly number[];
+  readonly excluded_indices: readonly number[];
+  readonly allowed_range_expression: string;
+  readonly excluded_range_expression: string;
+} {
+  const safeAvailable = Math.max(0, Math.floor(availableUnits));
+  const allowed = indices.slice(0, safeAvailable);
+  const excluded = indices.slice(safeAvailable);
+  return {
+    allowed_indices: allowed,
+    excluded_indices: excluded,
+    allowed_range_expression: compactIndicesToRangeExpression(allowed),
+    excluded_range_expression: compactIndicesToRangeExpression(excluded),
+  };
+}
+
+export function truncateSlideRangeExpressionToQuota(
+  expression: string,
+  availableUnits: number
+): {
+  readonly required_units: number;
+  readonly allowed_indices: readonly number[];
+  readonly excluded_indices: readonly number[];
+  readonly allowed_range_expression: string;
+  readonly excluded_range_expression: string;
+} | null {
+  const parsed = parsePageRangeDetailed(expression);
+  if (parsed.validation_errors.length > 0) {
+    return null;
+  }
+
+  const safeAvailable = Math.max(0, Math.floor(availableUnits));
+  let remaining = safeAvailable;
+  const seen = new Set<number>();
+  const allowedIndices: number[] = [];
+  const excludedIndices: number[] = [];
+  const allowedParts: string[] = [];
+  const excludedParts: string[] = [];
+
+  for (const rawToken of parsed.tokens) {
+    const token = rawToken.trim();
+    const [rawStart, rawEnd] = token.split(/[~-]/);
+    const start = Number(rawStart);
+    const end = rawEnd === undefined ? start : Number(rawEnd);
+    const uniquePages: number[] = [];
+
+    for (let page = start; page <= end; page += 1) {
+      if (!seen.has(page)) {
+        seen.add(page);
+        uniquePages.push(page);
+      }
+    }
+
+    if (uniquePages.length === 0) {
+      continue;
+    }
+
+    if (remaining <= 0) {
+      excludedIndices.push(...uniquePages);
+      excludedParts.push(compactIndicesToRangeExpression(uniquePages));
+      continue;
+    }
+
+    const allowed = uniquePages.slice(0, remaining);
+    const excluded = uniquePages.slice(remaining);
+    if (allowed.length > 0) {
+      allowedIndices.push(...allowed);
+      allowedParts.push(compactIndicesToRangeExpression(allowed));
+    }
+    if (excluded.length > 0) {
+      excludedIndices.push(...excluded);
+      excludedParts.push(compactIndicesToRangeExpression(excluded));
+    }
+    remaining -= allowed.length;
+  }
+
+  return {
+    required_units: parsed.resolved_pages.length,
+    allowed_indices: allowedIndices,
+    excluded_indices: excludedIndices,
+    allowed_range_expression: allowedParts.join(", "),
+    excluded_range_expression: excludedParts.join(", "),
   };
 }
 

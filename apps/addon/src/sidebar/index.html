@@ -75,6 +75,12 @@
       font-size: 12px;
     }
     .entitlement-bar.pro { background: #e6f4ea; }
+    .plan-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
     .plan-badge {
       display: inline-block;
       padding: 2px 8px;
@@ -85,6 +91,23 @@
     }
     .plan-badge.free { background: #d2e3fc; color: #1967d2; }
     .plan-badge.pro { background: #ceead6; color: #137333; }
+    .subscription-expiry-badge {
+      display: none;
+      flex: 0 1 auto;
+      max-width: 66%;
+      padding: 2px 7px;
+      border: 1px solid #34a853;
+      border-radius: 4px;
+      background: #ffffff;
+      color: #137333;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 1.4;
+      text-align: right;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .usage-row {
       margin-top: 6px;
       display: flex;
@@ -162,23 +185,31 @@
       color: #fff;
     }
     .btn-primary:hover:not(:disabled) { background: #3367d6; transform: scale(1.02); }
+    .btn-primary:active:not(:disabled) { background: #185abc; transform: scale(0.98); }
     .btn-secondary {
       background: #f1f3f4;
       color: #202124;
       margin-top: 8px;
     }
     .btn-secondary:hover:not(:disabled) { background: #e8eaed; transform: scale(1.02); }
+    .btn-secondary:active:not(:disabled) { background: #dadce0; transform: scale(0.98); }
     #resubmitBtn {
       background: #f9ba02;
       color: #fff;
     }
     #resubmitBtn:hover:not(:disabled) { background: #e0a700; transform: scale(1.02); }
+    #resubmitBtn:active:not(:disabled) { background: #c99200; transform: scale(0.98); }
     .btn-danger {
       background: #d93025;
       color: #fff;
       margin-top: 10px;
     }
     .btn-danger:hover:not(:disabled) { background: #b3261e; transform: scale(1.02); }
+    .btn-danger:active:not(:disabled) { background: #8f1d18; transform: scale(0.98); }
+    .btn:focus-visible {
+      outline: 2px solid #174ea6;
+      outline-offset: 2px;
+    }
     .btn-inline {
       width: auto;
       min-width: 120px;
@@ -298,6 +329,15 @@
     .copy-task-id-btn:hover {
       opacity: 1;
       transform: scale(1.02);
+    }
+    .copy-task-id-btn:active:not(:disabled) {
+      opacity: 1;
+      transform: scale(0.9);
+    }
+    .copy-task-id-btn:focus-visible {
+      outline: 2px solid #174ea6;
+      outline-offset: 2px;
+      border-radius: 4px;
     }
     .copy-task-id-btn svg {
       width: 14px;
@@ -440,12 +480,21 @@
       gap: 8px;
       justify-content: flex-end;
     }
+    .dialog-overlay.quota-dialog .dialog-actions {
+      justify-content: center;
+    }
     .dialog-actions .btn {
       width: auto;
       min-width: 96px;
       margin-top: 0;
       padding: 8px 12px;
       font-size: 12px;
+    }
+    .quota-link {
+      color: #0b57d0;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      cursor: pointer;
     }
     .support-link-wrap {
       margin-top: auto;
@@ -506,7 +555,10 @@
 
     <!-- Entitlement bar -->
     <div class="entitlement-bar" id="entitlementBar">
-      <span class="plan-badge free" id="planBadge">FREE</span>
+      <div class="plan-row">
+        <span class="plan-badge free" id="planBadge">FREE</span>
+        <span class="subscription-expiry-badge" id="subscriptionExpiryBadge"></span>
+      </div>
       <div class="usage-row" id="usageSlides" style="display:none;">
         <span>Slides</span>
         <span id="usageSlidesText">0 / 50</span>
@@ -585,7 +637,7 @@
 
     <!-- Upgrade / Manage button -->
     <button class="btn btn-secondary" id="upgradeBtn" onclick="handleUpgrade()">
-      Upgrade to Pro
+      Subscribe
     </button>
 
     <!-- Progress area -->
@@ -814,18 +866,49 @@
 
       var bar = document.getElementById('entitlementBar');
       var badge = document.getElementById('planBadge');
+      var expiryBadge = document.getElementById('subscriptionExpiryBadge');
       var upgradeBtn = document.getElementById('upgradeBtn');
 
-      var isPro = ent.access === 'pro';
-      bar.className = 'entitlement-bar' + (isPro ? ' pro' : '');
-      badge.className = 'plan-badge ' + (isPro ? 'pro' : 'free');
-      badge.textContent = isPro ? 'PRO' : 'FREE';
+      var planType = ent.plan_type || 'free';
+      var isPaid = ent.access === 'pro';
+      var planLabel = 'FREE';
+      var subscriptionLabel = 'subscription';
+      if (planType === 'pro_monthly') {
+        planLabel = 'MONTHLY';
+        subscriptionLabel = 'Monthly subscription';
+      } else if (planType === 'pro_yearly') {
+        planLabel = 'YEARLY';
+        subscriptionLabel = 'Yearly subscription';
+      }
+      bar.className = 'entitlement-bar' + (isPaid ? ' pro' : '');
+      badge.className = 'plan-badge ' + (isPaid ? 'pro' : 'free');
+      badge.textContent = planLabel;
+
+      function formatDate(value) {
+        var date = new Date(value);
+        if (isNaN(date.getTime())) return '';
+        return date.getFullYear() + '-' +
+          String(date.getMonth() + 1).padStart(2, '0') + '-' +
+          String(date.getDate()).padStart(2, '0');
+      }
 
       function formatUsageNumber(value) {
         if (typeof value !== 'number' || !isFinite(value)) return '0';
         return Number.isInteger(value)
           ? value.toLocaleString()
           : value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      }
+
+      var periodEnd = ent.subscription && ent.subscription.current_period_end;
+      var formattedPeriodEnd = periodEnd ? formatDate(periodEnd) : '';
+      if (isPaid && formattedPeriodEnd) {
+        var periodEndTime = new Date(periodEnd).getTime();
+        var prefix = periodEndTime < Date.now() ? 'Expired on: ' : 'Expires on: ';
+        expiryBadge.textContent = prefix + formattedPeriodEnd;
+        expiryBadge.style.display = 'inline-block';
+      } else {
+        expiryBadge.textContent = '';
+        expiryBadge.style.display = 'none';
       }
 
       // Usage display
@@ -849,22 +932,19 @@
       // Cancel notice
       var notice = document.getElementById('cancelNotice');
       if (ent.subscription && ent.subscription.cancel_at_period_end) {
-        var endDate = new Date(ent.subscription.current_period_end);
-        var formatted = endDate.getFullYear() + '-' +
-          String(endDate.getMonth() + 1).padStart(2, '0') + '-' +
-          String(endDate.getDate()).padStart(2, '0');
-        notice.textContent = 'Your subscription has been canceled. Access continues until ' + formatted + '.';
+        var formatted = formattedPeriodEnd || 'the current period end';
+        notice.textContent = subscriptionLabel + ' canceled. Access expires on ' + formatted + '.';
         notice.style.display = 'block';
       } else {
         notice.style.display = 'none';
       }
 
       // Upgrade button text
-      if (isPro) {
+      if (isPaid) {
         upgradeBtn.textContent = 'Manage Subscription';
         upgradeBtn.onclick = function() { handleManageSubscription(); };
       } else {
-        upgradeBtn.textContent = 'Upgrade to Pro';
+        upgradeBtn.textContent = 'Subscribe';
         upgradeBtn.onclick = function() { handleUpgrade(); };
       }
 
@@ -881,12 +961,40 @@
         return;
       }
 
+      previewTranslationSubmission(submissionData);
+    }
+
+    function previewTranslationSubmission(submissionData) {
+      google.script.run
+        .withSuccessHandler(function(preview) {
+          if (preview && preview.ok === false && preview.error === 'QUOTA_INSUFFICIENT_WITH_PARTIAL_OPTION') {
+            showQuotaPartialDialog(submissionData, preview);
+            return;
+          }
+          showFullTranslationConfirmation(submissionData);
+        })
+        .withFailureHandler(function(err) {
+          var msg = err.message || 'Failed to preview usage quota.';
+          if (msg.indexOf('[QUOTA_EXCEEDED]') !== -1) {
+            showError('Usage quota exceeded. Upgrade your subscription or buy credits for more capacity.');
+          } else {
+            showError(msg);
+          }
+        })
+        .previewJob({
+          host_type: submissionData.jobRequest.host_type,
+          range_mode: submissionData.jobRequest.range_mode,
+          range_expression: submissionData.jobRequest.range_expression
+        });
+    }
+
+    function showFullTranslationConfirmation(submissionData) {
       showConfirmationDialog(
         'Confirmation',
         buildTranslationConfirmationBody(
           submissionData.targetLang,
-          submissionData.rangeMode,
-          submissionData.rangeExpression,
+          submissionData.displayRangeMode,
+          submissionData.displayRangeExpression,
           submissionData.outputMode,
           submissionData.translatedPageCount
         ),
@@ -903,6 +1011,28 @@
         },
         true
       );
+    }
+
+    function showQuotaPartialDialog(submissionData, preview) {
+        showConfirmationDialog(
+          'Usage quota',
+          buildQuotaPartialBody(preview),
+        'Continue',
+          'Cancel',
+          function() {
+            var partialSubmission = applyQuotaPartialOption(submissionData, preview);
+            executeTranslateSubmission(
+            partialSubmission.jobRequest,
+            partialSubmission.targetLang,
+            partialSubmission.outputMode,
+            partialSubmission.rangeExpression,
+            partialSubmission.submissionNonce
+            );
+          },
+        true,
+        null,
+        'quota-dialog'
+        );
     }
 
     function buildTranslationSubmission(options) {
@@ -938,6 +1068,22 @@
         ? ('resubmit_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8))
         : '';
 
+      var translatedPageCount = estimateSelectedSlideCount(rangeMode, rangeExpression);
+      if (translatedPageCount === null) {
+        showError('The selected page range is invalid.');
+        return null;
+      }
+      var jobRangeMode = rangeMode;
+      var jobRangeExpression = rangeExpression;
+      if (state.hostType === 'slides' && rangeMode === 'entire') {
+        if (!state.slideCount || state.slideCount < 1) {
+          showError('Unable to determine the slide count for this presentation.');
+          return null;
+        }
+        jobRangeMode = 'custom';
+        jobRangeExpression = compactSlideIndicesToRangeExpression(buildSequentialSlideIndices(state.slideCount));
+      }
+
       var jobRequest = {
         host_type: state.hostType,
         document_id: state.documentId,
@@ -947,24 +1093,92 @@
         source_language_mode: 'auto',
         target_language_input: targetLang,
         output_mode: outputMode,
-        range_mode: rangeMode,
-        range_expression: rangeExpression,
+        range_mode: jobRangeMode,
+        range_expression: jobRangeExpression,
         idempotency_key: null
       };
-      var translatedPageCount = estimateSelectedSlideCount(rangeMode, rangeExpression);
-      if (translatedPageCount === null) {
-        showError('The selected page range is invalid.');
-        return null;
-      }
 
       return {
         jobRequest: jobRequest,
         targetLang: targetLang,
         outputMode: outputMode,
-        rangeMode: rangeMode,
-        rangeExpression: rangeExpression,
+        rangeMode: jobRangeMode,
+        rangeExpression: jobRangeExpression,
+        displayRangeMode: rangeMode,
+        displayRangeExpression: rangeExpression,
         translatedPageCount: translatedPageCount,
         submissionNonce: submissionNonce
+      };
+    }
+
+    function formatSlideCount(value) {
+      if (typeof value !== 'number' || !isFinite(value)) {
+        return '0';
+      }
+      return Number.isInteger(value)
+        ? String(value)
+        : value.toFixed(1);
+    }
+
+    function buildSequentialSlideIndices(count) {
+      var indices = [];
+      for (var i = 1; i <= count; i++) {
+        indices.push(i);
+      }
+      return indices;
+    }
+
+    function compactSlideIndicesToRangeExpression(indices) {
+      if (!indices || !indices.length) {
+        return '';
+      }
+      var ranges = [];
+      var start = indices[0];
+      var previous = start;
+      for (var i = 1; i <= indices.length; i++) {
+        var current = indices[i];
+        if (current === previous + 1) {
+          previous = current;
+          continue;
+        }
+        ranges.push(start === previous ? String(start) : (start + '~' + previous));
+        if (typeof current === 'number') {
+          start = current;
+          previous = current;
+        }
+      }
+      return ranges.join(', ');
+    }
+
+    function buildQuotaPartialBody(preview) {
+      var skippedUnits = Math.max(0, Number(preview.required_units || 0) - Number(preview.available_units || 0));
+      return [
+        'Your current quota is not enough for the full selection.<br><br>',
+        'Required slides: <strong>' + escapeHtml(formatSlideCount(preview.required_units)) + '</strong><br>',
+        'Available quota: <strong>' + escapeHtml(formatSlideCount(preview.available_units)) + '</strong><br>',
+        'Will translate: <strong>the first ' + escapeHtml(formatSlideCount(preview.available_units)) + ' slides of the task</strong><br>',
+        'Will skip: <strong>the last ' + escapeHtml(formatSlideCount(skippedUnits)) + ' slides of the task</strong><br><br>',
+        'Continuing will translate only the allowed slides. Skipped slides will not be submitted, translated, or counted toward quota.',
+        '<br><br>To execute the full task, you can also buy more on-demand credits on our ',
+        '<a href="#" class="quota-link" onclick="handleQuotaOfficialWebsiteClick(event)">official website</a>.'
+      ].join('');
+    }
+
+    function applyQuotaPartialOption(submissionData, preview) {
+      var jobRequest = cloneJobRequest(submissionData.jobRequest);
+      jobRequest.range_mode = 'custom';
+      jobRequest.range_expression = preview.allowed_range_expression;
+      jobRequest.idempotency_key = null;
+      return {
+        jobRequest: jobRequest,
+        targetLang: submissionData.targetLang,
+        outputMode: submissionData.outputMode,
+        rangeMode: 'custom',
+        rangeExpression: preview.allowed_range_expression,
+        displayRangeMode: 'custom',
+        displayRangeExpression: preview.allowed_range_expression,
+        translatedPageCount: preview.available_units,
+        submissionNonce: submissionData.submissionNonce
       };
     }
 
@@ -1125,8 +1339,21 @@
           var msg = err.message || 'Failed to create translation job.';
           if (msg.indexOf('[UNSUPPORTED_LANGUAGE]') !== -1) {
             showError('Language not recognized. Please try again.');
+          } else if (msg.indexOf('[QUOTA_INSUFFICIENT_WITH_PARTIAL_OPTION]') !== -1) {
+            var partial = parseQuotaPartialError(msg);
+            if (partial) {
+              showQuotaPartialDialog({
+                jobRequest: cloneJobRequest(jobRequest),
+                targetLang: jobRequest.target_language_input,
+                outputMode: jobRequest.output_mode,
+                rangeExpression: jobRequest.range_expression,
+                submissionNonce: 'partial_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
+              }, partial);
+            } else {
+              showError('Usage quota is insufficient for the full selection.');
+            }
           } else if (msg.indexOf('[QUOTA_EXCEEDED]') !== -1) {
-            showError('Usage quota exceeded. Upgrade to Pro for more capacity.');
+            showError('Usage quota exceeded. Upgrade your subscription or buy credits for more capacity.');
           } else if (msg.indexOf('[JOB_QUEUE_BUSY') !== -1) {
             showError('The system is currently busy. Please try again in a few minutes.');
           } else if (msg.indexOf('[RATE_LIMITED') !== -1) {
@@ -1154,6 +1381,18 @@
           }
         })
         .createJob(jobRequest);
+    }
+
+    function parseQuotaPartialError(message) {
+      var jsonStart = message.indexOf('{');
+      if (jsonStart === -1) {
+        return null;
+      }
+      try {
+        return JSON.parse(message.slice(jsonStart));
+      } catch (err) {
+        return null;
+      }
     }
 
     // ── Job polling ──
@@ -1576,6 +1815,17 @@
       if (event) {
         event.preventDefault();
       }
+      openOfficialWebsite('/');
+    }
+
+    function handleQuotaOfficialWebsiteClick(event) {
+      if (event) {
+        event.preventDefault();
+      }
+      openPortal('manage_subscription');
+    }
+
+    function openOfficialWebsite(redirectPath) {
       google.script.run
         .withSuccessHandler(function(url) {
           window.open(url, '_blank');
@@ -1583,7 +1833,7 @@
         .withFailureHandler(function(err) {
           showError('Failed to open official website: ' + err.message);
         })
-        .getOfficialWebsiteUrl();
+        .getOfficialWebsiteUrl(redirectPath);
     }
 
     function openPortal(reason) {
@@ -1605,8 +1855,13 @@
       var confirmBtn = document.getElementById('confirmDialogConfirmBtn');
       var bodyIsHtml = arguments[5] === true;
       var onCancel = arguments[6];
+      var dialogClassName = arguments[7] || '';
 
       titleEl.textContent = title || 'Confirmation';
+      overlay.classList.remove('quota-dialog');
+      if (dialogClassName) {
+        overlay.classList.add(dialogClassName);
+      }
       if (bodyIsHtml) {
         bodyEl.innerHTML = body || '';
       } else {
@@ -1632,7 +1887,9 @@
     }
 
     function hideConfirmationDialog() {
-      document.getElementById('confirmDialog').classList.remove('visible');
+      var overlay = document.getElementById('confirmDialog');
+      overlay.classList.remove('visible');
+      overlay.classList.remove('quota-dialog');
     }
 
     function estimateSelectedSlideCount(rangeMode, rangeExpression) {
@@ -1662,7 +1919,7 @@
           return null;
         }
 
-        var rangeMatch = segment.match(/^(\d+)\s*-\s*(\d+)$/);
+        var rangeMatch = segment.match(/^(\d+)\s*[-~]\s*(\d+)$/);
         if (rangeMatch) {
           var start = parseInt(rangeMatch[1], 10);
           var end = parseInt(rangeMatch[2], 10);

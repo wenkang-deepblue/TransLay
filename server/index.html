@@ -10,7 +10,25 @@
 <link rel="preconnect" href="https://accounts.google.com">
 <link rel="preconnect" href="https://accounts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=8" />
+<link rel="stylesheet" href="styles.css?v=10" />
+<script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+<script>
+(() => {
+  try {
+    const url = new URL(window.location.href);
+    const ticket = url.searchParams.get("ticket");
+    if (!ticket || !ticket.trim()) {
+      return;
+    }
+
+    window.__TRANSLAY_PORTAL_TICKET__ = ticket.trim();
+    url.searchParams.delete("ticket");
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+  } catch (_) {
+    window.__TRANSLAY_PORTAL_TICKET__ = "";
+  }
+})();
+</script>
 </head>
 <body>
 <div id="app"></div>
@@ -19,17 +37,41 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
-<script src="i18n.js?v=12"></script>
-<script src="js/landing-config.js?v=2"></script>
-<script src="js/landing-session.js?v=4"></script>
+<script src="i18n.js?v=16"></script>
+<script src="js/landing-config.js?v=3"></script>
+<script src="js/landing-session.js?v=7"></script>
 <script src="js/landing-auth.js?v=2"></script>
+<script src="js/landing-checkout.js?v=2"></script>
 <script type="text/babel" src="components/shared.jsx?v=9"></script>
 <script type="text/babel" src="components/hero.jsx?v=8"></script>
-<script type="text/babel" src="components/sections.jsx?v=8"></script>
+<script type="text/babel" src="components/sections.jsx?v=11"></script>
 <script type="text/babel" src="components/tweaks.jsx?v=3"></script>
 
 <script type="text/babel">
 const { useState, useEffect, useCallback } = React;
+
+function formatSubscriptionDate(iso) {
+  if (typeof iso !== "string" || !iso.trim()) {
+    return "";
+  }
+
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat(document.documentElement.lang || "en", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(parsed);
+}
+
+function fillTemplate(template, values) {
+  return String(template || "").replace(/\{(\w+)\}/g, (_match, key) => {
+    return Object.prototype.hasOwnProperty.call(values, key) ? values[key] : "";
+  });
+}
 
 function App() {
   const { lang, t, setLang } = useI18n();
@@ -49,9 +91,21 @@ function App() {
       user: null,
       planType: "free",
       subscriptionStatus: "active",
+      subscription: null,
       errorMessage: "",
     }),
   }));
+  const [checkoutNotice, setCheckoutNotice] = useState("");
+  const [subscriptionSuccessPlan, setSubscriptionSuccessPlan] = useState(() =>
+    window.TransLayLandingCheckout?.readSuccessfulPlan?.() || ""
+  );
+  const [successDialogPlan, setSuccessDialogPlan] = useState(() =>
+    window.TransLayLandingCheckout?.readPendingSuccessDialogPlan?.() || ""
+  );
+  const successDialogOpen = Boolean(successDialogPlan);
+  const [cancelDialogPlan, setCancelDialogPlan] = useState("");
+  const [upgradeDialogMode, setUpgradeDialogMode] = useState("");
+  const [upgradeDialogMessage, setUpgradeDialogMessage] = useState("");
 
   // Tweaks protocol with host toolbar
   useEffect(() => {
@@ -66,21 +120,101 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const completedEvent = window.TransLayLandingCheckoutEvents?.completed;
+    const errorEvent = window.TransLayLandingCheckoutEvents?.error;
+    if (!completedEvent || !errorEvent) {
+      return;
+    }
+
+    let refreshTimer = 0;
+
+    const handleCompleted = (event) => {
+      const completedPlan = event?.detail?.data?.custom_data?.sku || event?.detail?.custom_data?.sku || "";
+      if (completedPlan) {
+        window.TransLayLandingCheckout?.rememberSuccessfulPlan?.(completedPlan);
+        window.TransLayLandingCheckout?.rememberPendingSuccessDialog?.(completedPlan);
+        setSubscriptionSuccessPlan(completedPlan);
+        setSuccessDialogPlan(completedPlan);
+      }
+      setCheckoutNotice(t.pricing.purchase_received_notice);
+      setAuthState((prev) => ({
+        ...prev,
+        errorMessage: t.pricing.purchase_received_notice,
+      }));
+      refreshTimer = window.setTimeout(async () => {
+        const acceptedPlans = new Set(["pro_monthly", "pro_yearly"]);
+        const retryDelays = [1500, 2000, 3000, 4000, 5000, 6000];
+
+        for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+          try {
+            const payload = await window.TransLayLandingSession.fetchSessionMe();
+            setAuthState(window.TransLayLandingSession.rememberSessionState(payload));
+            if (acceptedPlans.has(payload?.plan_type || "")) {
+              setSubscriptionSuccessPlan(payload.plan_type);
+              setCheckoutNotice("");
+              return;
+            }
+          } catch (error) {
+            if (attempt === retryDelays.length - 1) {
+              const message =
+                error?.message || t.pricing.subscription_confirmation_delayed_notice;
+              setCheckoutNotice(message);
+              setAuthState((prev) => ({
+                ...prev,
+                errorMessage: message,
+              }));
+              return;
+            }
+          }
+
+          await new Promise((resolve) => {
+            refreshTimer = window.setTimeout(resolve, retryDelays[attempt]);
+          });
+        }
+
+        const delayedMessage = t.pricing.subscription_confirmation_delayed_notice;
+        setCheckoutNotice(delayedMessage);
+        setAuthState((prev) => ({
+          ...prev,
+          errorMessage: delayedMessage,
+        }));
+      }, 1000);
+    };
+
+    const handleCheckoutError = (event) => {
+      const eventName = event?.detail?.name || "";
+      const message =
+        eventName === "checkout.payment.failed" || eventName === "checkout.payment.error"
+          ? t.pricing.payment_failed_notice
+          : t.pricing.checkout_unavailable_notice;
+      setCheckoutNotice(message);
+      setAuthState((prev) => ({ ...prev, errorMessage: message }));
+    };
+
+    window.addEventListener(completedEvent, handleCompleted);
+    window.addEventListener(errorEvent, handleCheckoutError);
+    return () => {
+      window.clearTimeout(refreshTimer);
+      window.removeEventListener(completedEvent, handleCompleted);
+      window.removeEventListener(errorEvent, handleCheckoutError);
+    };
+  }, [t]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const bootstrapSession = async () => {
       const ticket = window.TransLayLandingSession.getTicketFromLocation();
       if (ticket) {
         setAuthState((prev) => ({ ...prev, status: "consuming_ticket", errorMessage: "" }));
+        window.TransLayLandingSession.stripTicketFromUrl();
         try {
           const payload = await window.TransLayLandingSession.consumeTicket(ticket);
-          window.TransLayLandingSession.stripTicketFromUrl();
           if (!cancelled) {
             setAuthState(window.TransLayLandingSession.rememberSessionState(payload));
           }
           return;
         } catch (error) {
-          window.TransLayLandingSession.stripTicketFromUrl();
           if (!cancelled) {
             setAuthState(
               window.TransLayLandingSession.buildSignedOutState(error?.message || "Unable to sign you in.")
@@ -97,6 +231,9 @@ function App() {
           const state = window.TransLayLandingSession.normalizeSessionState(payload);
           if (state.status === "signed_in") {
             setAuthState(window.TransLayLandingSession.rememberSessionState(payload));
+            if (payload.plan_type === "pro_monthly" || payload.plan_type === "pro_yearly") {
+              setSubscriptionSuccessPlan(payload.plan_type);
+            }
             return;
           }
 
@@ -170,10 +307,14 @@ function App() {
   }, []);
 
   const handleGoogleCredential = useCallback(async (credential) => {
+    setCheckoutNotice("");
     setAuthState((prev) => ({ ...prev, status: "signing_in", errorMessage: "" }));
     try {
       const payload = await window.TransLayLandingSession.loginWithGoogleCredential(credential);
       setAuthState(window.TransLayLandingSession.rememberSessionState(payload));
+      if (payload.plan_type === "pro_monthly" || payload.plan_type === "pro_yearly") {
+        setSubscriptionSuccessPlan(payload.plan_type);
+      }
     } catch (error) {
       setAuthState(
         window.TransLayLandingSession.buildSignedOutState(error?.message || "Unable to complete sign-in.")
@@ -188,12 +329,259 @@ function App() {
       console.warn("Portal logout failed:", error?.message || error);
     }
     window.TransLayLandingSession.clearAuthSnapshot?.();
+    setCheckoutNotice("");
+    setSubscriptionSuccessPlan("");
+    setSuccessDialogPlan("");
+    window.TransLayLandingCheckout?.clearSuccessfulPlan?.();
+    window.TransLayLandingCheckout?.clearPendingSuccessDialog?.();
     setAuthState(window.TransLayLandingSession.buildSignedOutState(""));
   }, []);
+
+  const handlePlanCheckout = useCallback(async (planType, options = {}) => {
+    if (authState.status !== "signed_in" || !authState.user) {
+      const localizedMessage = t.pricing.sign_in_required_notice;
+      setCheckoutNotice(localizedMessage);
+      setAuthState((prev) => ({
+        ...prev,
+        errorMessage: localizedMessage,
+      }));
+      document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    try {
+      if (authState.planType === "pro_monthly" || authState.planType === "pro_yearly") {
+        if (options.confirmUpgradeCharge) {
+          setCheckoutNotice("");
+          setUpgradeDialogMessage("");
+          setUpgradeDialogMode("processing");
+        } else {
+          setCheckoutNotice(t.pricing.subscription_change_pending_notice);
+        }
+        const payload = await window.TransLayLandingSession.changeSubscriptionPlan(planType, {
+          confirmUpgradeCharge: Boolean(options.confirmUpgradeCharge),
+        });
+        if (payload?.billing_action?.type === "confirm_upgrade_charge") {
+          setUpgradeDialogMessage(
+            fillTemplate(t.pricing.upgrade_notice_body, {
+              amount: payload.billing_action.formatted_amount,
+            })
+          );
+          setUpgradeDialogMode("confirm");
+          setCheckoutNotice("");
+          return;
+        }
+        window.TransLayLandingCheckout?.rememberSuccessfulPlan?.(planType);
+        setSubscriptionSuccessPlan(planType);
+        setAuthState(window.TransLayLandingSession.rememberSessionState(payload));
+        if (payload?.billing_action?.type === "upgrade_charged") {
+          const formattedDate = formatSubscriptionDate(
+            payload?.subscription?.current_period_end || ""
+          );
+          setUpgradeDialogMessage(
+            fillTemplate(t.pricing.upgrade_completed_body, {
+              date: formattedDate,
+            })
+          );
+          setUpgradeDialogMode("success");
+          setCheckoutNotice("");
+        } else if (payload?.subscription?.cancel_at_period_end === false && planType === authState.planType) {
+          setCheckoutNotice(t.pricing.subscription_resumed_notice);
+        } else {
+          setCheckoutNotice("");
+        }
+        return;
+      }
+
+      setCheckoutNotice(t.pricing.opening_checkout_notice);
+      await window.TransLayLandingCheckout.openSubscriptionCheckout({
+        planType,
+        email: authState.user.email || "",
+        locale: lang,
+      });
+    } catch (error) {
+      const message = error?.message || t.pricing.checkout_unavailable_notice;
+      if (options.confirmUpgradeCharge) {
+        setUpgradeDialogMessage(message);
+        setUpgradeDialogMode("error");
+      } else {
+        setCheckoutNotice(message);
+        setAuthState((prev) => ({
+          ...prev,
+          errorMessage: message,
+        }));
+      }
+    }
+  }, [authState, lang, t]);
+
+  const handleConfirmUpgrade = useCallback(async () => {
+    setUpgradeDialogMode("processing");
+    setUpgradeDialogMessage("");
+    await handlePlanCheckout("pro_yearly", { action: "upgrade", confirmUpgradeCharge: true });
+  }, [handlePlanCheckout]);
+
+  const handlePlanCancel = useCallback(() => {
+    setCancelDialogPlan(authState.planType === "pro_yearly" ? "pro_yearly" : "pro_monthly");
+  }, [authState.planType]);
+
+  const handleConfirmCancel = useCallback(async () => {
+    try {
+      const payload = await window.TransLayLandingSession.cancelSubscription();
+      if (payload?.billing_action?.type === "redirect" && payload.billing_action.url) {
+        setCancelDialogPlan("");
+        setCheckoutNotice(t.pricing.cancellation_redirect_notice);
+        window.location.assign(payload.billing_action.url);
+        return;
+      }
+
+      const nextState = window.TransLayLandingSession.rememberSessionState(payload);
+      setAuthState(nextState);
+      setCancelDialogPlan("");
+      const formattedDate = formatSubscriptionDate(
+        payload?.subscription?.current_period_end || nextState?.subscription?.currentPeriodEnd || ""
+      );
+      setCheckoutNotice(
+        fillTemplate(t.pricing.cancellation_scheduled_notice, {
+          date: formattedDate,
+        })
+      );
+    } catch (error) {
+      const message = error?.message || t.pricing.cancellation_failed_notice;
+      setCheckoutNotice(message);
+      setAuthState((prev) => ({
+        ...prev,
+        errorMessage: message,
+      }));
+    }
+  }, [t]);
+
+  const subscriptionState = {
+    currentPlanType:
+      authState.planType === "pro_monthly" || authState.planType === "pro_yearly"
+        ? authState.planType
+        : subscriptionSuccessPlan,
+    cancelAtPeriodEnd: Boolean(authState.subscription?.cancelAtPeriodEnd),
+  };
+
+  const successDialogMessage =
+    successDialogPlan === "pro_yearly"
+      ? t.pricing.subscription_success_body_yearly
+      : t.pricing.subscription_success_body_monthly;
+  const cancelDialogMessage =
+    cancelDialogPlan === "pro_yearly"
+      ? t.pricing.cancel_dialog_body_yearly
+      : t.pricing.cancel_dialog_body_monthly;
+  const upgradeConfirmMessage = fillTemplate(t.pricing.upgrade_notice_body, {
+    amount: "$110.00",
+  });
 
   return (
     <>
       <AnimatedBG />
+      {upgradeDialogMode ? (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="subscription-upgrade-title">
+            <h3 id="subscription-upgrade-title" className="modal-title">
+              {upgradeDialogMode === "processing"
+                ? t.pricing.upgrade_processing_title
+                : upgradeDialogMode === "success"
+                  ? t.pricing.upgrade_completed_title
+                  : upgradeDialogMode === "error"
+                    ? t.pricing.upgrade_failed_title
+                    : t.pricing.upgrade_notice_title}
+            </h3>
+            <p className="modal-body">
+              {upgradeDialogMode === "processing"
+                ? t.pricing.upgrade_processing_body
+                : upgradeDialogMode === "success" || upgradeDialogMode === "error"
+                  ? upgradeDialogMessage
+                  : upgradeDialogMessage || upgradeConfirmMessage}
+            </p>
+            {upgradeDialogMode === "processing" ? null : (
+              <div className={upgradeDialogMode === "confirm" ? "modal-actions modal-actions-compact" : "modal-actions"}>
+                {upgradeDialogMode === "confirm" ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleConfirmUpgrade}
+                    >
+                      {t.pricing.upgrade_notice_confirm}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => {
+                        setUpgradeDialogMode("");
+                        setUpgradeDialogMessage("");
+                      }}
+                    >
+                      {t.pricing.upgrade_notice_cancel}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      setUpgradeDialogMode("");
+                      setUpgradeDialogMessage("");
+                    }}
+                  >
+                    {upgradeDialogMode === "success"
+                      ? t.pricing.upgrade_completed_confirm
+                      : t.pricing.upgrade_failed_confirm}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+      {cancelDialogPlan ? (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="subscription-cancel-title">
+            <h3 id="subscription-cancel-title" className="modal-title">{t.pricing.cancel_dialog_title}</h3>
+            <p className="modal-body">{cancelDialogMessage}</p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleConfirmCancel}
+              >
+                {t.pricing.cancel_dialog_confirm}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setCancelDialogPlan("")}
+              >
+                {t.pricing.cancel_dialog_dismiss}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {successDialogOpen ? (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="subscription-success-title">
+            <h3 id="subscription-success-title" className="modal-title">{t.pricing.subscription_success_title}</h3>
+            <p className="modal-body">{successDialogMessage}</p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setSuccessDialogPlan("");
+                  window.TransLayLandingCheckout?.clearPendingSuccessDialog?.();
+                }}
+              >
+                {t.pricing.subscription_success_confirm}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <TopBar
         t={t}
         theme={theme}
@@ -214,7 +602,13 @@ function App() {
       <Hero t={t} variant={tweaks.hero} />
       <FeaturesSection t={t} />
       <DemoSection t={t} />
-      <PricingSection t={t} />
+      <PricingSection
+        t={t}
+        onPlanCheckout={handlePlanCheckout}
+        onPlanCancel={handlePlanCancel}
+        checkoutNotice={checkoutNotice}
+        subscriptionState={subscriptionState}
+      />
       <FAQSection t={t} />
       <CTASection t={t} />
       <Footer t={t} />

@@ -291,6 +291,86 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+.pricing-notice {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(234, 179, 8, 0.28);
+  background: rgba(250, 204, 21, 0.12);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  box-shadow: var(--shadow-sm);
+  text-align: start;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(10, 18, 32, 0.46);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modal-card {
+  width: min(100%, 520px);
+  border-radius: 22px;
+  border: 1px solid var(--line-2);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: var(--shadow-lg);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+[data-theme="dark"] .modal-card {
+  background: rgba(10, 16, 36, 0.98);
+}
+
+.modal-title {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.modal-body {
+  margin: 0 0 20px;
+  color: var(--text-soft);
+  font-size: 15px;
+  line-height: 1.65;
+  max-width: 420px;
+}
+
+.modal-card .btn {
+  width: auto;
+  min-width: 120px;
+  align-self: center;
+  justify-content: center;
+}
+
+.modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.modal-actions .btn {
+  min-width: 136px;
+}
+
+.modal-actions-compact .btn {
+  min-width: 68px;
+  padding-inline: 18px;
+}
+
 .account-shell {
   position: relative;
   display: inline-flex;
@@ -425,6 +505,23 @@ body {
   border: 1px solid var(--line);
 }
 .btn-ghost:hover { background: var(--line); border-color: var(--line-2); transform: translateY(-1px) scale(1.02); }
+.btn-pricing-cta {
+  background: var(--bg-elev);
+  color: var(--text);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+.btn-pricing-cta:hover:not(:disabled) {
+  background: var(--accent-grad-hover);
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 10px 26px rgba(66,133,244,0.4), inset 0 1px 0 rgba(255,255,255,0.3);
+  transform: translateY(-1px) scale(1.02);
+}
+.btn-pricing-cta:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
 .btn-lg { padding: 16px 28px; font-size: 16px; border-radius: 14px; }
 .btn-sm { padding: 8px 14px; font-size: 13px; border-radius: 9px; }
 .btn svg { width: 16px; height: 16px; }

@@ -47,6 +47,7 @@
       user: null,
       planType: "free",
       subscriptionStatus: "active",
+      subscription: null,
       errorMessage,
     };
   }
@@ -78,6 +79,14 @@
       },
       planType: payload.plan_type ?? "free",
       subscriptionStatus: payload.subscription_status ?? "active",
+      subscription: payload?.subscription
+        ? {
+            providerName: payload.subscription.provider_name ?? "",
+            currentPeriodStart: payload.subscription.current_period_start ?? "",
+            currentPeriodEnd: payload.subscription.current_period_end ?? "",
+            cancelAtPeriodEnd: Boolean(payload.subscription.cancel_at_period_end),
+          }
+        : null,
       errorMessage: "",
     };
   }
@@ -110,6 +119,14 @@
       },
       planType: state.planType ?? "free",
       subscriptionStatus: state.subscriptionStatus ?? "active",
+      subscription: state.subscription
+        ? {
+            providerName: state.subscription.providerName ?? "",
+            currentPeriodStart: state.subscription.currentPeriodStart ?? "",
+            currentPeriodEnd: state.subscription.currentPeriodEnd ?? "",
+            cancelAtPeriodEnd: Boolean(state.subscription.cancelAtPeriodEnd),
+          }
+        : null,
     };
   }
 
@@ -159,6 +176,24 @@
           typeof parsed?.subscriptionStatus === "string"
             ? parsed.subscriptionStatus
             : "active",
+        subscription:
+          parsed?.subscription && typeof parsed.subscription === "object"
+            ? {
+                providerName:
+                  typeof parsed.subscription.providerName === "string"
+                    ? parsed.subscription.providerName
+                    : "",
+                currentPeriodStart:
+                  typeof parsed.subscription.currentPeriodStart === "string"
+                    ? parsed.subscription.currentPeriodStart
+                    : "",
+                currentPeriodEnd:
+                  typeof parsed.subscription.currentPeriodEnd === "string"
+                    ? parsed.subscription.currentPeriodEnd
+                    : "",
+                cancelAtPeriodEnd: Boolean(parsed.subscription.cancelAtPeriodEnd),
+              }
+            : null,
         errorMessage: "",
       };
     } catch (_) {
@@ -207,6 +242,14 @@
   }
 
   function getTicketFromLocation(locationLike = window.location) {
+    const preloadedTicket =
+      typeof window.__TRANSLAY_PORTAL_TICKET__ === "string"
+        ? window.__TRANSLAY_PORTAL_TICKET__.trim()
+        : "";
+    if (preloadedTicket) {
+      return preloadedTicket;
+    }
+
     const href = typeof locationLike?.href === "string" ? locationLike.href : window.location.href;
     const url = new URL(href, window.location.origin);
     const ticket = url.searchParams.get("ticket");
@@ -214,6 +257,7 @@
   }
 
   function stripTicketFromUrl() {
+    window.__TRANSLAY_PORTAL_TICKET__ = "";
     const url = new URL(window.location.href);
     if (!url.searchParams.has("ticket")) {
       return;
@@ -250,6 +294,22 @@
     });
   }
 
+  async function changeSubscriptionPlan(planType, options = {}) {
+    return request("/subscription/change-plan", {
+      method: "POST",
+      body: {
+        plan_type: planType,
+        ...(options.confirmUpgradeCharge ? { confirm_upgrade_charge: true } : {}),
+      },
+    });
+  }
+
+  async function cancelSubscription() {
+    return request("/subscription/cancel", {
+      method: "POST",
+    });
+  }
+
   window.TransLayLandingSession = {
     buildSignedOutState,
     normalizeSessionState,
@@ -262,6 +322,8 @@
     fetchSessionMe,
     consumeTicket,
     loginWithGoogleCredential,
+    changeSubscriptionPlan,
+    cancelSubscription,
     logout,
   };
 })();

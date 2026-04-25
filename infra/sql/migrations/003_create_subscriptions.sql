@@ -21,7 +21,7 @@ CREATE TABLE subscriptions (
     CONSTRAINT chk_subscriptions_plan_type
         CHECK (plan_type IN ('free', 'pro_monthly', 'pro_yearly')),
     CONSTRAINT chk_subscriptions_status
-        CHECK (status IN ('active', 'past_due', 'canceled', 'expired', 'grace_period'))
+        CHECK (status IN ('active', 'past_due', 'paused', 'canceled', 'expired', 'grace_period', 'blocked'))
 );
 
 -- ON DELETE RESTRICT: never silently cascade-delete subscription history

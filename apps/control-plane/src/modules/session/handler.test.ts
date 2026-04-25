@@ -9,6 +9,7 @@ import {
   sessionConsumeHandler,
   sessionLoginHandler,
   sessionMeHandler,
+  sessionStartHandler,
 } from "./handler";
 
 interface MockResponseState {
@@ -438,4 +439,102 @@ test("sessionMeHandler returns signed out with no-store headers when there is no
   assert.deepEqual(state.body, {
     signed_in: false,
   });
+});
+
+test("sessionStartHandler appends the ticket before the hash fragment", async () => {
+  const writes: Array<Record<string, string>> = [];
+  const redis = {
+    multi() {
+      const commands: Array<[Error | null, unknown]> = [];
+      return {
+        hset(_key: string, fields: Record<string, string>) {
+          writes.push(fields);
+          commands.push([null, 1]);
+          return this;
+        },
+        expire(_key: string, _ttl: number) {
+          commands.push([null, 1]);
+          return this;
+        },
+        async exec() {
+          return commands;
+        },
+      };
+    },
+  } as unknown as Redis;
+
+  const { res, state } = makeResponse();
+  await sessionStartHandler(redis, makeConfig())(
+    {
+      authContext: {
+        user_id: "user-123",
+        identity: {
+          google_subject_id: "google-sub-123",
+          email: "user@example.com",
+          display_name: "Portal User",
+          avatar_url: "https://lh3.googleusercontent.com/a/example-avatar",
+        },
+      },
+      body: {
+        redirect_path: "/#pricing",
+        reason: "upgrade_click",
+      },
+    } as unknown as Request,
+    res
+  );
+
+  assert.equal(state.statusCode, 200);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0]?.redirect_path, "/#pricing");
+  assert.match(String((state.body as { portal_url: string }).portal_url), /^https:\/\/translay\.example\.com\/\?ticket=ttk_[a-f0-9]+#pricing$/);
+  assert.equal((state.body as { ticket_expires_in_seconds: number }).ticket_expires_in_seconds, 60);
+});
+
+test("sessionStartHandler rejects protocol-relative portal redirects", async () => {
+  const writes: Array<Record<string, string>> = [];
+  const redis = {
+    multi() {
+      const commands: Array<[Error | null, unknown]> = [];
+      return {
+        hset(_key: string, fields: Record<string, string>) {
+          writes.push(fields);
+          commands.push([null, 1]);
+          return this;
+        },
+        expire(_key: string, _ttl: number) {
+          commands.push([null, 1]);
+          return this;
+        },
+        async exec() {
+          return commands;
+        },
+      };
+    },
+  } as unknown as Redis;
+
+  const { res, state } = makeResponse();
+  await sessionStartHandler(redis, makeConfig())(
+    {
+      authContext: {
+        user_id: "user-123",
+        identity: {
+          google_subject_id: "google-sub-123",
+          email: "user@example.com",
+          display_name: "Portal User",
+          avatar_url: null,
+        },
+      },
+      body: {
+        redirect_path: "//evil.example/phish",
+      },
+    } as unknown as Request,
+    res
+  );
+
+  assert.equal(state.statusCode, 200);
+  assert.equal(writes[0]?.redirect_path, "/");
+  assert.match(
+    String((state.body as { portal_url: string }).portal_url),
+    /^https:\/\/translay\.example\.com\/\?ticket=ttk_[a-f0-9]+$/
+  );
 });

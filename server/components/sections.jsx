@@ -101,7 +101,7 @@ function DemoSection({ t }) {
   );
 }
 
-function PriceCard({ plan, t, delay = 0, highlight }) {
+function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onPlanCancel, subscriptionState }) {
   const p = t.pricing;
   const data = {
     free: { name: p.free_name, price: p.free_price, per: null, sub: p.free_sub, features: [p.free_f1, p.free_f2, p.free_f3, p.free_f4], cta: p.free_cta },
@@ -109,6 +109,40 @@ function PriceCard({ plan, t, delay = 0, highlight }) {
     yearly: { name: p.yearly_name, price: p.yearly_price, per: p.yearly_per, sub: p.yearly_sub, features: [p.yearly_f1, p.yearly_f2, p.yearly_f3, p.yearly_f4], cta: p.yearly_cta, badge: p.yearly_badge },
     payg: { name: p.payg_name, price: p.payg_price, per: p.payg_per, sub: p.payg_sub, features: [p.payg_f1, p.payg_f2, p.payg_f3, p.payg_f4], cta: p.payg_cta },
   }[plan];
+  const isSubscriptionPlan = plan === "monthly" || plan === "yearly";
+  const mappedPlanType = plan === "monthly" ? "pro_monthly" : plan === "yearly" ? "pro_yearly" : "";
+  const isCurrentPlan =
+    Boolean(mappedPlanType) && subscriptionState?.currentPlanType === mappedPlanType;
+  const cancelScheduled = Boolean(subscriptionState?.cancelAtPeriodEnd);
+  const currentPlanType = subscriptionState?.currentPlanType || "";
+  const isYearlyActiveOrCanceling = currentPlanType === "pro_yearly";
+  const buttonState = (() => {
+    if (!isSubscriptionPlan) {
+      return { label: data.cta, disabled: false, action: "link" };
+    }
+
+    if (plan === "monthly" && isYearlyActiveOrCanceling) {
+      return { label: p.monthly_cta, disabled: true, action: "none" };
+    }
+
+    if (isCurrentPlan && cancelScheduled) {
+      return {
+        label: mappedPlanType === "pro_yearly" ? p.resume_yearly_cta : p.resume_monthly_cta,
+        disabled: false,
+        action: "resume",
+      };
+    }
+
+    if (isCurrentPlan) {
+      return { label: p.cancel_cta, disabled: false, action: "cancel" };
+    }
+
+    if (plan === "yearly" && currentPlanType === "pro_monthly") {
+      return { label: p.upgrade_yearly_cta, disabled: false, action: "upgrade" };
+    }
+
+    return { label: data.cta, disabled: false, action: "checkout" };
+  })();
   return (
     <Reveal delay={delay}>
       <div className="card" style={{padding: 28, height: "100%", display: "flex", flexDirection: "column", position: "relative", ...(highlight ? {borderColor: "rgba(66,133,244,0.4)", boxShadow: "0 10px 40px rgba(66,133,244,0.15)"} : {})}}>
@@ -129,13 +163,37 @@ function PriceCard({ plan, t, delay = 0, highlight }) {
             </li>
           ))}
         </ul>
-        <a href="#install" className={`btn ${highlight ? "btn-primary" : "btn-ghost"}`} style={{justifyContent: "center"}}>{data.cta}</a>
+        {isSubscriptionPlan ? (
+          <button
+            type="button"
+            className="btn btn-pricing-cta"
+            style={{justifyContent: "center"}}
+            disabled={buttonState.disabled}
+            onClick={() => {
+              if (buttonState.action === "cancel") {
+                onPlanCancel?.(mappedPlanType);
+                return;
+              }
+              if (buttonState.action === "resume" || buttonState.action === "upgrade") {
+                onPlanCheckout?.(mappedPlanType, { action: buttonState.action });
+                return;
+              }
+              if (buttonState.action === "checkout") {
+                onPlanCheckout?.(mappedPlanType, { action: "checkout" });
+              }
+            }}
+          >
+            {buttonState.label}
+          </button>
+        ) : (
+          <a href="#install" className="btn btn-pricing-cta" style={{justifyContent: "center"}}>{data.cta}</a>
+        )}
       </div>
     </Reveal>
   );
 }
 
-function PricingSection({ t }) {
+function PricingSection({ t, onPlanCheckout, onPlanCancel, checkoutNotice, subscriptionState }) {
   return (
     <section id="pricing" className="section">
       <div className="container">
@@ -143,12 +201,19 @@ function PricingSection({ t }) {
           <Reveal><span className="kicker"><span className="dot" />{t.pricing.kicker}</span></Reveal>
           <Reveal delay={60}><h2 className="section-title">{t.pricing.title}</h2></Reveal>
           <Reveal delay={120}><p className="section-sub">{t.pricing.subtitle}</p></Reveal>
+          {checkoutNotice ? (
+            <Reveal delay={140}>
+              <div className="pricing-notice" role="status" aria-live="polite">
+                {checkoutNotice}
+              </div>
+            </Reveal>
+          ) : null}
         </div>
         <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 22, alignItems: "stretch"}}>
-          <PriceCard plan="free" t={t} delay={0} />
-          <PriceCard plan="monthly" t={t} delay={60} />
-          <PriceCard plan="yearly" t={t} delay={120} highlight />
-          <PriceCard plan="payg" t={t} delay={180} />
+          <PriceCard plan="free" t={t} delay={0} onPlanCheckout={onPlanCheckout} onPlanCancel={onPlanCancel} subscriptionState={subscriptionState} />
+          <PriceCard plan="monthly" t={t} delay={60} onPlanCheckout={onPlanCheckout} onPlanCancel={onPlanCancel} subscriptionState={subscriptionState} />
+          <PriceCard plan="yearly" t={t} delay={120} highlight onPlanCheckout={onPlanCheckout} onPlanCancel={onPlanCancel} subscriptionState={subscriptionState} />
+          <PriceCard plan="payg" t={t} delay={180} onPlanCheckout={onPlanCheckout} onPlanCancel={onPlanCancel} subscriptionState={subscriptionState} />
         </div>
       </div>
     </section>

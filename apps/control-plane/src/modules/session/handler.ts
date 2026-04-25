@@ -32,6 +32,31 @@ function generateSecureId(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
+function normalizePortalRedirectPath(rawPath: unknown): string {
+  if (typeof rawPath !== "string") {
+    return "/";
+  }
+
+  const trimmed = rawPath.trim();
+  if (!trimmed) {
+    return "/";
+  }
+
+  if (trimmed.startsWith("//") || /^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+    return "/";
+  }
+
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
+
+function buildPortalUrl(domain: string, redirectPath: string, ticket: string): string {
+  const origin = `https://${domain}`;
+  const resolved = new URL(redirectPath, origin);
+  const url = resolved.origin === origin ? resolved : new URL("/", origin);
+  url.searchParams.set("ticket", ticket);
+  return url.toString();
+}
+
 /**
  * C1: Lua script for atomic ticket consumption.
  * C3: Returns the consumed user/session snapshot directly to avoid TOCTOU.
@@ -162,15 +187,34 @@ function buildPortalSessionResponse(
     email: string | null;
     display_name: string | null;
   },
-  planType: string,
-  subscriptionStatus: string,
+  subscription:
+    | {
+        plan_type: string;
+        status: string;
+        provider_name: string;
+        current_period_end: Date | null;
+        current_period_start: Date | null;
+        cancel_at_period_end: boolean;
+      }
+    | null
+    | undefined,
   avatarUrl: string | null
 ): SessionConsumeResponse | SessionLoginResponse {
   return {
     ok: true,
     user: buildPortalUserSummary(user, avatarUrl),
-    plan_type: planType as SessionConsumeResponse["plan_type"],
-    subscription_status: subscriptionStatus as SessionConsumeResponse["subscription_status"],
+    plan_type: (subscription?.plan_type ?? "free") as SessionConsumeResponse["plan_type"],
+    subscription_status: (subscription?.status ?? "active") as SessionConsumeResponse["subscription_status"],
+    ...(subscription &&
+      subscription.plan_type !== "free" &&
+      subscription.provider_name !== "none" && {
+        subscription: {
+          provider_name: subscription.provider_name,
+          current_period_start: subscription.current_period_start?.toISOString() ?? "",
+          current_period_end: subscription.current_period_end?.toISOString() ?? "",
+          cancel_at_period_end: subscription.cancel_at_period_end,
+        },
+      }),
   };
 }
 
@@ -184,7 +228,7 @@ export function sessionStartHandler(redis: Redis, config: AppConfig) {
     }
 
     const { redirect_path, reason } = req.body ?? {};
-    const path = typeof redirect_path === "string" ? redirect_path : "/pricing";
+    const path = normalizePortalRedirectPath(redirect_path);
     const ticketReason = typeof reason === "string" ? reason : "upgrade_click";
 
     const ticket = `ttk_${generateSecureId()}`;
@@ -207,7 +251,7 @@ export function sessionStartHandler(redis: Redis, config: AppConfig) {
 
     assertMultiOk(results, "session/start ticket create");
 
-    const portalUrl = `https://${config.domain}${path}?ticket=${ticket}`;
+    const portalUrl = buildPortalUrl(config.domain, path, ticket);
 
     const response: SessionStartResponse = {
       portal_url: portalUrl,
@@ -322,8 +366,7 @@ export function sessionConsumeHandler(pool: Pool, redis: Redis, config: AppConfi
 
     const response = buildPortalSessionResponse(
       user,
-      sub?.plan_type ?? "free",
-      sub?.status ?? "active",
+      sub,
       consumedTicket.avatar_url || null
     ) as SessionConsumeResponse;
 
@@ -423,8 +466,7 @@ export function sessionLoginHandler(
 
     const response = buildPortalSessionResponse(
       identity,
-      sub?.plan_type ?? "free",
-      sub?.status ?? "active",
+      sub,
       identity.avatar_url
     ) as SessionLoginResponse;
 
@@ -465,6 +507,16 @@ export function sessionMeHandler(pool: Pool) {
       user: buildPortalUserSummary(user, req.portalSession.avatarUrl ?? null),
       plan_type: sub?.plan_type ?? "free",
       subscription_status: sub?.status ?? "active",
+      ...(sub &&
+        sub.plan_type !== "free" &&
+        sub.provider_name !== "none" && {
+          subscription: {
+            provider_name: sub.provider_name,
+            current_period_start: sub.current_period_start?.toISOString() ?? "",
+            current_period_end: sub.current_period_end?.toISOString() ?? "",
+            cancel_at_period_end: sub.cancel_at_period_end,
+          },
+        }),
     };
 
     res.json(response);

@@ -179,6 +179,31 @@ export interface CreateJobResponse {
   readonly queued: boolean;
 }
 
+export interface JobQuotaPartialOption {
+  readonly ok: false;
+  readonly error: "QUOTA_INSUFFICIENT_WITH_PARTIAL_OPTION";
+  readonly message: string;
+  readonly required_units: number;
+  readonly available_units: number;
+  readonly allowed_range_expression: string;
+  readonly excluded_range_expression: string;
+  readonly cta: {
+    readonly upgrade_subscription: boolean;
+    readonly buy_credits: boolean;
+  };
+}
+
+export interface JobQuotaPreviewAccepted {
+  readonly ok: true;
+  readonly required_units: number;
+  readonly available_units: number;
+  readonly accepted_range_expression: string;
+}
+
+export type JobQuotaPreviewResponse =
+  | JobQuotaPreviewAccepted
+  | JobQuotaPartialOption;
+
 /** GET /api/jobs/:jobId — in-progress response (status is NOT completed or failed). */
 export interface JobProgressResponse {
   readonly job_id: string;

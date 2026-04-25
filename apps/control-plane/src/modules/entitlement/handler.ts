@@ -54,11 +54,12 @@ export function entitlementHandler(pool: Pool) {
       subscription_status: sub.status,
       ...(sub.plan_type !== "free" &&
         sub.provider_name !== "none" && {
-          subscription: {
-            provider_name: sub.provider_name,
-            current_period_end: sub.current_period_end?.toISOString() ?? "",
-            cancel_at_period_end: sub.cancel_at_period_end,
-          },
+        subscription: {
+          provider_name: sub.provider_name,
+          current_period_start: sub.current_period_start?.toISOString() ?? "",
+          current_period_end: sub.current_period_end?.toISOString() ?? "",
+          cancel_at_period_end: sub.cancel_at_period_end,
+        },
         }),
       usage: usageSnapshot,
       cache_ttl_seconds: 300,

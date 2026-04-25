@@ -39,6 +39,23 @@ function createJob(jobRequest) {
 }
 
 /**
+ * Previews quota impact for a Slides translation request.
+ * @param {Object} previewRequest - Job quota preview request body
+ * @returns {Object} JobQuotaPreviewResponse
+ */
+function previewJob(previewRequest) {
+  var token = getGoogleToken();
+  var response = UrlFetchApp.fetch(API_BASE_URL + '/jobs/preview', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: _authHeaders(token),
+    payload: JSON.stringify(previewRequest),
+    muteHttpExceptions: true
+  });
+  return _handleResponse(response);
+}
+
+/**
  * Polls job status from the control plane.
  * @param {string} jobId
  * @returns {Object} JobStatusResponse
@@ -155,6 +172,10 @@ function _handleResponse(response) {
   var prefix = retryAfterSeconds > 0
     ? '[' + errorCode + ':retry=' + retryAfterSeconds + ']'
     : '[' + errorCode + ']';
+
+  if (errorCode === 'QUOTA_INSUFFICIENT_WITH_PARTIAL_OPTION') {
+    throw new Error(prefix + ' ' + errorMsg + ' ' + JSON.stringify(body));
+  }
 
   throw new Error(prefix + ' ' + errorMsg);
 }
