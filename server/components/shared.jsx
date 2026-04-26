@@ -182,13 +182,12 @@ function AccountShell({ t, authState, onGoogleCredential, onLogout }) {
     return () => document.removeEventListener("click", onDocumentClick);
   }, [menuOpen]);
 
-  if (authState.status === "loading" || authState.status === "consuming_ticket" || authState.status === "signing_in") {
-    const label = authState.status === "consuming_ticket"
-      ? t.auth.consuming_ticket
-      : authState.status === "signing_in"
-        ? t.auth.signing_in
-        : t.auth.loading;
-    return <div className="auth-status-chip">{label}</div>;
+  if (authState.status === "loading" || authState.status === "consuming_ticket") {
+    return null;
+  }
+
+  if (authState.status === "signing_in") {
+    return <div className="auth-status-chip">{t.auth.signing_in}</div>;
   }
 
   if (authState.status === "signed_out") {

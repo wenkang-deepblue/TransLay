@@ -1,7 +1,7 @@
 (() => {
-  const AUTH_SNAPSHOT_KEY = "translay.portal-auth.snapshot.v1";
-  const AUTH_SNAPSHOT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-  const SNAPSHOT_TEXT_MAX_LENGTH = 256;
+  const AUTH_HINT_KEY = "translay.portal-auth.hint.v2";
+  const LEGACY_AUTH_SNAPSHOT_KEY = "translay.portal-auth.snapshot.v1";
+  const AUTH_HINT_TTL_MS = 30 * 60 * 1000;
 
   function getApiBaseUrl() {
     const apiBaseUrl = window.TransLayLandingConfig?.apiBaseUrl;
@@ -53,20 +53,12 @@
     };
   }
 
-  function getSnapshotStorage() {
+  function getHintStorage() {
     try {
-      return window.localStorage;
+      return window.sessionStorage;
     } catch (_) {
       return null;
     }
-  }
-
-  function sanitizeSnapshotText(value) {
-    if (typeof value !== "string") {
-      return null;
-    }
-
-    return value.slice(0, SNAPSHOT_TEXT_MAX_LENGTH);
   }
 
   function normalizeSignedInState(payload) {
@@ -105,131 +97,97 @@
     return buildSignedOutState("Unable to determine sign-in state.");
   }
 
-  function buildStoredSnapshot(state) {
-    if (state?.status !== "signed_in" || !state.user?.googleSubjectId) {
+  function clearLegacyAuthSnapshot() {
+    try {
+      window.localStorage?.removeItem(LEGACY_AUTH_SNAPSHOT_KEY);
+    } catch (_) {
+      // Best-effort cleanup for the retired PII-bearing snapshot.
+    }
+  }
+
+  function buildStoredHint(state) {
+    if (state?.status !== "signed_in") {
       return null;
     }
 
     return {
-      version: 1,
-      expiresAtMs: Date.now() + AUTH_SNAPSHOT_TTL_MS,
-      user: {
-        googleSubjectId: state.user.googleSubjectId,
-        email: state.user.email ?? null,
-        displayName: state.user.displayName ?? null,
-        avatarUrl: state.user.avatarUrl ?? null,
-      },
+      version: 2,
+      expiresAtMs: Date.now() + AUTH_HINT_TTL_MS,
+      hadSignedInSession: true,
       planType: state.planType ?? "free",
       subscriptionStatus: state.subscriptionStatus ?? "active",
-      subscription: state.subscription
-        ? {
-            providerName: state.subscription.providerName ?? "",
-            currentPeriodStart: state.subscription.currentPeriodStart ?? "",
-            currentPeriodEnd: state.subscription.currentPeriodEnd ?? "",
-            cancelAtPeriodEnd: Boolean(state.subscription.cancelAtPeriodEnd),
-          }
-        : null,
-      creditBalance: state.creditBalance ?? null,
     };
   }
 
   function readAuthSnapshot() {
-    const storage = getSnapshotStorage();
+    clearLegacyAuthSnapshot();
+    const storage = getHintStorage();
     if (!storage) {
       return null;
     }
 
     try {
-      const raw = storage.getItem(AUTH_SNAPSHOT_KEY);
+      const raw = storage.getItem(AUTH_HINT_KEY);
       if (!raw) {
         return null;
       }
 
       const parsed = JSON.parse(raw);
-      if (parsed?.version !== 1) {
-        storage.removeItem(AUTH_SNAPSHOT_KEY);
+      if (parsed?.version !== 2 || parsed?.hadSignedInSession !== true) {
+        storage.removeItem(AUTH_HINT_KEY);
         return null;
       }
 
       const expiresAtMs = Number(parsed?.expiresAtMs ?? 0);
       if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
-        storage.removeItem(AUTH_SNAPSHOT_KEY);
-        return null;
-      }
-
-      const googleSubjectId =
-        typeof parsed?.user?.googleSubjectId === "string"
-          ? parsed.user.googleSubjectId.trim()
-          : "";
-      if (!googleSubjectId) {
-        storage.removeItem(AUTH_SNAPSHOT_KEY);
+        storage.removeItem(AUTH_HINT_KEY);
         return null;
       }
 
       return {
-        status: "signed_in",
-        user: {
-          googleSubjectId,
-          email: sanitizeSnapshotText(parsed?.user?.email),
-          displayName: sanitizeSnapshotText(parsed?.user?.displayName),
-          avatarUrl: sanitizeSnapshotText(parsed?.user?.avatarUrl),
-        },
+        status: "loading",
+        user: null,
         planType: typeof parsed?.planType === "string" ? parsed.planType : "free",
         subscriptionStatus:
           typeof parsed?.subscriptionStatus === "string"
             ? parsed.subscriptionStatus
             : "active",
-        subscription:
-          parsed?.subscription && typeof parsed.subscription === "object"
-            ? {
-                providerName:
-                  typeof parsed.subscription.providerName === "string"
-                    ? parsed.subscription.providerName
-                    : "",
-                currentPeriodStart:
-                  typeof parsed.subscription.currentPeriodStart === "string"
-                    ? parsed.subscription.currentPeriodStart
-                    : "",
-                currentPeriodEnd:
-                  typeof parsed.subscription.currentPeriodEnd === "string"
-                    ? parsed.subscription.currentPeriodEnd
-                    : "",
-                cancelAtPeriodEnd: Boolean(parsed.subscription.cancelAtPeriodEnd),
-              }
-            : null,
-        creditBalance: parsed?.creditBalance ?? null,
+        subscription: null,
+        creditBalance: null,
         errorMessage: "",
       };
     } catch (_) {
       try {
-        storage.removeItem(AUTH_SNAPSHOT_KEY);
+        storage.removeItem(AUTH_HINT_KEY);
       } catch (_) {}
       return null;
     }
   }
 
   function writeAuthSnapshot(state) {
-    const storage = getSnapshotStorage();
-    const snapshot = buildStoredSnapshot(state);
-    if (!storage || !snapshot) {
+    clearLegacyAuthSnapshot();
+    const storage = getHintStorage();
+    const hint = buildStoredHint(state);
+    if (!storage || !hint) {
       return;
     }
 
     try {
-      storage.setItem(AUTH_SNAPSHOT_KEY, JSON.stringify(snapshot));
+      storage.setItem(AUTH_HINT_KEY, JSON.stringify(hint));
     } catch (_) {
       // Best-effort UI hydration only.
     }
   }
 
   function clearAuthSnapshot() {
-    const storage = getSnapshotStorage();
+    clearLegacyAuthSnapshot();
+    const storage = getHintStorage();
     if (!storage) {
       return;
     }
 
     try {
-      storage.removeItem(AUTH_SNAPSHOT_KEY);
+      storage.removeItem(AUTH_HINT_KEY);
     } catch (_) {
       // Best-effort UI hydration only.
     }

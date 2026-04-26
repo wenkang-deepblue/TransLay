@@ -204,10 +204,26 @@ function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onCreditsChe
         {data.badge && (
           <span style={{position: "absolute", top: -12, insetInlineStart: 24, background: "var(--accent-grad)", color: "white", fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", padding: "5px 12px", borderRadius: 999, boxShadow: "0 6px 16px rgba(66,133,244,0.35)"}}>{data.badge}</span>
         )}
-        <div style={{display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginBottom: 10}}>
+        <div style={{
+          display: "flex",
+          flexDirection: plan === "payg" ? "column" : "row",
+          alignItems: plan === "payg" ? "center" : "baseline",
+          justifyContent: "space-between",
+          gap: plan === "payg" ? 8 : 12,
+          minHeight: 88,
+          marginBottom: 8,
+          textAlign: plan === "payg" ? "center" : "start",
+        }}>
           <div style={{fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 600, color: "var(--text-soft)"}}>{data.name}</div>
           {plan === "payg" && availableCredits !== null ? (
-            <div style={{fontSize: 12, color: "#188038", whiteSpace: "nowrap", textAlign: "right"}}>
+            <div style={{
+              fontSize: 12,
+              color: "#188038",
+              lineHeight: 1.45,
+              maxWidth: "100%",
+              overflowWrap: "anywhere",
+              textAlign: "center",
+            }}>
               {pendingRefundUnits > 0 ? (
                 <>
                   {p.credits_refund_in_progress_label || "Refunding"}:{" "}

@@ -67,10 +67,18 @@
     </div>
   </div>
 </footer>
-<script src="i18n.js?v=26"></script>
+<script src="i18n.js?v=27"></script>
 <script src="js/landing-config.js?v=4"></script>
-<script src="js/landing-session.js?v=11"></script>
+<script src="js/landing-session.js?v=12"></script>
 <script src="js/landing-auth.js?v=2"></script>
-<script src="js/legal-auth-shell.js?v=7"></script>
+<script src="js/legal-auth-shell.js?v=8"></script>
+<script>
+(() => {
+  try {
+    window.sessionStorage.removeItem("translay.checkout.success.plan");
+    window.sessionStorage.removeItem("translay.checkout.success.dialog.plan");
+  } catch (_) {}
+})();
+</script>
 </body>
 </html>

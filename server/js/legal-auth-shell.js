@@ -356,6 +356,11 @@
       return;
     }
 
+    if (state.status === "loading" || state.status === "consuming_ticket") {
+      slot.innerHTML = "";
+      return;
+    }
+
     if (state.status === "signing_in") {
       slot.innerHTML = buildLoadingMarkup(
         translations?.auth?.signing_in || "Completing sign-in..."
@@ -388,14 +393,11 @@
 
   async function bootstrapAuthSlot(slot) {
     if (!slot) return;
-    const translations = getTranslations();
     const hydratedSnapshot = window.TransLayLandingSession.readAuthSnapshot?.() || null;
     if (hydratedSnapshot?.status === "signed_in") {
       await renderAuthSlot(slot, hydratedSnapshot);
     } else {
-      slot.innerHTML = buildLoadingMarkup(
-        translations?.auth?.loading || "Checking session..."
-      );
+      slot.innerHTML = "";
     }
 
     try {
