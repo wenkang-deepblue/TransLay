@@ -916,8 +916,13 @@
       var usage = ent.usage;
       if (usage && !usage.unlimited) {
         document.getElementById('usageSlides').style.display = 'flex';
-        document.getElementById('usageSlidesText').textContent =
+        var slidesCreditBalance = Number(usage.slides_credit_balance || 0);
+        var slidesUsageText =
           formatUsageNumber(usage.slides_used) + ' / ' + formatUsageNumber(usage.slides_limit);
+        if (slidesCreditBalance > 0) {
+          slidesUsageText += ' + ' + formatUsageNumber(slidesCreditBalance) + ' credits';
+        }
+        document.getElementById('usageSlidesText').textContent = slidesUsageText;
 
         document.getElementById('usageDocs').style.display = 'flex';
         document.getElementById('usageDocsText').textContent = 'Coming soon';

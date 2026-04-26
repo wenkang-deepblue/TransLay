@@ -6,6 +6,7 @@ export const ERROR_CODES = {
   UNSUPPORTED_LANGUAGE: { status: 400, message: "Language could not be recognized" },
   INVALID_TICKET: { status: 400, message: "Ticket is invalid, expired, or malformed" },
   INVALID_CHECKOUT_REQUEST: { status: 400, message: "Checkout request is invalid" },
+  INVALID_REFUND_REQUEST: { status: 400, message: "Refund request is invalid" },
 
   // 401
   UNAUTHORIZED: { status: 401, message: "Authentication required" },

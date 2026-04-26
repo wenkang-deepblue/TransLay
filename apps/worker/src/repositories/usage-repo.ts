@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import type { HostType, UserId, JobId } from "@translay/shared-contracts";
+import type { HostType, UserId, JobId, PlanType } from "@translay/shared-contracts";
 
 export async function insertUsageLedger(
   client: PoolClient,
@@ -72,4 +72,56 @@ export async function insertUsageLedger(
   }
 
   return result.rows[0].id;
+}
+
+export async function getActivePlanForUser(
+  client: PoolClient,
+  userId: UserId | string
+): Promise<PlanType> {
+  const result = await client.query<{ plan_type: PlanType }>(
+    `SELECT plan_type
+     FROM subscriptions
+     WHERE user_id = $1
+     ORDER BY
+       CASE WHEN status IN ('active', 'grace_period') THEN 0 ELSE 1 END,
+       CASE WHEN plan_type != 'free' THEN 0 ELSE 1 END,
+       updated_at DESC
+     LIMIT 1`,
+    [userId]
+  );
+
+  return result.rows[0]?.plan_type ?? "free";
+}
+
+export async function getUsageBeforeJob(
+  client: PoolClient,
+  params: {
+    readonly userId: UserId | string;
+    readonly jobId: JobId | string;
+    readonly hostType: HostType;
+    readonly periodKey: string;
+  }
+): Promise<number> {
+  const result = await client.query<{ used: string }>(
+    `SELECT COALESCE(SUM(quantity), 0)::numeric(12,1) AS used
+     FROM usage_ledgers
+     WHERE user_id = $1
+       AND billing_period_key = $2
+       AND host_type = $3
+       AND job_id IS DISTINCT FROM $4`,
+    [params.userId, params.periodKey, params.hostType, params.jobId]
+  );
+
+  return toNumber(result.rows[0]?.used);
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === "number") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }

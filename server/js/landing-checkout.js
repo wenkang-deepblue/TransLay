@@ -63,7 +63,7 @@
     paddleInitialized = true;
   }
 
-  async function createCheckout(planType) {
+  async function createSubscriptionCheckout(planType) {
     const response = await fetch("/api/checkout", {
       method: "POST",
       credentials: "same-origin",
@@ -85,33 +85,73 @@
     return payload;
   }
 
+  async function createCreditsCheckout(sku, quantity) {
+    const response = await fetch("/api/checkout", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        product_type: "credits",
+        sku,
+        quantity,
+      }),
+    });
+    const payload = await readJson(response);
+    if (!response.ok) {
+      throw createError(
+        payload?.error || "checkout_failed",
+        payload?.message || "Unable to start checkout right now."
+      );
+    }
+    return payload;
+  }
+
   async function openSubscriptionCheckout({ planType, email, locale }) {
     await ensurePublicConfig();
     ensurePaddleInitialized();
 
-    const payload = await createCheckout(planType);
-    window.Paddle.Checkout.open({
-      items: [
-        {
-          priceId: payload.price_id,
-          quantity: 1,
-        },
-      ],
-      customer: email
-        ? {
-            email,
-          }
-        : undefined,
-      customData: payload.custom_data,
-      settings: {
-        displayMode: "overlay",
-        variant: "one-page",
-        allowLogout: false,
-        locale: normalizeString(locale) || "en",
-        theme: "light",
-      },
-    });
+    const payload = await createSubscriptionCheckout(planType);
+    openPaddleOverlay(payload, email, locale);
   }
+
+  async function openCreditsCheckout({ sku = "slides", quantity = 1, email, locale }) {
+    await ensurePublicConfig();
+    ensurePaddleInitialized();
+
+    const payload = await createCreditsCheckout(sku, quantity);
+    openPaddleOverlay(payload, email, locale);
+  }
+
+	  function openPaddleOverlay(payload, email, locale) {
+	    const checkout = {
+	      customer: email
+	        ? {
+	            email,
+	          }
+	        : undefined,
+	      settings: {
+	        displayMode: "overlay",
+	        variant: "one-page",
+	        allowLogout: false,
+	        locale: normalizeString(locale) || "en",
+	        theme: "light",
+	      },
+	    };
+	    if (payload.transaction_id) {
+	      checkout.transactionId = payload.transaction_id;
+	    } else {
+	      checkout.items = [
+	        {
+	          priceId: payload.price_id,
+	          quantity: payload.custom_data?.quantity || 1,
+	        },
+	      ];
+	      checkout.customData = payload.custom_data;
+	    }
+	    window.Paddle.Checkout.open(checkout);
+	  }
 
   function rememberSuccessfulPlan(planType) {
     try {
@@ -164,6 +204,7 @@
   };
   window.TransLayLandingCheckout = {
     openSubscriptionCheckout,
+    openCreditsCheckout,
     rememberSuccessfulPlan,
     readSuccessfulPlan,
     clearSuccessfulPlan,

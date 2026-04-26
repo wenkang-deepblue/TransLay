@@ -7,6 +7,8 @@ import type {
   ChangeSubscriptionPlanRequest,
   CheckoutRequest,
   CheckoutResponse,
+  CreditRefundRequest,
+  CreditRefundResponse,
   SessionConsumeResponse,
   SubscriptionStatus,
 } from "@translay/shared-contracts";
@@ -18,6 +20,21 @@ import {
 } from "../../repositories/subscription-repo";
 import { upsertPaymentOrder } from "../../repositories/payment-order-repo";
 import {
+  completeCreditRefundRequest,
+  createCreditRefundRequest,
+  grantPurchasedCredits,
+  getCreditBalance,
+  getNextProviderPendingCreditRefundRequest,
+  getProviderPendingCreditRefundRequestsForUser,
+  getQueuedCreditRefundBatch,
+  markCreditRefundRequestProviderPending,
+  rejectCreditRefundRequest,
+  type CreditGrantSource,
+  type CreditRefundReservationItem,
+  type QueuedCreditRefundRequest,
+} from "../../repositories/credit-repo";
+import { enqueueCreditRefundProcessingTask } from "./refund-tasks";
+import {
   insertWebhookEvent,
   lockWebhookEventForProcessing,
   markWebhookEventFailed,
@@ -28,8 +45,11 @@ import type { SubscriptionRow } from "../../repositories/subscription-repo";
 
 type FetchLike = typeof fetch;
 type ManagedPlanType = "pro_monthly" | "pro_yearly";
+type ManagedCreditSku = "slides";
 const PADDLE_API_TIMEOUT_MS = 5000;
 const PADDLE_WEBHOOK_FUTURE_SKEW_SECONDS = 60;
+const PADDLE_REFUND_RETRY_DELAY_SECONDS = 10 * 60;
+const CREDIT_REFUND_QUEUE_BATCH_LIMIT = 25;
 
 type PaddleApiSubscriptionItem = {
   readonly price_id: string | null;
@@ -75,7 +95,27 @@ type PaddleTransactionEvent = {
   readonly subscriptionId: string | null;
   readonly checkoutId: string | null;
   readonly paidAt: Date | null;
+  readonly quantity: number | null;
   readonly status: "paid";
+};
+
+type PaddleTransactionLineItem = {
+  readonly id: string;
+  readonly quantity: number;
+  readonly totalMinorUnits: number;
+};
+
+type PaddleAdjustmentResult = {
+  readonly id: string;
+  readonly status: string;
+};
+
+type PaddleCreditRefundAdjustmentSummary = {
+  readonly transactionId: string;
+  readonly adjustmentId: string;
+  readonly status: string;
+  readonly amountMinorUnits: number;
+  readonly currency: string | null;
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -97,6 +137,21 @@ function readDate(value: unknown): Date | null {
   }
   const timestamp = Date.parse(raw);
   return Number.isFinite(timestamp) ? new Date(timestamp) : null;
+}
+
+function readPositiveInteger(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isInteger(value) && value > 0 ? value : null;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function addYearsUtc(date: Date, years: number): Date {
@@ -310,6 +365,25 @@ function extractPriceIds(items: unknown): string[] {
   return priceIds;
 }
 
+function extractPaddleItemQuantity(items: unknown): number | null {
+  if (!Array.isArray(items)) {
+    return null;
+  }
+
+  let total = 0;
+  for (const item of items) {
+    if (!isObject(item)) {
+      continue;
+    }
+    const quantity = readPositiveInteger(item.quantity);
+    if (quantity) {
+      total += quantity;
+    }
+  }
+
+  return total > 0 ? total : null;
+}
+
 function extractPaddleSubscriptionEvent(
   payload: Record<string, unknown>,
   config: AppConfig,
@@ -404,6 +478,10 @@ function extractPaddleTransactionEvent(
     readString(totals?.grand_total) ??
     readString(totals?.grandTotal) ??
     readString(data.amount);
+  const quantity =
+    productType === "credits"
+      ? readPositiveInteger(customData?.quantity) ?? extractPaddleItemQuantity(data.items)
+      : null;
 
   return {
     id: transactionId,
@@ -416,12 +494,21 @@ function extractPaddleTransactionEvent(
     subscriptionId: readString(data.subscription_id),
     checkoutId: readString(data.checkout_id),
     paidAt: readDate(data.billed_at) ?? readDate(data.created_at),
+    quantity,
     status: "paid",
   };
 }
 
 function isSubscriptionPlanType(value: string | null): value is "pro_monthly" | "pro_yearly" {
   return value === "pro_monthly" || value === "pro_yearly";
+}
+
+function isCreditSku(value: string | null): value is ManagedCreditSku {
+  return value === "slides";
+}
+
+function getCreditSkuConfig(config: AppConfig, sku: ManagedCreditSku) {
+  return config.billing.paddle.creditSkus[sku];
 }
 
 function getPaddleApiBaseUrl(config: AppConfig): string {
@@ -447,6 +534,50 @@ function resolvePaddleApiErrorMessage(payload: unknown, fallback: string): strin
 function isPaddleCancelPermissionError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? "");
   return /not authorized to create subscription-cancel/i.test(message);
+}
+
+function isInternalCronAuthorized(
+  authorizationHeader: string | undefined,
+  internalSecretHeader: string | string[] | undefined,
+  config: AppConfig
+): boolean {
+  const secret = config.security.internalCronSecret;
+  if (!secret) {
+    return false;
+  }
+  const receivedSecret = Array.isArray(internalSecretHeader)
+    ? internalSecretHeader[0]
+    : internalSecretHeader;
+  const received = receivedSecret ? String(receivedSecret) : authorizationHeader ?? "";
+  const expectedValue = receivedSecret ? secret : `Bearer ${secret}`;
+  const expected = Buffer.from(expectedValue);
+  const receivedBuffer = Buffer.from(received);
+  return expected.length === receivedBuffer.length && crypto.timingSafeEqual(expected, receivedBuffer);
+}
+
+function isPaddlePendingRefundRequestError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /pending refund request/i.test(message);
+}
+
+function isPaddleRefundProviderPendingStatus(status: string): boolean {
+  return status === "pending" || status === "pending_approval";
+}
+
+function summarizePaddleAdjustmentStatuses(statuses: readonly string[]): string {
+  const normalized = statuses.map((status) => status.trim()).filter(Boolean);
+  if (normalized.some(isPaddleRefundProviderPendingStatus)) {
+    return "pending_approval";
+  }
+  const unique = Array.from(new Set(normalized));
+  if (unique.length === 0) {
+    return "unknown";
+  }
+  return unique.length === 1 ? unique[0] : unique.join(",");
+}
+
+function roundCreditUnitQuantity(value: number): number {
+  return Math.round(value * 10) / 10;
 }
 
 function readPaddleCancelManagementUrl(data: unknown): string | null {
@@ -505,6 +636,251 @@ async function paddleApiRequest<T>(
   }
 
   return (payload.data ?? payload) as T;
+}
+
+function majorAmountToMinorUnits(amount: string | null, currency: string | null): number | null {
+  if (!amount || !/^\d+(\.\d+)?$/.test(amount)) {
+    return null;
+  }
+
+  const exponent = getCurrencyExponent(currency);
+  const [whole, fraction = ""] = amount.split(".");
+  const normalizedFraction = fraction.padEnd(exponent, "0").slice(0, exponent);
+  const minor = Number(`${whole}${normalizedFraction || ""}`);
+  return Number.isSafeInteger(minor) ? minor : null;
+}
+
+function formatCreditsProductName(): string {
+  return "TransLay Slides Credits";
+}
+
+function calculateCreditRefundAmountFromGrantItems(
+  items: readonly CreditRefundReservationItem[],
+  currency: string | null
+): number | null {
+  let total = 0;
+  for (const item of items) {
+    const amountFromGrant = majorAmountToMinorUnits(item.amountPaid, item.currency);
+    if (!amountFromGrant || (currency && item.currency !== currency)) {
+      return null;
+    }
+    total += Math.round((amountFromGrant * item.units) / Math.max(item.purchasedUnits, 1));
+  }
+  return Number.isSafeInteger(total) && total > 0 ? total : null;
+}
+
+function extractPaddleTransactionLineItem(
+  transaction: unknown
+): PaddleTransactionLineItem | null {
+  if (!isObject(transaction)) {
+    return null;
+  }
+  const details = isObject(transaction.details) ? transaction.details : null;
+  const lineItems = Array.isArray(details?.line_items) ? details.line_items : [];
+  for (const lineItem of lineItems) {
+    if (!isObject(lineItem)) {
+      continue;
+    }
+    const id = readString(lineItem.id);
+    const quantity = readPositiveInteger(lineItem.quantity);
+    const totals = isObject(lineItem.totals) ? lineItem.totals : null;
+    const total = readString(totals?.total);
+    if (!id || !quantity || !total || !/^\d+$/.test(total)) {
+      continue;
+    }
+    return {
+      id,
+      quantity,
+      totalMinorUnits: Number(total),
+    };
+  }
+  return null;
+}
+
+async function createPaddleCreditRefundAdjustment(
+  config: AppConfig,
+  fetchImpl: FetchLike,
+  items: readonly CreditRefundReservationItem[],
+  reason: string
+): Promise<{
+  readonly adjustmentId: string;
+  readonly status: string;
+  readonly amountMinorUnits: number;
+  readonly currency: string | null;
+}> {
+  const firstItem = items[0];
+  if (!firstItem) {
+    throw new Error("Credit refund adjustment has no items");
+  }
+  if (items.some((item) => item.providerTransactionId !== firstItem.providerTransactionId)) {
+    throw new Error("Credit refund adjustment items must belong to one Paddle transaction");
+  }
+  const totalUnits = roundCreditUnitQuantity(
+    items.reduce((sum, item) => sum + item.units, 0)
+  );
+  const transaction = await paddleApiRequest<unknown>(
+    config,
+    fetchImpl,
+    `/transactions/${firstItem.providerTransactionId}`
+  );
+  const lineItem = extractPaddleTransactionLineItem(transaction);
+  if (!lineItem) {
+    throw new Error("Paddle transaction does not contain a refundable line item");
+  }
+
+  const amountFromGrantItems = calculateCreditRefundAmountFromGrantItems(items, firstItem.currency);
+  const amountFromLineItem = Math.round(
+    (lineItem.totalMinorUnits * totalUnits) / Math.max(lineItem.quantity, 1)
+  );
+  const amountMinorUnits = Math.max(1, amountFromGrantItems || amountFromLineItem || 0);
+  if (!Number.isSafeInteger(amountMinorUnits) || amountMinorUnits <= 0) {
+    throw new Error("Refund amount is too small for Paddle");
+  }
+  const isFullLineRefund = amountMinorUnits >= lineItem.totalMinorUnits;
+
+  const adjustment = await paddleApiRequest<PaddleAdjustmentResult>(
+    config,
+    fetchImpl,
+    "/adjustments",
+    {
+      method: "POST",
+      body: {
+        action: "refund",
+        type: "partial",
+        transaction_id: firstItem.providerTransactionId,
+        reason,
+        items: [
+          {
+            item_id: lineItem.id,
+            type: isFullLineRefund ? "full" : "partial",
+            ...(isFullLineRefund ? {} : { amount: String(amountMinorUnits) }),
+          },
+        ],
+      },
+    }
+  );
+  const adjustmentId = readString(adjustment.id);
+  if (!adjustmentId) {
+    throw new Error("Paddle returned a malformed refund adjustment");
+  }
+
+  return {
+    adjustmentId,
+    status: readString(adjustment.status) ?? "unknown",
+    amountMinorUnits,
+    currency: firstItem.currency,
+  };
+}
+
+async function createPaddleCreditsCheckoutTransaction(
+  config: AppConfig,
+  fetchImpl: FetchLike,
+  input: {
+    readonly userId: string;
+    readonly sku: ManagedCreditSku;
+    readonly quantity: number;
+    readonly amountCents: number;
+  }
+): Promise<string> {
+  const productName = formatCreditsProductName();
+  const transaction = await paddleApiRequest<unknown>(
+    config,
+    fetchImpl,
+    "/transactions",
+    {
+      method: "POST",
+      body: {
+        items: [
+          {
+            quantity: input.quantity,
+            price: {
+              name: productName,
+              description: `${input.quantity} Google Slides™ translation credits`,
+              unit_price: {
+                amount: String(input.amountCents),
+                currency_code: "USD",
+              },
+              product: {
+                name: productName,
+                tax_category: "standard",
+                description: "Prepaid credits for Google Slides™ translation in TransLay.",
+              },
+            },
+          },
+        ],
+        collection_mode: "automatic",
+        custom_data: {
+          user_id: input.userId,
+          product_type: "credits",
+          sku: input.sku,
+          quantity: input.quantity,
+        },
+      },
+    }
+  );
+  const transactionId = isObject(transaction) ? readString(transaction.id) : null;
+  if (!transactionId) {
+    throw new Error("Paddle returned a malformed credits checkout transaction");
+  }
+  return transactionId;
+}
+
+async function getPaddleAdjustmentStatus(
+  config: AppConfig,
+  fetchImpl: FetchLike,
+  adjustmentId: string
+): Promise<string> {
+  const adjustments = await paddleApiRequest<unknown>(
+    config,
+    fetchImpl,
+    `/adjustments?id=${encodeURIComponent(adjustmentId)}`
+  );
+  const adjustment = Array.isArray(adjustments)
+    ? adjustments.find((item) => isObject(item) && readString(item.id) === adjustmentId)
+    : adjustments;
+  const adjustmentRecord = isObject(adjustment) ? adjustment : null;
+  return readString(adjustmentRecord?.status) ?? "unknown";
+}
+
+function groupCreditRefundItemsByTransaction(
+  requests: readonly QueuedCreditRefundRequest[]
+): Map<string, CreditRefundReservationItem[]> {
+  const itemsByTransactionId = new Map<string, CreditRefundReservationItem[]>();
+  for (const request of requests) {
+    for (const item of request.items) {
+      const items = itemsByTransactionId.get(item.providerTransactionId) ?? [];
+      items.push(item);
+      itemsByTransactionId.set(item.providerTransactionId, items);
+    }
+  }
+  return itemsByTransactionId;
+}
+
+function getCreditRefundRequestTransactionIds(
+  request: QueuedCreditRefundRequest
+): Set<string> {
+  return new Set(request.items.map((item) => item.providerTransactionId));
+}
+
+function calculateCreditRefundRequestMoney(
+  request: QueuedCreditRefundRequest
+): { readonly amountRefunded: string | null; readonly currency: string | null } {
+  const currency = request.items[0]?.currency ?? null;
+  const amountMinorUnits = calculateCreditRefundAmountFromGrantItems(request.items, currency);
+  return {
+    amountRefunded: amountMinorUnits
+      ? formatMinorUnitsAsMajorUnits(String(amountMinorUnits), currency)
+      : null,
+    currency,
+  };
+}
+
+function getBatchCreditRefundReason(requests: readonly QueuedCreditRefundRequest[]): string {
+  const reasons = requests
+    .map((request) => request.reason?.trim())
+    .filter((reason): reason is string => Boolean(reason));
+  const uniqueReasons = Array.from(new Set(reasons));
+  return uniqueReasons.length === 1 ? uniqueReasons[0] : "unused prepaid TransLay credits";
 }
 
 function normalizePaddleSubscriptionItems(items: unknown): PaddleApiSubscriptionItem[] {
@@ -921,7 +1297,7 @@ async function invalidateEntitlementCache(redis: Redis, userId: string): Promise
   }
 }
 
-export function checkoutHandler(pool: Pool, config: AppConfig) {
+export function checkoutHandler(pool: Pool, config: AppConfig, fetchImpl: FetchLike = fetch) {
   return async (req: Request, res: Response) => {
     const portalSession = req.portalSession;
     if (!portalSession) {
@@ -931,7 +1307,60 @@ export function checkoutHandler(pool: Pool, config: AppConfig) {
 
     const body = (req.body ?? {}) as CheckoutRequest;
     const productType = body.product_type ?? "subscription";
-    const planType = body.plan_type;
+    const planType = "plan_type" in body ? body.plan_type : undefined;
+    const creditSku = "sku" in body ? body.sku : undefined;
+    if (productType === "credits") {
+      const normalizedCreditSku = readString(creditSku);
+      if (!isCreditSku(normalizedCreditSku)) {
+        sendError(res, "INVALID_CHECKOUT_REQUEST");
+        return;
+      }
+
+      const user = await findUserById(pool, portalSession.userId);
+      if (!user) {
+        sendError(res, "UNAUTHORIZED");
+        return;
+      }
+
+	      const skuConfig = getCreditSkuConfig(config, normalizedCreditSku);
+	      const quantity = readPositiveInteger("quantity" in body ? body.quantity : null);
+      if (!quantity || quantity < skuConfig.minUnits || quantity > skuConfig.maxUnits) {
+        sendError(
+          res,
+          "INVALID_CHECKOUT_REQUEST",
+          `Credit quantity must be between ${skuConfig.minUnits} and ${skuConfig.maxUnits}`
+        );
+        return;
+      }
+
+      let transactionId: string;
+      try {
+        transactionId = await createPaddleCreditsCheckoutTransaction(config, fetchImpl, {
+          userId: user.id,
+          sku: normalizedCreditSku,
+          quantity,
+          amountCents: skuConfig.amountCents,
+        });
+      } catch (error) {
+        sendError(res, "SERVICE_UNAVAILABLE", (error as Error).message);
+        return;
+      }
+
+      const response: CheckoutResponse = {
+        provider_name: "paddle",
+        transaction_id: transactionId,
+        custom_data: {
+          user_id: user.id,
+          product_type: "credits",
+          sku: normalizedCreditSku,
+          quantity,
+        },
+      };
+
+      res.json(response);
+      return;
+    }
+
     if (
       productType !== "subscription" ||
       (planType !== "pro_monthly" && planType !== "pro_yearly")
@@ -981,6 +1410,400 @@ export function checkoutHandler(pool: Pool, config: AppConfig) {
     };
 
     res.json(response);
+  };
+}
+
+export function creditBalanceHandler(
+  pool: Pool,
+  redis?: Redis,
+  config?: AppConfig,
+  fetchImpl: FetchLike = fetch
+) {
+  return async (req: Request, res: Response) => {
+    const portalSession = req.portalSession;
+    if (!portalSession) {
+      sendError(res, "UNAUTHORIZED");
+      return;
+    }
+
+    if (redis && config) {
+      await refreshProviderPendingCreditRefundsForUser(
+        pool,
+        redis,
+        config,
+        fetchImpl,
+        portalSession.userId
+      );
+    }
+
+    const balance = await getCreditBalance(pool, portalSession.userId);
+    res.json({
+      unit: "slides_pages",
+      balance: balance.slides_balance,
+      refundable_units: balance.slides_refundable_units,
+      pending_refund_units: balance.slides_pending_refund_units,
+    });
+  };
+}
+
+async function refreshProviderPendingCreditRefundsForUser(
+  pool: Pool,
+  redis: Redis,
+  config: AppConfig,
+  fetchImpl: FetchLike,
+  userId: string
+): Promise<void> {
+  const pendingRequests = await getProviderPendingCreditRefundRequestsForUser(pool, userId);
+  let finishedAny = false;
+  for (const pending of pendingRequests) {
+    if (pending.providerRefundIds.length === 0) {
+      continue;
+    }
+
+    try {
+      const statuses = await Promise.all(
+        pending.providerRefundIds.map((id) => getPaddleAdjustmentStatus(config, fetchImpl, id))
+      );
+      const providerStatus = summarizePaddleAdjustmentStatuses(statuses);
+      if (isPaddleRefundProviderPendingStatus(providerStatus)) {
+        continue;
+      }
+
+      if (/rejected|declined|failed|canceled|cancelled/i.test(providerStatus)) {
+        await rejectCreditRefundRequest(pool, {
+          userId: pending.userId,
+          refundRequestId: pending.refundRequestId,
+          providerName: "paddle",
+          providerRefundIds: pending.providerRefundIds,
+          providerStatus,
+          providerError: "Paddle rejected the refund adjustment",
+        });
+      } else {
+        await completeCreditRefundRequest(pool, {
+          userId: pending.userId,
+          refundRequestId: pending.refundRequestId,
+          unit: pending.unit,
+          items: pending.items,
+          providerName: "paddle",
+          providerRefundIds: pending.providerRefundIds,
+          amountRefunded: null,
+          currency: null,
+          providerStatus,
+        });
+      }
+      finishedAny = true;
+    } catch (error) {
+      console.warn(
+        "[billing] failed to refresh provider-pending credit refund",
+        (error as Error).message
+      );
+    }
+  }
+
+  if (!finishedAny) {
+    return;
+  }
+
+  await invalidateEntitlementCache(redis, userId);
+  enqueueCreditRefundProcessingTask(config, "drain").catch((error) => {
+    console.warn("[billing] failed to enqueue credit refund drain", (error as Error).message);
+  });
+}
+
+export function creditRefundRequestHandler(
+  pool: Pool,
+  redis: Redis,
+  config: AppConfig,
+  _fetchImpl: FetchLike = fetch
+) {
+  return async (req: Request, res: Response) => {
+    const portalSession = req.portalSession;
+    if (!portalSession) {
+      sendError(res, "UNAUTHORIZED");
+      return;
+    }
+
+    const body = (req.body ?? {}) as CreditRefundRequest;
+    const unit = body.unit ?? "slides_pages";
+    const quantity = readPositiveInteger(body.quantity);
+    const reason = readString(body.reason ?? null);
+    if (unit !== "slides_pages" || !quantity) {
+      sendError(res, "INVALID_REFUND_REQUEST");
+      return;
+    }
+    if (reason && reason.length > 500) {
+      sendError(res, "INVALID_REFUND_REQUEST", "Refund reason is too long");
+      return;
+    }
+
+    const summary = await createCreditRefundRequest(pool, {
+      userId: portalSession.userId,
+      unit,
+      requestedUnits: quantity,
+      reason,
+    });
+    if (!summary.refund_request_id) {
+      sendError(
+        res,
+        "INVALID_REFUND_REQUEST",
+        "Refund quantity exceeds your unused refundable credits"
+      );
+      return;
+    }
+    await invalidateEntitlementCache(redis, portalSession.userId);
+    enqueueCreditRefundProcessingTask(config, summary.refund_request_id).catch((error) => {
+      console.warn("[billing] failed to enqueue credit refund processing", (error as Error).message);
+    });
+
+    const balance = await getCreditBalance(pool, portalSession.userId);
+    const response: CreditRefundResponse = {
+      refund_request_id: summary.refund_request_id,
+      status: "submitted",
+      unit: "slides_pages",
+      requested_units: summary.requested_units,
+      refundable_units_remaining: balance.slides_refundable_units,
+    };
+    res.json(response);
+  };
+}
+
+async function processOneQueuedCreditRefund(
+  pool: Pool,
+  redis: Redis,
+  config: AppConfig,
+  fetchImpl: FetchLike
+): Promise<{ processed: boolean; retryDelaySeconds: number | null }> {
+  const pending = await getNextProviderPendingCreditRefundRequest(pool);
+  if (pending) {
+    const statuses = await Promise.all(
+      pending.providerRefundIds.map((id) => getPaddleAdjustmentStatus(config, fetchImpl, id))
+    );
+    const providerStatus = summarizePaddleAdjustmentStatuses(statuses);
+    if (isPaddleRefundProviderPendingStatus(providerStatus)) {
+      return { processed: true, retryDelaySeconds: PADDLE_REFUND_RETRY_DELAY_SECONDS };
+    }
+    if (/rejected|declined|failed|canceled|cancelled/i.test(providerStatus)) {
+      await rejectCreditRefundRequest(pool, {
+        userId: pending.userId,
+        refundRequestId: pending.refundRequestId,
+        providerName: "paddle",
+        providerRefundIds: pending.providerRefundIds,
+        providerStatus,
+        providerError: "Paddle rejected the refund adjustment",
+      });
+      await invalidateEntitlementCache(redis, pending.userId);
+      return { processed: true, retryDelaySeconds: null };
+    }
+    await completeCreditRefundRequest(pool, {
+      userId: pending.userId,
+      refundRequestId: pending.refundRequestId,
+      unit: pending.unit,
+      items: pending.items,
+      providerName: "paddle",
+      providerRefundIds: pending.providerRefundIds,
+      amountRefunded: null,
+      currency: null,
+      providerStatus,
+    });
+    await invalidateEntitlementCache(redis, pending.userId);
+    return { processed: true, retryDelaySeconds: null };
+  }
+
+  const batch = await getQueuedCreditRefundBatch(pool, CREDIT_REFUND_QUEUE_BATCH_LIMIT);
+  if (batch.requests.length === 0) {
+    return { processed: false, retryDelaySeconds: null };
+  }
+
+  const adjustments: PaddleCreditRefundAdjustmentSummary[] = [];
+  const itemsByTransactionId = groupCreditRefundItemsByTransaction(batch.requests);
+  const batchReason = getBatchCreditRefundReason(batch.requests);
+  try {
+    for (const [transactionId, items] of itemsByTransactionId) {
+      const adjustment = await createPaddleCreditRefundAdjustment(
+        config,
+        fetchImpl,
+        items,
+        batchReason
+      );
+      adjustments.push({
+        transactionId,
+        adjustmentId: adjustment.adjustmentId,
+        status: adjustment.status,
+        amountMinorUnits: adjustment.amountMinorUnits,
+        currency: adjustment.currency,
+      });
+    }
+
+    const providerStatus = summarizePaddleAdjustmentStatuses(
+      adjustments.map((adjustment) => adjustment.status)
+    );
+    for (const request of batch.requests) {
+      const requestTransactionIds = getCreditRefundRequestTransactionIds(request);
+      const requestAdjustments = adjustments.filter((adjustment) =>
+        requestTransactionIds.has(adjustment.transactionId)
+      );
+      const requestProviderRefundIds = requestAdjustments.map(
+        (adjustment) => adjustment.adjustmentId
+      );
+      const requestProviderStatus = summarizePaddleAdjustmentStatuses(
+        requestAdjustments.map((adjustment) => adjustment.status)
+      );
+      const { amountRefunded: requestAmountRefunded, currency: requestCurrency } =
+        calculateCreditRefundRequestMoney(request);
+
+      if (isPaddleRefundProviderPendingStatus(requestProviderStatus)) {
+        await markCreditRefundRequestProviderPending(pool, {
+          userId: request.userId,
+          refundRequestId: request.refundRequestId,
+          providerName: "paddle",
+          providerRefundIds: requestProviderRefundIds,
+          providerStatus: requestProviderStatus,
+          amountRefunded: requestAmountRefunded,
+          currency: requestCurrency,
+        });
+        continue;
+      }
+
+      await completeCreditRefundRequest(pool, {
+        userId: request.userId,
+        refundRequestId: request.refundRequestId,
+        unit: request.unit,
+        items: request.items,
+        providerName: "paddle",
+        providerRefundIds: requestProviderRefundIds,
+        amountRefunded: requestAmountRefunded,
+        currency: requestCurrency,
+        providerStatus: requestProviderStatus,
+      });
+    }
+
+    for (const userId of new Set(batch.requests.map((request) => request.userId))) {
+      await invalidateEntitlementCache(redis, userId);
+    }
+    if (isPaddleRefundProviderPendingStatus(providerStatus)) {
+      return { processed: true, retryDelaySeconds: PADDLE_REFUND_RETRY_DELAY_SECONDS };
+    }
+    return { processed: true, retryDelaySeconds: null };
+  } catch (error) {
+    const coveredRequestIds = new Set<string>();
+    if (adjustments.length > 0) {
+      const createdTransactionIds = new Set(adjustments.map((adjustment) => adjustment.transactionId));
+      const coveredRequests = batch.requests.filter((request) => {
+        const requestTransactionIds = getCreditRefundRequestTransactionIds(request);
+        return Array.from(requestTransactionIds).every((transactionId) =>
+          createdTransactionIds.has(transactionId)
+        );
+      });
+      for (const request of coveredRequests) {
+        coveredRequestIds.add(request.refundRequestId);
+      }
+      for (const request of coveredRequests) {
+        const requestTransactionIds = getCreditRefundRequestTransactionIds(request);
+        const requestAdjustments = adjustments.filter((adjustment) =>
+          requestTransactionIds.has(adjustment.transactionId)
+        );
+        const providerStatus = summarizePaddleAdjustmentStatuses(
+          requestAdjustments.map((adjustment) => adjustment.status)
+        );
+        const providerRefundIds = requestAdjustments.map((adjustment) => adjustment.adjustmentId);
+        const { amountRefunded, currency } = calculateCreditRefundRequestMoney(request);
+        if (isPaddleRefundProviderPendingStatus(providerStatus)) {
+          await markCreditRefundRequestProviderPending(pool, {
+            userId: request.userId,
+            refundRequestId: request.refundRequestId,
+            providerName: "paddle",
+            providerRefundIds,
+            providerStatus,
+            amountRefunded,
+            currency,
+          });
+        } else {
+          await completeCreditRefundRequest(pool, {
+            userId: request.userId,
+            refundRequestId: request.refundRequestId,
+            unit: request.unit,
+            items: request.items,
+            providerName: "paddle",
+            providerRefundIds,
+            amountRefunded,
+            currency,
+            providerStatus,
+          });
+        }
+      }
+      for (const userId of new Set(coveredRequests.map((request) => request.userId))) {
+        await invalidateEntitlementCache(redis, userId);
+      }
+    }
+
+    if (isPaddlePendingRefundRequestError(error)) {
+      return { processed: true, retryDelaySeconds: PADDLE_REFUND_RETRY_DELAY_SECONDS };
+    }
+    for (const queued of batch.requests) {
+      if (coveredRequestIds.has(queued.refundRequestId)) {
+        continue;
+      }
+      await rejectCreditRefundRequest(pool, {
+        userId: queued.userId,
+        refundRequestId: queued.refundRequestId,
+        providerName: "paddle",
+        providerRefundIds: [],
+        providerStatus: "failed",
+        providerError: error instanceof Error ? error.message : String(error),
+      });
+    }
+    for (const userId of new Set(batch.requests.map((request) => request.userId))) {
+      await invalidateEntitlementCache(redis, userId);
+    }
+    return { processed: true, retryDelaySeconds: null };
+  }
+}
+
+export function processCreditRefundQueueHandler(
+  pool: Pool,
+  redis: Redis,
+  config: AppConfig,
+  fetchImpl: FetchLike = fetch
+) {
+  return async (req: Request, res: Response) => {
+    if (!config.security.internalCronSecret) {
+      res.status(503).json({
+        error: "SERVICE_UNAVAILABLE",
+        message: "Internal cron secret is not configured.",
+      });
+      return;
+    }
+    if (!isInternalCronAuthorized(req.headers.authorization, req.headers["x-internal-cron-secret"], config)) {
+      sendError(res, "UNAUTHORIZED");
+      return;
+    }
+
+    const result = await processOneQueuedCreditRefund(pool, redis, config, fetchImpl);
+    if (result.retryDelaySeconds !== null) {
+      const refundRequestId =
+        typeof req.body?.refund_request_id === "string" ? req.body.refund_request_id : "retry";
+      enqueueCreditRefundProcessingTask(config, refundRequestId, result.retryDelaySeconds).catch(
+        (error) => {
+          console.warn(
+            "[billing] failed to enqueue delayed credit refund processing",
+            (error as Error).message
+          );
+        }
+      );
+    } else if (result.processed) {
+      enqueueCreditRefundProcessingTask(config, "drain").catch((error) => {
+        console.warn(
+          "[billing] failed to enqueue follow-up credit refund processing",
+          (error as Error).message
+        );
+      });
+    }
+
+    res.json({
+      status: "ok",
+      processed: result.processed,
+      retry_delay_seconds: result.retryDelaySeconds,
+    });
   };
 }
 
@@ -1311,7 +2134,7 @@ export function paddleWebhookHandler(pool: Pool, redis: Redis, config: AppConfig
           );
 
           if (normalizedTransaction) {
-            await upsertPaymentOrder(client, {
+            const paymentOrder = await upsertPaymentOrder(client, {
               userId: normalizedTransaction.userId,
               providerName: "paddle",
               productType: normalizedTransaction.productType,
@@ -1352,6 +2175,43 @@ export function paddleWebhookHandler(pool: Pool, redis: Redis, config: AppConfig
                   cancelAtPeriodEnd: existingSubscription?.cancel_at_period_end ?? false,
                 });
               }
+              await invalidateEntitlementCache(redis, normalizedTransaction.userId);
+            } else if (
+              normalizedTransaction.productType === "credits" &&
+              isCreditSku(normalizedTransaction.sku)
+            ) {
+              const creditSkuConfig = getCreditSkuConfig(config, normalizedTransaction.sku);
+              const quantity = normalizedTransaction.quantity;
+              if (
+                !quantity ||
+                quantity < creditSkuConfig.minUnits ||
+                quantity > creditSkuConfig.maxUnits
+              ) {
+                throw new Error("Paddle credits transaction has an invalid quantity");
+              }
+              const activeSubscription = await getActiveSubscription(
+                client,
+                normalizedTransaction.userId as Parameters<typeof getActiveSubscription>[1]
+              );
+              const source: CreditGrantSource =
+                activeSubscription &&
+                activeSubscription.plan_type !== "free" &&
+                ["active", "grace_period", "past_due"].includes(activeSubscription.status)
+                  ? "subscription_extra"
+                  : "pay_as_you_go";
+
+              await grantPurchasedCredits(client, {
+                userId: normalizedTransaction.userId,
+                orderId: paymentOrder.id,
+                providerName: "paddle",
+                providerTransactionId: normalizedTransaction.id,
+                source,
+                unit: creditSkuConfig.unit,
+                units: quantity,
+                amountPaid: normalizedTransaction.amount,
+                currency: normalizedTransaction.currency,
+                idempotencyKey: `paddle:${normalizedTransaction.id}:credits:${normalizedTransaction.sku}`,
+              });
               await invalidateEntitlementCache(redis, normalizedTransaction.userId);
             }
           }

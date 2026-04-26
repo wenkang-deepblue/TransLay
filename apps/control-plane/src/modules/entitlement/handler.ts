@@ -5,6 +5,7 @@ import { computeEntitlement } from "@translay/shared-domain";
 import { getQuotaLimits, billingPeriodKey } from "@translay/shared-domain";
 import { getActiveSubscription } from "../../repositories/subscription-repo";
 import { getUsageSummary } from "../../repositories/usage-repo";
+import { getCreditBalance } from "../../repositories/credit-repo";
 import { sendError } from "../../utils/errors";
 
 export function entitlementHandler(pool: Pool) {
@@ -31,15 +32,19 @@ export function entitlementHandler(pool: Pool) {
     const periodKey = billingPeriodKey();
     const limits = getQuotaLimits(sub.plan_type);
     const usage = await getUsageSummary(pool, auth.user_id, periodKey);
+    const credits = await getCreditBalance(pool, auth.user_id);
 
     const usageSnapshot: MeteredUsageSnapshot = {
       period_key: periodKey,
       slides_used: usage.slides_used,
       slides_limit: limits.slides,
+      slides_credit_balance: credits.slides_balance,
       docs_pages_used: usage.docs_pages_used,
       docs_pages_limit: limits.docs_pages,
+      docs_pages_credit_balance: credits.docs_pages_balance,
       sheets_cells_used: usage.sheets_cells_used,
       sheets_cells_limit: limits.sheets_cells,
+      sheets_cells_credit_balance: credits.sheets_cells_balance,
     };
 
     const response: EntitlementResponse = {

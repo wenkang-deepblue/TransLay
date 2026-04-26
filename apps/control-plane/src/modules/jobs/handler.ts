@@ -42,6 +42,7 @@ import {
 } from "@translay/shared-domain";
 import { getActiveSubscription } from "../../repositories/subscription-repo";
 import { getUsageSummary } from "../../repositories/usage-repo";
+import { getCreditBalance } from "../../repositories/credit-repo";
 import {
   acquireCreateJobAdmission,
   createJob,
@@ -961,7 +962,8 @@ async function getEntitledUsageSnapshot(pool: Pool, userId: string) {
 
   const periodKey = billingPeriodKey();
   const usage = await getUsageSummary(pool, userId as UserId, periodKey);
-  return { sub, usage };
+  const credits = await getCreditBalance(pool, userId as UserId);
+  return { sub, usage, credits };
 }
 
 export function previewJobHandler(pool: Pool) {
@@ -988,17 +990,22 @@ export function previewJobHandler(pool: Pool) {
       return;
     }
 
-    const { sub, usage } = snapshot;
-    if (sub.plan_type === "free" && usage.total_jobs >= FREE_TIER_MAX_JOBS_PER_PERIOD) {
+    const { sub, usage, credits } = snapshot;
+    if (
+      sub.plan_type === "free" &&
+      usage.total_jobs >= FREE_TIER_MAX_JOBS_PER_PERIOD &&
+      credits.slides_balance <= 0
+    ) {
       sendError(res, "QUOTA_EXCEEDED");
       return;
     }
 
-    const remaining = getRemainingQuota(
+    const planRemaining = getRemainingQuota(
       sub.plan_type,
       "slides",
       getHostUsed(usage, "slides")
     );
+    const remaining = planRemaining + credits.slides_balance;
     if (remaining <= 0) {
       sendError(res, "QUOTA_EXCEEDED");
       return;
@@ -1070,14 +1077,26 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
       sendError(res, "ACCESS_DENIED");
       return;
     }
-    const { sub, usage } = snapshot;
+    const { sub, usage, credits } = snapshot;
 
-    if (sub.plan_type === "free" && usage.total_jobs >= FREE_TIER_MAX_JOBS_PER_PERIOD) {
+    if (
+      sub.plan_type === "free" &&
+      usage.total_jobs >= FREE_TIER_MAX_JOBS_PER_PERIOD &&
+      credits.slides_balance <= 0
+    ) {
       sendError(res, "QUOTA_EXCEEDED");
       return;
     }
 
-    const remaining = getRemainingQuota(sub.plan_type, body.host_type, getHostUsed(usage, body.host_type));
+    const creditBalance =
+      body.host_type === "slides"
+        ? credits.slides_balance
+        : body.host_type === "docs"
+          ? credits.docs_pages_balance
+          : credits.sheets_cells_balance;
+    const remaining =
+      getRemainingQuota(sub.plan_type, body.host_type, getHostUsed(usage, body.host_type)) +
+      creditBalance;
     if (remaining <= 0) {
       sendError(res, "QUOTA_EXCEEDED");
       return;

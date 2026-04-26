@@ -15,6 +15,8 @@ import type {
 import {
   matchPresetLanguage,
   billingPeriodKey,
+  getHostLimit,
+  getQuotaLimits,
   parsePageRange,
   buildJobCancelKey,
   buildJobPauseKey,
@@ -38,7 +40,12 @@ import {
   insertLlmDebugOutput,
   purgeExpiredLlmDebugOutputs,
 } from "../repositories/llm-debug-output-repo";
-import { insertUsageLedger } from "../repositories/usage-repo";
+import {
+  getActivePlanForUser,
+  getUsageBeforeJob,
+  insertUsageLedger,
+} from "../repositories/usage-repo";
+import { consumeCredits } from "../repositories/credit-repo";
 import { setJobProgress } from "../cache/job-progress";
 import {
   extractSlides,
@@ -2371,6 +2378,29 @@ async function settleSlideBilling(
       slideIndex,
       ledgerStage: "refund",
       relatedUsageId: provisionalLedgerIds.get(slideIndex),
+    });
+  }
+
+  const planType = await getActivePlanForUser(client, job.user_id);
+  const planLimit = getHostLimit(getQuotaLimits(planType), "slides");
+  const usedBeforeJob = await getUsageBeforeJob(client, {
+    userId: job.user_id,
+    jobId: job.id,
+    hostType: "slides",
+    periodKey,
+  });
+  const planRemainingBeforeJob = Math.max(0, planLimit - usedBeforeJob);
+  const creditUnitsToConsume = Math.max(
+    0,
+    settlement.net_billed_slides - planRemainingBeforeJob
+  );
+  if (creditUnitsToConsume > 0) {
+    await consumeCredits(client, {
+      userId: job.user_id,
+      jobId: job.id,
+      unit: "slides_pages",
+      units: creditUnitsToConsume,
+      idempotencyKey: `job:${job.id}:slides:${creditUnitsToConsume}`,
     });
   }
 

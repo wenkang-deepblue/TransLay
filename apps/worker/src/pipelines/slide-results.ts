@@ -93,6 +93,7 @@ export function markSlideTranslated(
   updateSlideResult(slideResults, slideIndex, (current) => {
     if (
       current.status === "excluded_unsafe" ||
+      current.status === "translated" ||
       current.status === "committed" ||
       current.status === "skipped_translation_failed" ||
       current.status === "skipped_materialization_failed" ||

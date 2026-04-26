@@ -25,10 +25,13 @@ export interface MeteredUsageSnapshot {
   readonly period_key: string;
   readonly slides_used: number;
   readonly slides_limit: number;
+  readonly slides_credit_balance?: number;
   readonly docs_pages_used: number;
   readonly docs_pages_limit: number;
+  readonly docs_pages_credit_balance?: number;
   readonly sheets_cells_used: number;
   readonly sheets_cells_limit: number;
+  readonly sheets_cells_credit_balance?: number;
 }
 
 export type UsageSnapshot = MeteredUsageSnapshot;
@@ -50,10 +53,16 @@ export interface EntitlementResponse {
 }
 
 /** POST /api/checkout request body. */
-export interface CheckoutRequest {
-  readonly product_type?: "subscription";
-  readonly plan_type: "pro_monthly" | "pro_yearly";
-}
+export type CheckoutRequest =
+  | {
+      readonly product_type?: "subscription";
+      readonly plan_type: "pro_monthly" | "pro_yearly";
+    }
+  | {
+      readonly product_type: "credits";
+      readonly sku: "slides";
+      readonly quantity: number;
+    };
 
 export interface ChangeSubscriptionPlanRequest {
   readonly plan_type: "pro_monthly" | "pro_yearly";
@@ -61,14 +70,47 @@ export interface ChangeSubscriptionPlanRequest {
 }
 
 /** POST /api/checkout response. */
-export interface CheckoutResponse {
-  readonly provider_name: "paddle";
-  readonly price_id: string;
-  readonly custom_data: {
-    readonly user_id: string;
-    readonly product_type: "subscription";
-    readonly sku: "pro_monthly" | "pro_yearly";
-  };
+export type CheckoutResponse =
+  | {
+      readonly provider_name: "paddle";
+      readonly price_id: string;
+      readonly custom_data: {
+        readonly user_id: string;
+        readonly product_type: "subscription";
+        readonly sku: "pro_monthly" | "pro_yearly";
+      };
+    }
+	  | {
+	      readonly provider_name: "paddle";
+	      readonly price_id?: string;
+	      readonly transaction_id?: string;
+	      readonly custom_data: {
+	        readonly user_id: string;
+	        readonly product_type: "credits";
+        readonly sku: "slides";
+        readonly quantity: number;
+      };
+    };
+
+export interface CreditBalanceResponse {
+  readonly unit: "slides_pages";
+  readonly balance: number;
+  readonly refundable_units: number;
+  readonly pending_refund_units: number;
+}
+
+export interface CreditRefundRequest {
+  readonly unit?: "slides_pages";
+  readonly quantity: number;
+  readonly reason?: string;
+}
+
+export interface CreditRefundResponse {
+  readonly refund_request_id: string;
+  readonly status: "submitted" | "completed" | "partially_completed" | "rejected";
+  readonly unit: "slides_pages";
+  readonly requested_units: number;
+  readonly refundable_units_remaining: number;
 }
 
 /** GET /api/subscription response. */

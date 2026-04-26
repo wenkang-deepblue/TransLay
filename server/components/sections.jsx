@@ -101,8 +101,12 @@ function DemoSection({ t }) {
   );
 }
 
-function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onPlanCancel, subscriptionState }) {
+function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onCreditsCheckout, onCreditRefund, onPlanCancel, subscriptionState, creditBalance, creditActionCompletedKey }) {
   const p = t.pricing;
+  const initialCreditSku = window.TransLayLandingConfig?.getCreditSku?.("slides") || {};
+  const [creditQuantity, setCreditQuantity] = React.useState(String(initialCreditSku.minUnits || 18));
+  const [refundQuantity, setRefundQuantity] = React.useState("1");
+  const [creditPanel, setCreditPanel] = React.useState("");
   const data = {
     free: { name: p.free_name, price: p.free_price, per: null, sub: p.free_sub, features: [p.free_f1, p.free_f2, p.free_f3, p.free_f4], cta: p.free_cta },
     monthly: { name: p.monthly_name, price: p.monthly_price, per: p.monthly_per, sub: p.monthly_sub, features: [p.monthly_f1, p.monthly_f2, p.monthly_f3, p.monthly_f4], cta: p.monthly_cta },
@@ -116,9 +120,60 @@ function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onPlanCancel
   const cancelScheduled = Boolean(subscriptionState?.cancelAtPeriodEnd);
   const currentPlanType = subscriptionState?.currentPlanType || "";
   const isYearlyActiveOrCanceling = currentPlanType === "pro_yearly";
+  const refundableUnits =
+    creditBalance && typeof creditBalance.refundable_units === "number"
+      ? Math.floor(creditBalance.refundable_units)
+      : 0;
+  const availableCredits =
+    creditBalance && typeof creditBalance.refundable_units === "number"
+      ? Math.floor(creditBalance.refundable_units)
+      : null;
+  const pendingRefundUnits =
+    creditBalance && typeof creditBalance.pending_refund_units === "number"
+      ? Math.floor(creditBalance.pending_refund_units)
+      : 0;
+  const creditSku = window.TransLayLandingConfig?.getCreditSku?.("slides") || {};
+  const purchaseMinUnits = Number.isInteger(creditSku.minUnits) ? creditSku.minUnits : 18;
+  const purchaseMaxUnits = Number.isInteger(creditSku.maxUnits) ? creditSku.maxUnits : 100;
+  React.useEffect(() => {
+    if (refundableUnits > 0 && Number(refundQuantity) > refundableUnits) {
+      setRefundQuantity(String(refundableUnits));
+    }
+  }, [refundableUnits, refundQuantity]);
+  React.useEffect(() => {
+    if (creditPanel === "refund" && refundableUnits <= 0) {
+      setCreditPanel("");
+    }
+  }, [creditPanel, refundableUnits]);
+  React.useEffect(() => {
+    setCreditPanel("");
+  }, [creditActionCompletedKey]);
+  const parseUnitInput = (value, min, max) => {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed)) {
+      return null;
+    }
+    if (parsed < min || parsed > max) {
+      return null;
+    }
+    return parsed;
+  };
+  const purchaseQuantity = parseUnitInput(creditQuantity, purchaseMinUnits, purchaseMaxUnits);
+  const refundableQuantity = parseUnitInput(refundQuantity, 1, refundableUnits);
+  const creditInputStyle = {
+    width: "100%",
+    height: 42,
+    border: "1px solid var(--line)",
+    borderRadius: 8,
+    padding: "0 12px",
+    font: "inherit",
+    background: "var(--surface)",
+    color: "var(--text)",
+    textAlign: "center",
+  };
   const buttonState = (() => {
     if (!isSubscriptionPlan) {
-      return { label: data.cta, disabled: false, action: "link" };
+      return { label: data.cta, disabled: false, action: plan === "payg" ? "credits" : "link" };
     }
 
     if (plan === "monthly" && isYearlyActiveOrCanceling) {
@@ -149,7 +204,22 @@ function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onPlanCancel
         {data.badge && (
           <span style={{position: "absolute", top: -12, insetInlineStart: 24, background: "var(--accent-grad)", color: "white", fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", padding: "5px 12px", borderRadius: 999, boxShadow: "0 6px 16px rgba(66,133,244,0.35)"}}>{data.badge}</span>
         )}
-        <div style={{fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 600, color: "var(--text-soft)", marginBottom: 10}}>{data.name}</div>
+        <div style={{display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginBottom: 10}}>
+          <div style={{fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 600, color: "var(--text-soft)"}}>{data.name}</div>
+          {plan === "payg" && availableCredits !== null ? (
+            <div style={{fontSize: 12, color: "#188038", whiteSpace: "nowrap", textAlign: "right"}}>
+              {pendingRefundUnits > 0 ? (
+                <>
+                  {p.credits_refund_in_progress_label || "Refunding"}:{" "}
+                  <span style={{fontWeight: 600}}>{pendingRefundUnits.toLocaleString()}</span>
+                  {" · "}
+                </>
+              ) : null}
+              {p.payg_available_credits_label || "Credits left"}:{" "}
+              <span style={{fontWeight: 600}}>{availableCredits.toLocaleString()}</span>
+            </div>
+          ) : null}
+        </div>
         <div style={{display: "flex", alignItems: "baseline", gap: 4, marginBottom: 6}}>
           <span style={{fontFamily: "var(--font-display)", fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em"}}>{data.price}</span>
           {data.per && <span style={{fontSize: 16, color: "var(--text-mute)"}}>{data.per}</span>}
@@ -158,7 +228,11 @@ function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onPlanCancel
         <ul style={{listStyle: "none", padding: 0, margin: "0 0 24px", display: "flex", flexDirection: "column", gap: 10, flex: 1}}>
           {data.features.map((f, i) => (
             <li key={i} style={{display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14.5, color: "var(--text-soft)"}}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{flexShrink: 0, marginTop: 3}}><path d="M5 12l5 5 9-11" stroke="var(--accent)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              {plan === "payg" && i === 3 ? (
+                <span style={{width: 16, flexShrink: 0, marginTop: 2, color: "var(--accent)", fontWeight: 700, textAlign: "center"}}>*</span>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{flexShrink: 0, marginTop: 3}}><path d="M5 12l5 5 9-11" stroke="var(--accent)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              )}
               {f}
             </li>
           ))}
@@ -185,6 +259,82 @@ function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onPlanCancel
           >
             {buttonState.label}
           </button>
+        ) : buttonState.action === "credits" ? (
+          <div style={{display: "flex", flexDirection: "column", gap: 10}}>
+            {!creditPanel ? (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-pricing-cta payg-action-btn"
+                  style={{justifyContent: "center"}}
+                  onClick={() => setCreditPanel("purchase")}
+                >
+                  {p.payg_buy_entry_cta || "Buy pay-as-you-go credits"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost payg-action-btn"
+                  style={{justifyContent: "center"}}
+                  disabled={refundableUnits <= 0}
+                  onClick={() => setCreditPanel("refund")}
+                >
+                  {p.payg_refund_entry_cta || "Refund unused credits"}
+                </button>
+              </>
+            ) : (
+              <>
+                <input
+                  type="number"
+                  min={creditPanel === "purchase" ? purchaseMinUnits : 1}
+                  max={creditPanel === "purchase" ? purchaseMaxUnits : refundableUnits}
+                  step="1"
+                  aria-label={
+                    creditPanel === "purchase"
+                      ? p.credits_quantity_label || "Slides to buy"
+                      : p.credits_refund_quantity_label || "Slides to refund"
+                  }
+                  value={creditPanel === "purchase" ? creditQuantity : refundQuantity}
+                  onChange={(event) => {
+                    if (creditPanel === "purchase") {
+                      setCreditQuantity(event.target.value);
+                    } else {
+                      setRefundQuantity(event.target.value);
+                    }
+                  }}
+                  style={creditInputStyle}
+                />
+                <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10}}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost payg-action-btn"
+                    style={{justifyContent: "center"}}
+                    onClick={() => setCreditPanel("")}
+                  >
+                    {p.credits_cancel_cta || "Cancel"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-pricing-cta payg-action-btn"
+                    style={{justifyContent: "center"}}
+                    disabled={creditPanel === "purchase" ? !purchaseQuantity : !refundableQuantity}
+                    onClick={() => {
+                      if (creditPanel === "purchase" && purchaseQuantity) {
+                        onCreditsCheckout?.(purchaseQuantity);
+                        return;
+                      }
+                      if (creditPanel === "refund" && refundableQuantity) {
+                        onCreditRefund?.(refundableQuantity);
+                      }
+                    }}
+                  >
+                    {creditPanel === "purchase"
+                      ? p.credits_purchase_cta || "Buy"
+                      : p.credits_refund_cta || "Refund"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         ) : (
           <a href="#install" className="btn btn-pricing-cta" style={{justifyContent: "center"}}>{data.cta}</a>
         )}
@@ -193,7 +343,7 @@ function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onPlanCancel
   );
 }
 
-function PricingSection({ t, onPlanCheckout, onPlanCancel, checkoutNotice, subscriptionState }) {
+function PricingSection({ t, onPlanCheckout, onCreditsCheckout, onCreditRefund, onPlanCancel, checkoutNotice, subscriptionState, creditBalance, creditActionCompletedKey }) {
   return (
     <section id="pricing" className="section">
       <div className="container">
@@ -210,10 +360,10 @@ function PricingSection({ t, onPlanCheckout, onPlanCancel, checkoutNotice, subsc
           ) : null}
         </div>
         <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 22, alignItems: "stretch"}}>
-          <PriceCard plan="free" t={t} delay={0} onPlanCheckout={onPlanCheckout} onPlanCancel={onPlanCancel} subscriptionState={subscriptionState} />
-          <PriceCard plan="monthly" t={t} delay={60} onPlanCheckout={onPlanCheckout} onPlanCancel={onPlanCancel} subscriptionState={subscriptionState} />
-          <PriceCard plan="yearly" t={t} delay={120} highlight onPlanCheckout={onPlanCheckout} onPlanCancel={onPlanCancel} subscriptionState={subscriptionState} />
-          <PriceCard plan="payg" t={t} delay={180} onPlanCheckout={onPlanCheckout} onPlanCancel={onPlanCancel} subscriptionState={subscriptionState} />
+          <PriceCard plan="free" t={t} delay={0} onPlanCheckout={onPlanCheckout} onCreditsCheckout={onCreditsCheckout} onCreditRefund={onCreditRefund} onPlanCancel={onPlanCancel} subscriptionState={subscriptionState} creditBalance={creditBalance} creditActionCompletedKey={creditActionCompletedKey} />
+          <PriceCard plan="monthly" t={t} delay={60} onPlanCheckout={onPlanCheckout} onCreditsCheckout={onCreditsCheckout} onCreditRefund={onCreditRefund} onPlanCancel={onPlanCancel} subscriptionState={subscriptionState} creditBalance={creditBalance} creditActionCompletedKey={creditActionCompletedKey} />
+          <PriceCard plan="yearly" t={t} delay={120} highlight onPlanCheckout={onPlanCheckout} onCreditsCheckout={onCreditsCheckout} onCreditRefund={onCreditRefund} onPlanCancel={onPlanCancel} subscriptionState={subscriptionState} creditBalance={creditBalance} creditActionCompletedKey={creditActionCompletedKey} />
+          <PriceCard plan="payg" t={t} delay={180} onPlanCheckout={onPlanCheckout} onCreditsCheckout={onCreditsCheckout} onCreditRefund={onCreditRefund} onPlanCancel={onPlanCancel} subscriptionState={subscriptionState} creditBalance={creditBalance} creditActionCompletedKey={creditActionCompletedKey} />
         </div>
       </div>
     </section>

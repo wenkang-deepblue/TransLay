@@ -9,8 +9,13 @@ import {
   cancelSubscriptionHandler,
   changeSubscriptionPlanHandler,
   checkoutHandler,
+  creditBalanceHandler,
+  creditRefundRequestHandler,
   paddleWebhookHandler,
+  processCreditRefundQueueHandler,
 } from "./handler";
+
+type FetchLike = typeof fetch;
 
 function makeResponse(): { res: Response; state: { statusCode: number; body: unknown } } {
   const state = {
@@ -74,10 +79,22 @@ function makeConfig(): AppConfig {
         priceIds: {
           pro_monthly: "pri_monthly_123",
           pro_yearly: "pri_yearly_456",
+          credits_slides: "pri_credits_slide",
         },
         priceAmounts: {
           pro_monthly: 999,
           pro_yearly: 11999,
+          credits_slides: 4,
+        },
+        creditSkus: {
+          slides: {
+            unit: "slides_pages",
+            minUnits: 18,
+            maxUnits: 100,
+            priceId: "pri_credits_slide",
+            amountCents: 4,
+            minimumChargeAmountCents: 70,
+          },
         },
         webhookToleranceSeconds: 300,
       },
@@ -218,6 +235,1131 @@ test("checkoutHandler blocks duplicate paid subscriptions", async () => {
     error: "ACCESS_DENIED",
     message: "A paid subscription already exists for this account. Use the billing page to change it.",
   });
+});
+
+test("checkoutHandler returns Paddle overlay config for credit purchases", async () => {
+  const pool = {
+    async query(sql: string, params: unknown[]) {
+      if (sql.includes("FROM users WHERE id = $1")) {
+        return {
+          rows: [
+            {
+              id: params[0],
+              google_subject_id: "google-sub-123",
+              email: "user@example.com",
+              display_name: "Portal User",
+            },
+          ],
+        };
+      }
+
+      throw new Error(`Unexpected SQL: ${sql}`);
+    },
+  } as unknown as Pool;
+
+  const { res, state } = makeResponse();
+  const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
+    const path = String(url);
+    assert.ok(path.endsWith("/transactions"));
+    assert.equal(init?.method, "POST");
+    assert.deepEqual(JSON.parse(String(init?.body)), {
+      items: [
+        {
+          quantity: 30,
+          price: {
+            name: "TransLay Slides Credits",
+            description: "30 Google Slides™ translation credits",
+            unit_price: {
+              amount: "4",
+              currency_code: "USD",
+            },
+            product: {
+              name: "TransLay Slides Credits",
+              tax_category: "standard",
+              description: "Prepaid credits for Google Slides™ translation in TransLay.",
+            },
+          },
+        },
+      ],
+      collection_mode: "automatic",
+      custom_data: {
+        user_id: "user-123",
+        product_type: "credits",
+        sku: "slides",
+        quantity: 30,
+      },
+    });
+    return new Response(JSON.stringify({
+      data: { id: "txn_checkout_credits" },
+    }), { status: 201 });
+  }) as unknown as FetchLike;
+
+  await checkoutHandler(pool, makeConfig(), fetchImpl)(
+    {
+      portalSession: {
+        userId: "user-123",
+        createdAt: new Date().toISOString(),
+      },
+      body: { product_type: "credits", sku: "slides", quantity: 30 },
+    } as unknown as Request,
+    res
+  );
+
+  assert.equal(state.statusCode, 200);
+  assert.deepEqual(state.body, {
+    provider_name: "paddle",
+    transaction_id: "txn_checkout_credits",
+    custom_data: {
+      user_id: "user-123",
+      product_type: "credits",
+      sku: "slides",
+      quantity: 30,
+    },
+  });
+});
+
+test("checkoutHandler rejects credit purchases below Paddle's effective minimum charge", async () => {
+  const pool = {
+    async query(sql: string, params: unknown[]) {
+      if (sql.includes("FROM users WHERE id = $1")) {
+        return {
+          rows: [
+            {
+              id: params[0],
+              google_subject_id: "google-sub-123",
+              email: "user@example.com",
+              display_name: "Portal User",
+            },
+          ],
+        };
+      }
+
+      throw new Error(`Unexpected SQL: ${sql}`);
+    },
+  } as unknown as Pool;
+
+  const { res, state } = makeResponse();
+  await checkoutHandler(pool, makeConfig())(
+    {
+      portalSession: {
+        userId: "user-123",
+        createdAt: new Date().toISOString(),
+      },
+      body: { product_type: "credits", sku: "slides", quantity: 13 },
+    } as unknown as Request,
+    res
+  );
+
+  assert.equal(state.statusCode, 400);
+  assert.deepEqual(state.body, {
+    error: "INVALID_CHECKOUT_REQUEST",
+    message: "Credit quantity must be between 18 and 100",
+  });
+});
+
+test("creditBalanceHandler returns prepaid slides balance", async () => {
+  const pool = {
+    async query(sql: string, params: unknown[]) {
+      if (sql.includes("FROM users u")) {
+        assert.deepEqual(params, ["user-123"]);
+        return {
+          rows: [{
+            slides_balance: "18.5",
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+            slides_refundable_units: "18.5",
+            slides_pending_refund_units: "0",
+          }],
+        };
+      }
+      throw new Error(`Unexpected SQL: ${sql}`);
+    },
+  } as unknown as Pool;
+
+  const { res, state } = makeResponse();
+  await creditBalanceHandler(pool)(
+    {
+      portalSession: {
+        userId: "user-123",
+        createdAt: new Date().toISOString(),
+      },
+    } as unknown as Request,
+    res
+  );
+
+  assert.equal(state.statusCode, 200);
+  assert.deepEqual(state.body, {
+    unit: "slides_pages",
+    balance: 18.5,
+    refundable_units: 18.5,
+    pending_refund_units: 0,
+  });
+});
+
+test("creditBalanceHandler refreshes approved provider-pending refunds before returning balance", async () => {
+  let balance = 20;
+  const client = {
+    async query(sql: string, params?: unknown[]) {
+      if (sql === "BEGIN" || sql === "COMMIT") {
+        return { rows: [] };
+      }
+      if (sql.includes("provider_status IN ('pending', 'pending_approval')")) {
+        assert.match(sql, /\$1::uuid/);
+        assert.deepEqual(params, ["user-123", 10]);
+        return {
+          rows: [{
+            id: "refund-1",
+            user_id: "user-123",
+            unit: "slides_pages",
+            requested_units: "1",
+            reason: null,
+            provider_refund_ids: ["adj-1"],
+          }],
+        };
+      }
+      if (sql.includes("FROM credit_refund_request_items cri") && sql.includes("WHERE cri.refund_request_id = ANY")) {
+        return {
+          rows: [{
+            refund_request_id: "refund-1",
+            credit_grant_id: "grant-1",
+            order_id: "order-1",
+            provider_transaction_id: "txn-1",
+            units: "1",
+            purchased_units: "20",
+            amount_paid: "0.80",
+            currency: "USD",
+          }],
+        };
+      }
+      if (sql.startsWith("INSERT INTO credit_balances")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM credit_balances") && sql.includes("FOR UPDATE")) {
+        return {
+          rows: [{
+            user_id: "user-123",
+            slides_balance: String(balance),
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+          }],
+        };
+      }
+      if (sql.includes("FROM credit_refund_requests") && sql.includes("status = 'submitted'")) {
+        assert.deepEqual(params, ["refund-1", "user-123"]);
+        return { rows: [{ id: "refund-1" }] };
+      }
+      if (sql.startsWith("UPDATE credit_grants")) {
+        assert.deepEqual(params, ["grant-1", 1, "user-123", "slides_pages"]);
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.startsWith("UPDATE credit_balances")) {
+        balance = Number(params?.[1]);
+        return { rows: [] };
+      }
+      if (sql.startsWith("INSERT INTO credit_ledger")) {
+        return { rows: [] };
+      }
+      if (sql.startsWith("UPDATE payment_orders")) {
+        return { rows: [] };
+      }
+      if (sql.startsWith("UPDATE credit_refund_requests")) {
+        assert.deepEqual(params, [
+          "refund-1",
+          "user-123",
+          "paddle",
+          JSON.stringify(["adj-1"]),
+          null,
+          null,
+          "completed",
+          "approved",
+          null,
+        ]);
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected SQL: ${sql} params=${JSON.stringify(params ?? [])}`);
+    },
+    release() {},
+  };
+  const pool = {
+    async connect() {
+      return client;
+    },
+    async query(sql: string, params: unknown[]) {
+      if (sql.includes("FROM users u")) {
+        assert.deepEqual(params, ["user-123"]);
+        return {
+          rows: [{
+            slides_balance: String(balance),
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+            slides_refundable_units: String(balance),
+            slides_pending_refund_units: "0",
+          }],
+        };
+      }
+      throw new Error(`Unexpected pool SQL: ${sql}`);
+    },
+  } as unknown as Pool;
+  const redis = {
+    async del(key: string) {
+      assert.equal(key, "entitlement:user-123");
+      return 1;
+    },
+  } as unknown as Redis;
+  const fetchImpl = (async (url: string | URL) => {
+    const path = String(url);
+    assert.ok(path.endsWith("/adjustments?id=adj-1"), path);
+    return new Response(JSON.stringify({
+      data: [{ id: "adj-1", status: "approved" }],
+    }), { status: 200 });
+  }) as unknown as FetchLike;
+
+  const { res, state } = makeResponse();
+  await creditBalanceHandler(pool, redis, makeConfig(), fetchImpl)(
+    {
+      portalSession: {
+        userId: "user-123",
+        createdAt: new Date().toISOString(),
+      },
+    } as unknown as Request,
+    res
+  );
+
+  assert.equal(state.statusCode, 200);
+  assert.deepEqual(state.body, {
+    unit: "slides_pages",
+    balance: 19,
+    refundable_units: 19,
+    pending_refund_units: 0,
+  });
+});
+
+test("creditRefundRequestHandler queues a partial unused-credit refund request", async () => {
+  const queries: string[] = [];
+  const client = {
+    async query(sql: string, params?: unknown[]) {
+      queries.push(sql);
+      if (sql === "BEGIN" || sql === "COMMIT") {
+        return { rows: [] };
+      }
+      if (sql.startsWith("INSERT INTO credit_balances")) {
+        assert.deepEqual(params, ["user-123"]);
+        return { rows: [] };
+      }
+      if (sql.includes("FROM credit_balances") && sql.includes("FOR UPDATE")) {
+        assert.deepEqual(params, ["user-123"]);
+        return {
+          rows: [{
+            user_id: "user-123",
+            slides_balance: "20",
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+          }],
+        };
+      }
+      if (sql.includes("FROM credit_grants") && sql.includes("FOR UPDATE OF cg")) {
+        assert.deepEqual(params, ["user-123", "slides_pages"]);
+        return {
+          rows: [{
+            id: "grant-1",
+            order_id: "order-1",
+            provider_transaction_id: "txn-1",
+            purchased_units: "20",
+            amount_paid: "0.80",
+            currency: "USD",
+            available_units: "20",
+          }],
+        };
+      }
+      if (sql.startsWith("INSERT INTO credit_refund_requests")) {
+        assert.deepEqual(params, ["user-123", "slides_pages", 5, "partial refund"]);
+        return { rows: [{ id: "refund-1" }] };
+      }
+      if (sql.startsWith("INSERT INTO credit_refund_request_items")) {
+        assert.deepEqual(params, ["refund-1", "grant-1", "order-1", 5]);
+        return { rows: [] };
+      }
+      if (sql.includes("FROM credit_refund_requests") && sql.includes("FOR UPDATE")) {
+        assert.deepEqual(params, ["refund-1", "user-123"]);
+        return { rows: [{ id: "refund-1" }] };
+      }
+      if (sql.startsWith("UPDATE credit_grants")) {
+        assert.deepEqual(params, ["grant-1", 5, "user-123", "slides_pages"]);
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.startsWith("UPDATE credit_balances")) {
+        assert.deepEqual(params, ["user-123", 15]);
+        return { rows: [] };
+      }
+      if (sql.startsWith("INSERT INTO credit_ledger")) {
+        assert.deepEqual(params, [
+          "user-123",
+          "order-1",
+          "grant-1",
+          null,
+          "slides_pages",
+          -5,
+          15,
+          "refund",
+          "refund:refund-1:grant:grant-1",
+        ]);
+        return { rows: [] };
+      }
+      if (sql.startsWith("UPDATE payment_orders")) {
+        assert.deepEqual(params, ["order-1"]);
+        return { rows: [] };
+      }
+      if (sql.includes("provider_refund_ids")) {
+        assert.deepEqual(params, [
+          "refund-1",
+          "user-123",
+          "paddle",
+          JSON.stringify(["adj-1"]),
+          "0.20",
+          "USD",
+          "completed",
+          "approved",
+          null,
+        ]);
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected SQL: ${sql} params=${JSON.stringify(params ?? [])}`);
+    },
+    release() {},
+  };
+  const pool = {
+    async query(sql: string, params?: unknown[]) {
+      if (sql.includes("FROM users u")) {
+        assert.deepEqual(params, ["user-123"]);
+        return {
+          rows: [{
+            slides_balance: "15",
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+            slides_refundable_units: "15",
+            slides_pending_refund_units: "0",
+          }],
+        };
+      }
+      throw new Error(`Unexpected pool SQL: ${sql}`);
+    },
+    async connect() {
+      return client;
+    },
+  } as unknown as Pool;
+  const redis = {
+    async del(key: string) {
+      assert.equal(key, "entitlement:user-123");
+      return 1;
+    },
+  } as unknown as Redis;
+  const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
+    const path = String(url);
+    if (path.endsWith("/transactions/txn-1")) {
+      return new Response(JSON.stringify({
+        data: {
+          id: "txn-1",
+          details: {
+            line_items: [{
+              id: "txnitm-1",
+              quantity: 20,
+              totals: { total: "80" },
+            }],
+          },
+        },
+      }), { status: 200 });
+    }
+    if (path.endsWith("/adjustments") && init?.method === "POST") {
+      assert.deepEqual(JSON.parse(String(init.body)), {
+        action: "refund",
+        type: "partial",
+        transaction_id: "txn-1",
+        reason: "partial refund",
+        items: [{
+          item_id: "txnitm-1",
+          type: "partial",
+          amount: "20",
+        }],
+      });
+      return new Response(JSON.stringify({
+        data: { id: "adj-1", status: "approved" },
+      }), { status: 201 });
+    }
+    throw new Error(`Unexpected fetch: ${path}`);
+  }) as unknown as FetchLike;
+
+  const { res, state } = makeResponse();
+  await creditRefundRequestHandler(pool, redis, makeConfig(), fetchImpl)(
+    {
+      portalSession: {
+        userId: "user-123",
+        createdAt: new Date().toISOString(),
+      },
+      body: { unit: "slides_pages", quantity: 5, reason: "partial refund" },
+    } as unknown as Request,
+    res
+  );
+
+  assert.equal(state.statusCode, 200);
+  assert.deepEqual(state.body, {
+    refund_request_id: "refund-1",
+    status: "submitted",
+    unit: "slides_pages",
+    requested_units: 5,
+    refundable_units_remaining: 15,
+  });
+  assert.ok(queries.includes("COMMIT"));
+});
+
+test("creditRefundRequestHandler calculates refunds from grant amount when Paddle item quantity is custom", async () => {
+  const client = {
+    async query(sql: string, params?: unknown[]) {
+      if (sql === "BEGIN" || sql === "COMMIT") {
+        return { rows: [] };
+      }
+      if (sql.startsWith("INSERT INTO credit_balances")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM credit_balances") && sql.includes("FOR UPDATE")) {
+        return {
+          rows: [{
+            user_id: "user-123",
+            slides_balance: "18",
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+          }],
+        };
+      }
+      if (sql.includes("FROM credit_grants") && sql.includes("FOR UPDATE OF cg")) {
+        return {
+          rows: [{
+            id: "grant-1",
+            order_id: "order-1",
+            provider_transaction_id: "txn-1",
+            purchased_units: "18",
+            amount_paid: "0.72",
+            currency: "USD",
+            available_units: "18",
+          }],
+        };
+      }
+      if (sql.startsWith("INSERT INTO credit_refund_requests")) {
+        return { rows: [{ id: "refund-1" }] };
+      }
+      if (sql.startsWith("INSERT INTO credit_refund_request_items")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM credit_refund_requests") && sql.includes("FOR UPDATE")) {
+        return { rows: [{ id: "refund-1" }] };
+      }
+      if (sql.startsWith("UPDATE credit_grants")) {
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.startsWith("UPDATE credit_balances")) {
+        assert.deepEqual(params, ["user-123", 1]);
+        return { rows: [] };
+      }
+      if (sql.startsWith("INSERT INTO credit_ledger")) {
+        return { rows: [] };
+      }
+      if (sql.startsWith("UPDATE payment_orders")) {
+        return { rows: [] };
+      }
+      if (sql.includes("provider_refund_ids")) {
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected SQL: ${sql} params=${JSON.stringify(params ?? [])}`);
+    },
+    release() {},
+  };
+  const pool = {
+    async query(sql: string, params?: unknown[]) {
+      if (sql.includes("FROM users u")) {
+        assert.deepEqual(params, ["user-123"]);
+        return {
+          rows: [{
+            slides_balance: "1",
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+            slides_refundable_units: "1",
+            slides_pending_refund_units: "0",
+          }],
+        };
+      }
+      throw new Error(`Unexpected pool SQL: ${sql}`);
+    },
+    async connect() {
+      return client;
+    },
+  } as unknown as Pool;
+  const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
+    const path = String(url);
+    if (path.endsWith("/transactions/txn-1")) {
+      return new Response(JSON.stringify({
+        data: {
+          id: "txn-1",
+          details: {
+            line_items: [{
+              id: "txnitm-1",
+              quantity: 1,
+              totals: { total: "72" },
+            }],
+          },
+        },
+      }), { status: 200 });
+    }
+    if (path.endsWith("/adjustments") && init?.method === "POST") {
+      assert.deepEqual(JSON.parse(String(init.body)), {
+        action: "refund",
+        type: "partial",
+        transaction_id: "txn-1",
+        reason: "unused prepaid TransLay credits",
+        items: [{
+          item_id: "txnitm-1",
+          type: "partial",
+          amount: "68",
+        }],
+      });
+      return new Response(JSON.stringify({
+        data: { id: "adj-1", status: "approved" },
+      }), { status: 201 });
+    }
+    throw new Error(`Unexpected fetch: ${path}`);
+  }) as unknown as FetchLike;
+
+  const { res, state } = makeResponse();
+  await creditRefundRequestHandler(pool, { async del() { return 1; } } as unknown as Redis, makeConfig(), fetchImpl)(
+    {
+      portalSession: {
+        userId: "user-123",
+        createdAt: new Date().toISOString(),
+      },
+      body: { unit: "slides_pages", quantity: 17 },
+    } as unknown as Request,
+    res
+  );
+
+  assert.equal(state.statusCode, 200);
+});
+
+test("creditRefundRequestHandler rejects refund quantities above unused credits", async () => {
+  const client = {
+    async query(sql: string) {
+      if (sql === "BEGIN" || sql === "ROLLBACK") {
+        return { rows: [] };
+      }
+      if (sql.startsWith("INSERT INTO credit_balances")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM credit_balances") && sql.includes("FOR UPDATE")) {
+        return {
+          rows: [{
+            user_id: "user-123",
+            slides_balance: "2",
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+          }],
+        };
+      }
+      if (sql.includes("FROM credit_grants") && sql.includes("FOR UPDATE OF cg")) {
+        return {
+          rows: [{
+            id: "grant-1",
+            order_id: "order-1",
+            available_units: "2",
+          }],
+        };
+      }
+      throw new Error(`Unexpected SQL: ${sql}`);
+    },
+    release() {},
+  };
+  const pool = {
+    async connect() {
+      return client;
+    },
+  } as unknown as Pool;
+
+  const { res, state } = makeResponse();
+  await creditRefundRequestHandler(pool, {} as Redis, makeConfig(), (async () => {
+    throw new Error("Paddle should not be called");
+  }) as unknown as FetchLike)(
+    {
+      portalSession: {
+        userId: "user-123",
+        createdAt: new Date().toISOString(),
+      },
+      body: { unit: "slides_pages", quantity: 3 },
+    } as unknown as Request,
+    res
+  );
+
+  assert.equal(state.statusCode, 400);
+  assert.deepEqual(state.body, {
+    error: "INVALID_REFUND_REQUEST",
+    message: "Refund quantity exceeds your unused refundable credits",
+  });
+});
+
+test("processCreditRefundQueueHandler sends partial adjustments for single-quantity Paddle credit transactions", async () => {
+  const client = {
+    async query(sql: string, params?: unknown[]) {
+      if (sql === "BEGIN" || sql === "COMMIT") {
+        return { rows: [] };
+      }
+      if (
+        sql.includes("FROM credit_refund_requests") &&
+        sql.includes("provider_refund_ids") &&
+        sql.includes("provider_status IN")
+      ) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM credit_refund_requests") && sql.includes("provider_name IS NULL")) {
+        return {
+          rows: [{
+            id: "refund-1",
+            user_id: "user-123",
+            unit: "slides_pages",
+            requested_units: "1",
+            reason: null,
+          }],
+        };
+      }
+      if (sql.includes("FROM credit_refund_request_items cri") && sql.includes("WHERE cri.refund_request_id = ANY")) {
+        return {
+          rows: [{
+            refund_request_id: "refund-1",
+            credit_grant_id: "grant-1",
+            order_id: "order-1",
+            provider_transaction_id: "txn-1",
+            units: "1",
+            purchased_units: "20",
+            amount_paid: "0.80",
+            currency: "USD",
+          }],
+        };
+      }
+      if (sql.startsWith("INSERT INTO credit_balances")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM credit_balances") && sql.includes("FOR UPDATE")) {
+        return {
+          rows: [{
+            user_id: "user-123",
+            slides_balance: "20",
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+          }],
+        };
+      }
+      if (sql.includes("FROM credit_refund_requests") && sql.includes("status = 'submitted'")) {
+        return { rows: [{ id: "refund-1" }] };
+      }
+      if (sql.startsWith("UPDATE credit_grants")) {
+        assert.deepEqual(params, ["grant-1", 1, "user-123", "slides_pages"]);
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.startsWith("UPDATE credit_balances")) {
+        assert.deepEqual(params, ["user-123", 19]);
+        return { rows: [] };
+      }
+      if (sql.startsWith("INSERT INTO credit_ledger")) {
+        assert.deepEqual(params, [
+          "user-123",
+          "order-1",
+          "grant-1",
+          null,
+          "slides_pages",
+          -1,
+          19,
+          "refund",
+          "refund:refund-1:grant:grant-1",
+        ]);
+        return { rows: [] };
+      }
+      if (sql.startsWith("UPDATE payment_orders")) {
+        assert.deepEqual(params, ["order-1"]);
+        return { rows: [] };
+      }
+      if (sql.includes("provider_refund_ids")) {
+        assert.deepEqual(params, [
+          "refund-1",
+          "user-123",
+          "paddle",
+          JSON.stringify(["adj-1"]),
+          "0.04",
+          "USD",
+          "completed",
+          "approved",
+          null,
+        ]);
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected SQL: ${sql} params=${JSON.stringify(params ?? [])}`);
+    },
+    release() {},
+  };
+  const pool = {
+    async connect() {
+      return client;
+    },
+  } as unknown as Pool;
+  const redis = {
+    async del(key: string) {
+      assert.equal(key, "entitlement:user-123");
+      return 1;
+    },
+  } as unknown as Redis;
+  const config = {
+    ...makeConfig(),
+    security: {
+      ...makeConfig().security,
+      internalCronSecret: "cron-secret",
+    },
+  };
+  const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
+    const path = String(url);
+    if (path.endsWith("/transactions/txn-1")) {
+      return new Response(JSON.stringify({
+        data: {
+          id: "txn-1",
+          details: {
+            line_items: [{
+              id: "txnitm-1",
+              quantity: 1,
+              totals: { total: "80" },
+            }],
+          },
+        },
+      }), { status: 200 });
+    }
+    if (path.endsWith("/adjustments") && init?.method === "POST") {
+      assert.deepEqual(JSON.parse(String(init.body)), {
+        action: "refund",
+        type: "partial",
+        transaction_id: "txn-1",
+        reason: "unused prepaid TransLay credits",
+        items: [{
+          item_id: "txnitm-1",
+          type: "partial",
+          amount: "4",
+        }],
+      });
+      return new Response(JSON.stringify({
+        data: { id: "adj-1", status: "approved" },
+      }), { status: 201 });
+    }
+    throw new Error(`Unexpected fetch: ${path}`);
+  }) as unknown as FetchLike;
+
+  const { res, state } = makeResponse();
+  await processCreditRefundQueueHandler(pool, redis, config, fetchImpl)(
+    {
+      headers: {
+        "x-internal-cron-secret": "cron-secret",
+      },
+      body: {},
+    } as unknown as Request,
+    res
+  );
+
+  assert.equal(state.statusCode, 200);
+  assert.deepEqual(state.body, {
+    status: "ok",
+    processed: true,
+    retry_delay_seconds: null,
+  });
+});
+
+test("processCreditRefundQueueHandler batches queued refunds by Paddle transaction", async () => {
+  let balance = 20;
+  let adjustmentPosts = 0;
+  const completedRequests: Array<{ id: string; amount: unknown }> = [];
+  const client = {
+    async query(sql: string, params?: unknown[]) {
+      if (sql === "BEGIN" || sql === "COMMIT") {
+        return { rows: [] };
+      }
+      if (
+        sql.includes("FROM credit_refund_requests") &&
+        sql.includes("provider_refund_ids") &&
+        sql.includes("provider_status IN")
+      ) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM credit_refund_requests") && sql.includes("provider_name IS NULL")) {
+        return {
+          rows: [
+            {
+              id: "refund-1",
+              user_id: "user-123",
+              unit: "slides_pages",
+              requested_units: "1",
+              reason: null,
+            },
+            {
+              id: "refund-2",
+              user_id: "user-123",
+              unit: "slides_pages",
+              requested_units: "19",
+              reason: null,
+            },
+          ],
+        };
+      }
+      if (sql.includes("FROM credit_refund_request_items cri") && sql.includes("WHERE cri.refund_request_id = ANY")) {
+        return {
+          rows: [
+            {
+              refund_request_id: "refund-1",
+              credit_grant_id: "grant-1",
+              order_id: "order-1",
+              provider_transaction_id: "txn-1",
+              units: "1",
+              purchased_units: "20",
+              amount_paid: "0.80",
+              currency: "USD",
+            },
+            {
+              refund_request_id: "refund-2",
+              credit_grant_id: "grant-1",
+              order_id: "order-1",
+              provider_transaction_id: "txn-1",
+              units: "19",
+              purchased_units: "20",
+              amount_paid: "0.80",
+              currency: "USD",
+            },
+          ],
+        };
+      }
+      if (sql.startsWith("INSERT INTO credit_balances")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM credit_balances") && sql.includes("FOR UPDATE")) {
+        return {
+          rows: [{
+            user_id: "user-123",
+            slides_balance: String(balance),
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+          }],
+        };
+      }
+      if (sql.includes("FROM credit_refund_requests") && sql.includes("status = 'submitted'")) {
+        return { rows: [{ id: params?.[0] }] };
+      }
+      if (sql.startsWith("UPDATE credit_grants")) {
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.startsWith("UPDATE credit_balances")) {
+        balance = Number(params?.[1]);
+        return { rows: [] };
+      }
+      if (sql.startsWith("INSERT INTO credit_ledger")) {
+        return { rows: [] };
+      }
+      if (sql.startsWith("UPDATE payment_orders")) {
+        return { rows: [] };
+      }
+      if (sql.includes("provider_refund_ids")) {
+        completedRequests.push({ id: String(params?.[0]), amount: params?.[4] });
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected SQL: ${sql} params=${JSON.stringify(params ?? [])}`);
+    },
+    release() {},
+  };
+  const pool = {
+    async connect() {
+      return client;
+    },
+  } as unknown as Pool;
+  const redis = {
+    async del() {
+      return 1;
+    },
+  } as unknown as Redis;
+  const config = {
+    ...makeConfig(),
+    security: {
+      ...makeConfig().security,
+      internalCronSecret: "cron-secret",
+    },
+  };
+  const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
+    const path = String(url);
+    if (path.endsWith("/transactions/txn-1")) {
+      return new Response(JSON.stringify({
+        data: {
+          id: "txn-1",
+          details: {
+            line_items: [{
+              id: "txnitm-1",
+              quantity: 1,
+              totals: { total: "80" },
+            }],
+          },
+        },
+      }), { status: 200 });
+    }
+    if (path.endsWith("/adjustments") && init?.method === "POST") {
+      adjustmentPosts += 1;
+      assert.deepEqual(JSON.parse(String(init.body)), {
+        action: "refund",
+        type: "partial",
+        transaction_id: "txn-1",
+        reason: "unused prepaid TransLay credits",
+        items: [{
+          item_id: "txnitm-1",
+          type: "full",
+        }],
+      });
+      return new Response(JSON.stringify({
+        data: { id: "adj-1", status: "approved" },
+      }), { status: 201 });
+    }
+    throw new Error(`Unexpected fetch: ${path}`);
+  }) as unknown as FetchLike;
+
+  const { res, state } = makeResponse();
+  await processCreditRefundQueueHandler(pool, redis, config, fetchImpl)(
+    {
+      headers: {
+        "x-internal-cron-secret": "cron-secret",
+      },
+      body: {},
+    } as unknown as Request,
+    res
+  );
+
+  assert.equal(state.statusCode, 200);
+  assert.deepEqual(state.body, {
+    status: "ok",
+    processed: true,
+    retry_delay_seconds: null,
+  });
+  assert.equal(adjustmentPosts, 1);
+  assert.equal(balance, 0);
+  assert.deepEqual(completedRequests, [
+    { id: "refund-1", amount: "0.04" },
+    { id: "refund-2", amount: "0.76" },
+  ]);
+});
+
+test("processCreditRefundQueueHandler polls pending Paddle adjustments through list filter", async () => {
+  const queries: string[] = [];
+  const client = {
+    async query(sql: string, params?: unknown[]) {
+      queries.push(sql);
+      if (sql === "BEGIN" || sql === "COMMIT") {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM credit_refund_requests") && sql.includes("provider_status IN")) {
+        return {
+          rows: [{
+            id: "refund-1",
+            user_id: "user-123",
+            unit: "slides_pages",
+            requested_units: "5",
+            reason: null,
+            provider_refund_ids: ["adj-1"],
+          }],
+        };
+      }
+      if (sql.includes("FROM credit_refund_request_items") && sql.includes("JOIN credit_grants")) {
+        return {
+          rows: [{
+            credit_grant_id: "grant-1",
+            order_id: "order-1",
+            provider_transaction_id: "txn-1",
+            units: "5",
+            purchased_units: "20",
+            amount_paid: "0.80",
+            currency: "USD",
+          }],
+        };
+      }
+      if (sql.startsWith("INSERT INTO credit_balances")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM credit_balances") && sql.includes("FOR UPDATE")) {
+        return {
+          rows: [{
+            user_id: "user-123",
+            slides_balance: "20",
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+          }],
+        };
+      }
+      if (sql.includes("FROM credit_refund_requests") && sql.includes("status = 'submitted'")) {
+        return { rows: [{ id: "refund-1" }] };
+      }
+      if (sql.startsWith("UPDATE credit_grants")) {
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.startsWith("UPDATE credit_balances")) {
+        assert.deepEqual(params, ["user-123", 15]);
+        return { rows: [] };
+      }
+      if (sql.startsWith("INSERT INTO credit_ledger")) {
+        return { rows: [] };
+      }
+      if (sql.startsWith("UPDATE payment_orders")) {
+        return { rows: [] };
+      }
+      if (sql.includes("provider_refund_ids")) {
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected SQL: ${sql} params=${JSON.stringify(params ?? [])}`);
+    },
+    release() {},
+  };
+  const pool = {
+    async connect() {
+      return client;
+    },
+  } as unknown as Pool;
+  const redis = {
+    async del(key: string) {
+      assert.equal(key, "entitlement:user-123");
+      return 1;
+    },
+  } as unknown as Redis;
+  const config = {
+    ...makeConfig(),
+    security: {
+      ...makeConfig().security,
+      internalCronSecret: "cron-secret",
+    },
+  };
+  const fetchImpl = (async (url: string | URL) => {
+    const path = String(url);
+    assert.ok(path.endsWith("/adjustments?id=adj-1"), path);
+    return new Response(JSON.stringify({
+      data: [{ id: "adj-1", status: "approved" }],
+    }), { status: 200 });
+  }) as unknown as FetchLike;
+
+  const { res, state } = makeResponse();
+  await processCreditRefundQueueHandler(pool, redis, config, fetchImpl)(
+    {
+      headers: {
+        "x-internal-cron-secret": "cron-secret",
+      },
+      body: {},
+    } as unknown as Request,
+    res
+  );
+
+  assert.equal(state.statusCode, 200);
+  assert.deepEqual(state.body, {
+    status: "ok",
+    processed: true,
+    retry_delay_seconds: null,
+  });
+  assert.ok(queries.some((sql) => sql.startsWith("UPDATE credit_refund_requests")));
 });
 
 test("paddleWebhookHandler rejects invalid signatures", async () => {
@@ -524,6 +1666,184 @@ test("paddleWebhookHandler treats concurrent duplicate inserts as idempotent", a
   assert.equal(state.statusCode, 200);
   assert.deepEqual(state.body, { ok: true, duplicate: true });
   assert.ok(queries.some((sql) => sql.includes("FOR UPDATE")));
+});
+
+test("paddleWebhookHandler grants purchased credits from completed transactions", async () => {
+  const queries: string[] = [];
+  const pool = {
+    async query(sql: string, params?: unknown[]) {
+      queries.push(sql);
+
+      if (sql.includes("INSERT INTO webhook_events")) {
+        return {
+          rows: [{
+            id: "wh_credits",
+            provider_name: "paddle",
+            provider_event_id: "evt_credits",
+            event_type: "transaction.completed",
+            signature_valid: true,
+            processed: false,
+            processing_error: null,
+            received_at: new Date(),
+            processed_at: null,
+            inserted: true,
+          }],
+        };
+      }
+      if (sql === "BEGIN" || sql === "COMMIT") {
+        return { rows: [] };
+      }
+      if (sql.includes("FOR UPDATE") && sql.includes("webhook_events")) {
+        return {
+          rows: [{
+            id: "wh_credits",
+            provider_name: "paddle",
+            provider_event_id: "evt_credits",
+            event_type: "transaction.completed",
+            signature_valid: true,
+            processed: false,
+            processing_error: null,
+            received_at: new Date(),
+            processed_at: null,
+          }],
+        };
+      }
+      if (sql.startsWith("INSERT INTO payment_orders")) {
+        return {
+          rows: [{
+            id: "ord_credits",
+            user_id: "user-123",
+            provider_name: "paddle",
+            product_type: "credits",
+            sku: "slides",
+            amount: "1.20",
+            currency: "USD",
+            provider_checkout_id: "che_credits",
+            provider_transaction_id: "txn_credits",
+            provider_subscription_id: null,
+            status: "paid",
+            created_at: new Date(),
+            paid_at: new Date(),
+            refunded_at: null,
+            updated_at: new Date(),
+          }],
+        };
+      }
+      if (sql.includes("FROM subscriptions")) {
+        return { rows: [] };
+      }
+      if (sql.includes("SELECT id FROM credit_ledger")) {
+        return { rows: [] };
+      }
+      if (sql.startsWith("INSERT INTO credit_balances")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM credit_balances") && sql.includes("FOR UPDATE")) {
+        return {
+          rows: [{
+            user_id: "user-123",
+            slides_balance: "3.0",
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+          }],
+        };
+      }
+      if (sql.startsWith("INSERT INTO credit_grants")) {
+        assert.deepEqual(params?.slice(0, 7), [
+          "user-123",
+          "ord_credits",
+          "paddle",
+          "txn_credits",
+          "pay_as_you_go",
+          "slides_pages",
+          30,
+        ]);
+        return { rows: [{ id: "grant_credits" }] };
+      }
+      if (sql.startsWith("UPDATE credit_balances")) {
+        assert.deepEqual(params, ["user-123", 33]);
+        return { rows: [] };
+      }
+      if (sql.startsWith("INSERT INTO credit_ledger")) {
+        assert.deepEqual(params, [
+          "user-123",
+          "ord_credits",
+          "grant_credits",
+          null,
+          "slides_pages",
+          30,
+          33,
+          "purchase",
+          "paddle:txn_credits:credits:slides",
+        ]);
+        return { rows: [] };
+      }
+      if (sql.startsWith("UPDATE webhook_events")) {
+        return { rows: [] };
+      }
+
+      throw new Error(`Unexpected SQL: ${sql} params=${JSON.stringify(params ?? [])}`);
+    },
+    async connect() {
+      return this;
+    },
+    release() {},
+  } as unknown as Pool;
+
+  const deletedKeys: string[] = [];
+  const redis = {
+    async del(key: string) {
+      deletedKeys.push(key);
+      return 1;
+    },
+  } as unknown as Redis;
+
+  const body = {
+    event_id: "evt_credits",
+    event_type: "transaction.completed",
+    data: {
+      id: "txn_credits",
+      customer_id: "ctm_123",
+      checkout_id: "che_credits",
+      custom_data: {
+        user_id: "user-123",
+        product_type: "credits",
+        sku: "slides",
+        quantity: 30,
+      },
+      details: {
+        totals: {
+          grand_total: "120",
+          currency_code: "USD",
+        },
+      },
+      billed_at: "2026-04-23T12:00:00.000Z",
+    },
+  };
+  const rawBody = Buffer.from(JSON.stringify(body));
+  const timestamp = Math.floor(Date.now() / 1000);
+  const digest = crypto
+    .createHmac("sha256", makeConfig().billing.paddle.webhookSecret)
+    .update(`${timestamp}:${rawBody.toString("utf8")}`)
+    .digest("hex");
+
+  const { res, state } = makeResponse();
+  await paddleWebhookHandler(pool, redis, makeConfig())(
+    {
+      headers: {
+        "paddle-signature": `ts=${timestamp};h1=${digest}`,
+      },
+      rawBody,
+      body,
+    } as unknown as Request,
+    res
+  );
+
+  assert.equal(state.statusCode, 200);
+  assert.deepEqual(state.body, { ok: true });
+  assert.ok(queries.some((sql) => sql.startsWith("INSERT INTO credit_grants")));
+  assert.ok(queries.some((sql) => sql.startsWith("INSERT INTO credit_ledger")));
+  assert.deepEqual(deletedKeys, ["entitlement:user-123"]);
 });
 
 test("paddleWebhookHandler applies terminal subscription status even when Paddle omits price items", async () => {

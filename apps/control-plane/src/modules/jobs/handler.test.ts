@@ -798,6 +798,16 @@ test("createJobHandler returns a partial quota option when selected slides excee
           }],
         };
       }
+      if (sql.includes("FROM users u")) {
+        return {
+          rows: [{
+            slides_balance: "0",
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+            slides_refundable_units: "0",
+          }],
+        };
+      }
       throw new Error(`Unexpected pool query: ${sql}`);
     },
     connect: async () => {
@@ -885,6 +895,16 @@ test("previewJobHandler returns allowed and excluded ranges for partial quota co
           }],
         };
       }
+      if (sql.includes("FROM users u")) {
+        return {
+          rows: [{
+            slides_balance: "0",
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+            slides_refundable_units: "0",
+          }],
+        };
+      }
       throw new Error(`Unexpected pool query: ${sql}`);
     },
   } as unknown as Pool;
@@ -956,6 +976,16 @@ test("previewJobHandler truncates sparse custom Slides ranges to the remaining q
             docs_pages_used: "0",
             sheets_cells_used: "0",
             total_jobs: 1,
+          }],
+        };
+      }
+      if (sql.includes("FROM users u")) {
+        return {
+          rows: [{
+            slides_balance: "0",
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+            slides_refundable_units: "0",
           }],
         };
       }
@@ -1042,6 +1072,16 @@ test("createJobHandler returns JOB_QUEUE_BUSY when the global in-flight gate is 
           }],
         };
       }
+      if (sql.includes("FROM users u")) {
+        return {
+          rows: [{
+            slides_balance: "0",
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+            slides_refundable_units: "0",
+          }],
+        };
+      }
       throw new Error(`Unexpected pool query: ${sql}`);
     },
     connect: async () => ({
@@ -1109,10 +1149,22 @@ test("createJobHandler returns JOB_QUEUE_BUSY when the global in-flight gate is 
         priceIds: {
           pro_monthly: "pri_monthly_123",
           pro_yearly: "pri_yearly_456",
+          credits_slides: "pri_credits_slide",
         },
         priceAmounts: {
           pro_monthly: 999,
           pro_yearly: 11999,
+          credits_slides: 4,
+        },
+        creditSkus: {
+          slides: {
+            unit: "slides_pages",
+            minUnits: 1,
+            maxUnits: 100,
+            priceId: "pri_credits_slide",
+            amountCents: 4,
+            minimumChargeAmountCents: 70,
+          },
         },
         webhookToleranceSeconds: 300,
       },
@@ -1208,6 +1260,16 @@ test("createJobHandler returns CONCURRENT_JOB_RUNNING when atomic admission sees
           }],
         };
       }
+      if (sql.includes("FROM users u")) {
+        return {
+          rows: [{
+            slides_balance: "0",
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+            slides_refundable_units: "0",
+          }],
+        };
+      }
       throw new Error(`Unexpected pool query: ${sql}`);
     },
     connect: async () => ({
@@ -1275,10 +1337,22 @@ test("createJobHandler returns CONCURRENT_JOB_RUNNING when atomic admission sees
         priceIds: {
           pro_monthly: "pri_monthly_123",
           pro_yearly: "pri_yearly_456",
+          credits_slides: "pri_credits_slide",
         },
         priceAmounts: {
           pro_monthly: 999,
           pro_yearly: 11999,
+          credits_slides: 4,
+        },
+        creditSkus: {
+          slides: {
+            unit: "slides_pages",
+            minUnits: 1,
+            maxUnits: 100,
+            priceId: "pri_credits_slide",
+            amountCents: 4,
+            minimumChargeAmountCents: 70,
+          },
         },
         webhookToleranceSeconds: 300,
       },

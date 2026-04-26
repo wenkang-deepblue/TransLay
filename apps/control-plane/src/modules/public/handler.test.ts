@@ -15,6 +15,14 @@ test("landingConfigHandler returns the public Google Web client ID", () => {
         environment: "sandbox",
         clientToken: "test_client_token",
         apiKey: "pdl_test_api_key",
+        creditSkus: {
+          slides: {
+            minUnits: 18,
+            maxUnits: 100,
+            amountCents: 4,
+            minimumChargeAmountCents: 70,
+          },
+        },
       },
     },
   } as unknown as AppConfig;
@@ -41,6 +49,14 @@ test("landingConfigHandler returns the public Google Web client ID", () => {
     billing_provider: "paddle",
     paddle_environment: "sandbox",
     paddle_client_token: "test_client_token",
+    credit_skus: {
+      slides: {
+        min_units: 18,
+        max_units: 100,
+        amount_cents: 4,
+        minimum_charge_amount_cents: 70,
+      },
+    },
   });
   assert.equal(cacheControl, "public, max-age=300");
 });

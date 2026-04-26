@@ -13,6 +13,9 @@ import {
   cancelSubscriptionHandler,
   changeSubscriptionPlanHandler,
   checkoutHandler,
+  creditBalanceHandler,
+  processCreditRefundQueueHandler,
+  creditRefundRequestHandler,
   paddleWebhookHandler,
 } from "./modules/billing/handler";
 import {
@@ -143,6 +146,18 @@ app.post(
   userWriteRateLimit,
   asyncHandler(cancelSubscriptionHandler(pool, redis, config))
 );
+app.get(
+  "/api/credits/balance",
+  portalSession,
+  userReadRateLimit,
+  asyncHandler(creditBalanceHandler(pool, redis, config))
+);
+app.post(
+  "/api/refunds/request",
+  portalSession,
+  userWriteRateLimit,
+  asyncHandler(creditRefundRequestHandler(pool, redis, config))
+);
 app.post(
   "/api/session/logout",
   portalSession,
@@ -205,6 +220,10 @@ app.post(
 app.post(
   "/internal/sweep-oauth-tokens",
   asyncHandler(sweepHostOauthTokensHandler(pool, config))
+);
+app.post(
+  "/api/internal/refunds/process",
+  asyncHandler(processCreditRefundQueueHandler(pool, redis, config))
 );
 app.post(
   "/api/webhooks/paddle",

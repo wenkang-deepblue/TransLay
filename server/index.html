@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://accounts.google.com">
 <link rel="preconnect" href="https://accounts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=10" />
+<link rel="stylesheet" href="styles.css?v=11" />
 <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
 <script>
 (() => {
@@ -37,18 +37,18 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
-<script src="i18n.js?v=16"></script>
-<script src="js/landing-config.js?v=3"></script>
-<script src="js/landing-session.js?v=7"></script>
+<script src="i18n.js?v=26"></script>
+<script src="js/landing-config.js?v=4"></script>
+<script src="js/landing-session.js?v=11"></script>
 <script src="js/landing-auth.js?v=2"></script>
-<script src="js/landing-checkout.js?v=2"></script>
+<script src="js/landing-checkout.js?v=5"></script>
 <script type="text/babel" src="components/shared.jsx?v=9"></script>
 <script type="text/babel" src="components/hero.jsx?v=8"></script>
-<script type="text/babel" src="components/sections.jsx?v=11"></script>
+<script type="text/babel" src="components/sections.jsx?v=19"></script>
 <script type="text/babel" src="components/tweaks.jsx?v=3"></script>
 
 <script type="text/babel">
-const { useState, useEffect, useCallback } = React;
+const { useState, useEffect, useCallback, useRef } = React;
 
 function formatSubscriptionDate(iso) {
   if (typeof iso !== "string" || !iso.trim()) {
@@ -73,6 +73,37 @@ function fillTemplate(template, values) {
   });
 }
 
+function readPositiveInteger(value) {
+  if (typeof value === "number") {
+    return Number.isInteger(value) && value > 0 ? value : null;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function readCompletedCreditQuantity(event) {
+  const customData = event?.detail?.data?.custom_data || event?.detail?.custom_data || {};
+  return readPositiveInteger(customData.quantity);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function formatCreditRefundAmount(balance) {
+  const creditSku = window.TransLayLandingConfig?.getCreditSku?.("slides") || {};
+  const amountCents = Number.isInteger(creditSku.amountCents) ? creditSku.amountCents : 4;
+  const pendingUnits = Number(balance?.pending_refund_units) || 0;
+  return `$${((pendingUnits * amountCents) / 100).toFixed(2)}`;
+}
+
 function App() {
   const { lang, t, setLang } = useI18n();
   const { theme, setTheme } = useTheme();
@@ -92,6 +123,7 @@ function App() {
       planType: "free",
       subscriptionStatus: "active",
       subscription: null,
+      creditBalance: null,
       errorMessage: "",
     }),
   }));
@@ -106,6 +138,100 @@ function App() {
   const [cancelDialogPlan, setCancelDialogPlan] = useState("");
   const [upgradeDialogMode, setUpgradeDialogMode] = useState("");
   const [upgradeDialogMessage, setUpgradeDialogMessage] = useState("");
+  const [creditActionCompletedKey, setCreditActionCompletedKey] = useState(0);
+  const creditBalanceRef = useRef(authState.creditBalance);
+  const pendingCreditPurchaseRef = useRef(null);
+
+  useEffect(() => {
+    creditBalanceRef.current = authState.creditBalance;
+  }, [authState.creditBalance]);
+
+  const applyCreditBalance = useCallback((balance, { clearError = true } = {}) => {
+    setAuthState((prev) => {
+      const next = {
+        ...prev,
+        creditBalance: balance,
+        ...(clearError ? { errorMessage: "" } : {}),
+      };
+      window.TransLayLandingSession.writeAuthSnapshot?.(next);
+      return next;
+    });
+  }, []);
+
+  const fetchCreditBalanceUntil = useCallback(async (expectedMinimumBalance = null) => {
+    const retryDelays = [0, 1500, 2000, 3000, 4000, 5000, 7000, 9000];
+    let lastBalance = null;
+
+    for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+      if (retryDelays[attempt] > 0) {
+        await sleep(retryDelays[attempt]);
+      }
+
+      lastBalance = await window.TransLayLandingSession.fetchCreditBalance();
+      const balanceValue = Number(lastBalance?.balance);
+      if (
+        expectedMinimumBalance === null ||
+        !Number.isFinite(expectedMinimumBalance) ||
+        (Number.isFinite(balanceValue) && balanceValue >= expectedMinimumBalance)
+      ) {
+        return { balance: lastBalance, confirmed: true };
+      }
+    }
+
+    return { balance: lastBalance, confirmed: false };
+  }, []);
+
+  useEffect(() => {
+    if (authState.status !== "signed_in") {
+      return undefined;
+    }
+    const pendingRefundUnits = Number(authState.creditBalance?.pending_refund_units) || 0;
+    if (pendingRefundUnits <= 0) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    let refreshTimer = 0;
+    const scheduleRefresh = (delayMs) => {
+      refreshTimer = window.setTimeout(refreshPendingRefundBalance, delayMs);
+    };
+    const refreshPendingRefundBalance = async () => {
+      try {
+        const balance = await window.TransLayLandingSession.fetchCreditBalance();
+        if (cancelled) {
+          return;
+        }
+
+        applyCreditBalance(balance, { clearError: false });
+        const nextPendingRefundUnits = Number(balance?.pending_refund_units) || 0;
+        if (nextPendingRefundUnits > 0) {
+          setCheckoutNotice(
+            fillTemplate(
+              t.pricing.credits_refund_processing_banner ||
+                "Refund submitted. Refunds in progress: {units}. Estimated refund: {amount}.",
+              {
+                units: String(nextPendingRefundUnits),
+                amount: formatCreditRefundAmount(balance),
+              }
+            )
+          );
+          scheduleRefresh(30000);
+        } else {
+          setCheckoutNotice("");
+        }
+      } catch (_) {
+        if (!cancelled) {
+          scheduleRefresh(30000);
+        }
+      }
+    };
+
+    scheduleRefresh(5000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(refreshTimer);
+    };
+  }, [applyCreditBalance, authState.creditBalance?.pending_refund_units, authState.status, t]);
 
   // Tweaks protocol with host toolbar
   useEffect(() => {
@@ -130,17 +256,64 @@ function App() {
 
     const handleCompleted = (event) => {
       const completedPlan = event?.detail?.data?.custom_data?.sku || event?.detail?.custom_data?.sku || "";
-      if (completedPlan) {
+      const completedCredits = completedPlan === "slides";
+      const pendingCreditPurchase = pendingCreditPurchaseRef.current;
+      const completedCreditQuantity =
+        readCompletedCreditQuantity(event) || pendingCreditPurchase?.quantity || null;
+      const previousCreditBalance =
+        typeof pendingCreditPurchase?.previousBalance === "number"
+          ? pendingCreditPurchase.previousBalance
+          : Number(creditBalanceRef.current?.balance);
+      const expectedCreditBalance =
+        completedCredits && completedCreditQuantity
+          ? Number.isFinite(previousCreditBalance)
+            ? previousCreditBalance + completedCreditQuantity
+            : completedCreditQuantity
+          : null;
+      const creditsReceivedNotice =
+        t.pricing.credits_purchase_received_notice ||
+        "Credit purchase received. Confirming your balance...";
+      if (completedCredits) {
+        window.TransLayLandingCheckout?.clearPendingSuccessDialog?.();
+      } else if (completedPlan) {
         window.TransLayLandingCheckout?.rememberSuccessfulPlan?.(completedPlan);
         window.TransLayLandingCheckout?.rememberPendingSuccessDialog?.(completedPlan);
         setSubscriptionSuccessPlan(completedPlan);
         setSuccessDialogPlan(completedPlan);
       }
-      setCheckoutNotice(t.pricing.purchase_received_notice);
+      setCheckoutNotice(
+        completedCredits
+          ? creditsReceivedNotice
+          : t.pricing.purchase_received_notice
+      );
       setAuthState((prev) => ({
         ...prev,
-        errorMessage: t.pricing.purchase_received_notice,
+        errorMessage: completedCredits
+          ? creditsReceivedNotice
+          : t.pricing.purchase_received_notice,
       }));
+      if (completedCredits && completedCreditQuantity) {
+        const currentCreditBalance = creditBalanceRef.current || {};
+        const currentBalance = Number(currentCreditBalance.balance);
+        const currentRefundable = Number(currentCreditBalance.refundable_units);
+        const optimisticBalance = Number.isFinite(currentBalance)
+          ? currentBalance + completedCreditQuantity
+          : completedCreditQuantity;
+        const optimisticRefundable = Number.isFinite(currentRefundable)
+          ? currentRefundable + completedCreditQuantity
+          : optimisticBalance;
+        applyCreditBalance(
+          {
+            unit: "slides_pages",
+            ...currentCreditBalance,
+            balance: optimisticBalance,
+            refundable_units: optimisticRefundable,
+            pending_refund_units: Number(currentCreditBalance.pending_refund_units) || 0,
+          },
+          { clearError: false }
+        );
+        setCreditActionCompletedKey((value) => value + 1);
+      }
       refreshTimer = window.setTimeout(async () => {
         const acceptedPlans = new Set(["pro_monthly", "pro_yearly"]);
         const retryDelays = [1500, 2000, 3000, 4000, 5000, 6000];
@@ -149,6 +322,23 @@ function App() {
           try {
             const payload = await window.TransLayLandingSession.fetchSessionMe();
             setAuthState(window.TransLayLandingSession.rememberSessionState(payload));
+            if (completedCredits) {
+              const result = await fetchCreditBalanceUntil(expectedCreditBalance);
+              if (!result.confirmed && expectedCreditBalance !== null) {
+                const message = t.pricing.subscription_confirmation_delayed_notice;
+                setCheckoutNotice(message);
+                setAuthState((prev) => ({
+                  ...prev,
+                  errorMessage: message,
+                }));
+                return;
+              }
+              applyCreditBalance(result.balance);
+              pendingCreditPurchaseRef.current = null;
+              setCreditActionCompletedKey((value) => value + 1);
+              setCheckoutNotice("");
+              return;
+            }
             if (acceptedPlans.has(payload?.plan_type || "")) {
               setSubscriptionSuccessPlan(payload.plan_type);
               setCheckoutNotice("");
@@ -182,6 +372,7 @@ function App() {
     };
 
     const handleCheckoutError = (event) => {
+      pendingCreditPurchaseRef.current = null;
       const eventName = event?.detail?.name || "";
       const message =
         eventName === "checkout.payment.failed" || eventName === "checkout.payment.error"
@@ -198,7 +389,7 @@ function App() {
       window.removeEventListener(completedEvent, handleCompleted);
       window.removeEventListener(errorEvent, handleCheckoutError);
     };
-  }, [t]);
+  }, [applyCreditBalance, fetchCreditBalanceUntil, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -211,7 +402,17 @@ function App() {
         try {
           const payload = await window.TransLayLandingSession.consumeTicket(ticket);
           if (!cancelled) {
-            setAuthState(window.TransLayLandingSession.rememberSessionState(payload));
+            const state = window.TransLayLandingSession.rememberSessionState(payload);
+            setAuthState(state);
+            if (state.status === "signed_in") {
+              window.TransLayLandingSession.fetchCreditBalance()
+                .then((balance) => {
+                  if (!cancelled) {
+                    applyCreditBalance(balance, { clearError: false });
+                  }
+                })
+                .catch(() => {});
+            }
           }
           return;
         } catch (error) {
@@ -231,6 +432,13 @@ function App() {
           const state = window.TransLayLandingSession.normalizeSessionState(payload);
           if (state.status === "signed_in") {
             setAuthState(window.TransLayLandingSession.rememberSessionState(payload));
+            window.TransLayLandingSession.fetchCreditBalance()
+              .then((balance) => {
+                if (!cancelled) {
+                  applyCreditBalance(balance, { clearError: false });
+                }
+              })
+              .catch(() => {});
             if (payload.plan_type === "pro_monthly" || payload.plan_type === "pro_yearly") {
               setSubscriptionSuccessPlan(payload.plan_type);
             }
@@ -257,7 +465,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [applyCreditBalance]);
 
   useEffect(() => {
     let retryTimer = 0;
@@ -312,6 +520,11 @@ function App() {
     try {
       const payload = await window.TransLayLandingSession.loginWithGoogleCredential(credential);
       setAuthState(window.TransLayLandingSession.rememberSessionState(payload));
+      window.TransLayLandingSession.fetchCreditBalance()
+        .then((balance) => {
+          applyCreditBalance(balance, { clearError: false });
+        })
+        .catch(() => {});
       if (payload.plan_type === "pro_monthly" || payload.plan_type === "pro_yearly") {
         setSubscriptionSuccessPlan(payload.plan_type);
       }
@@ -320,7 +533,7 @@ function App() {
         window.TransLayLandingSession.buildSignedOutState(error?.message || "Unable to complete sign-in.")
       );
     }
-  }, []);
+  }, [applyCreditBalance]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -412,7 +625,92 @@ function App() {
         }));
       }
     }
+  }, [applyCreditBalance, authState, lang, t]);
+
+  const handleCreditsCheckout = useCallback(async (quantity) => {
+    if (authState.status !== "signed_in" || !authState.user) {
+      const localizedMessage = t.pricing.sign_in_required_notice;
+      setCheckoutNotice(localizedMessage);
+      setAuthState((prev) => ({
+        ...prev,
+        errorMessage: localizedMessage,
+      }));
+      document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    try {
+      let previousBalance = Number(creditBalanceRef.current?.balance);
+      if (!Number.isFinite(previousBalance)) {
+        try {
+          const balance = await window.TransLayLandingSession.fetchCreditBalance();
+          previousBalance = Number(balance?.balance);
+          applyCreditBalance(balance, { clearError: false });
+        } catch (_) {
+          previousBalance = null;
+        }
+      }
+      pendingCreditPurchaseRef.current = {
+        quantity,
+        previousBalance: Number.isFinite(previousBalance) ? previousBalance : null,
+      };
+      setCheckoutNotice(t.pricing.opening_checkout_notice);
+      await window.TransLayLandingCheckout.openCreditsCheckout({
+        sku: "slides",
+        quantity,
+        email: authState.user.email || "",
+        locale: lang,
+      });
+    } catch (error) {
+      pendingCreditPurchaseRef.current = null;
+      const message = error?.message || t.pricing.checkout_unavailable_notice;
+      setCheckoutNotice(message);
+      setAuthState((prev) => ({
+        ...prev,
+        errorMessage: message,
+      }));
+    }
   }, [authState, lang, t]);
+
+  const handleCreditRefund = useCallback(async (quantity) => {
+    if (authState.status !== "signed_in" || !authState.user) {
+      const localizedMessage = t.pricing.sign_in_required_notice;
+      setCheckoutNotice(localizedMessage);
+      setAuthState((prev) => ({
+        ...prev,
+        errorMessage: localizedMessage,
+      }));
+      document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    try {
+      setCheckoutNotice(t.pricing.credits_refund_pending_notice || "Submitting refund request...");
+      const refund = await window.TransLayLandingSession.requestCreditRefund(quantity);
+      const balance = await window.TransLayLandingSession.fetchCreditBalance();
+      applyCreditBalance(balance);
+      setCreditActionCompletedKey((value) => value + 1);
+      setCheckoutNotice(
+        refund?.status === "submitted"
+          ? fillTemplate(
+              t.pricing.credits_refund_processing_banner ||
+                "Refund submitted. Refunds in progress: {units}. Estimated refund: {amount}.",
+              {
+                units: String(balance?.pending_refund_units ?? quantity),
+                amount: formatCreditRefundAmount(balance),
+              }
+            )
+          : t.pricing.credits_refund_submitted_notice || "Refund completed."
+      );
+    } catch (error) {
+      const message = error?.message || t.pricing.checkout_unavailable_notice;
+      setCheckoutNotice(message);
+      setAuthState((prev) => ({
+        ...prev,
+        errorMessage: message,
+      }));
+    }
+  }, [applyCreditBalance, authState, t]);
 
   const handleConfirmUpgrade = useCallback(async () => {
     setUpgradeDialogMode("processing");
@@ -605,9 +903,13 @@ function App() {
       <PricingSection
         t={t}
         onPlanCheckout={handlePlanCheckout}
+        onCreditsCheckout={handleCreditsCheckout}
+        onCreditRefund={handleCreditRefund}
         onPlanCancel={handlePlanCancel}
         checkoutNotice={checkoutNotice}
         subscriptionState={subscriptionState}
+        creditBalance={authState.creditBalance}
+        creditActionCompletedKey={creditActionCompletedKey}
       />
       <FAQSection t={t} />
       <CTASection t={t} />

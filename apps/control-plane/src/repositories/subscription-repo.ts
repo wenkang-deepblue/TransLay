@@ -35,7 +35,7 @@ export interface UpsertSubscriptionInput {
  * prioritizes active/grace_period pro subscriptions, falls back to free.
  */
 export async function getActiveSubscription(
-  pool: Pool,
+  pool: Queryable,
   userId: UserId
 ): Promise<SubscriptionRow | null> {
   const result = await pool.query(

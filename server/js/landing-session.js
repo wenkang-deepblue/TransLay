@@ -48,6 +48,7 @@
       planType: "free",
       subscriptionStatus: "active",
       subscription: null,
+      creditBalance: null,
       errorMessage,
     };
   }
@@ -85,8 +86,9 @@
             currentPeriodStart: payload.subscription.current_period_start ?? "",
             currentPeriodEnd: payload.subscription.current_period_end ?? "",
             cancelAtPeriodEnd: Boolean(payload.subscription.cancel_at_period_end),
-          }
+        }
         : null,
+      creditBalance: payload?.credit_balance ?? null,
       errorMessage: "",
     };
   }
@@ -127,6 +129,7 @@
             cancelAtPeriodEnd: Boolean(state.subscription.cancelAtPeriodEnd),
           }
         : null,
+      creditBalance: state.creditBalance ?? null,
     };
   }
 
@@ -194,6 +197,7 @@
                 cancelAtPeriodEnd: Boolean(parsed.subscription.cancelAtPeriodEnd),
               }
             : null,
+        creditBalance: parsed?.creditBalance ?? null,
         errorMessage: "",
       };
     } catch (_) {
@@ -272,6 +276,21 @@
     return request("/session/me");
   }
 
+  async function fetchCreditBalance() {
+    return request("/credits/balance");
+  }
+
+  async function requestCreditRefund(quantity, reason = "") {
+    return request("/refunds/request", {
+      method: "POST",
+      body: {
+        unit: "slides_pages",
+        quantity,
+        ...(reason ? { reason } : {}),
+      },
+    });
+  }
+
   async function consumeTicket(ticket) {
     return request("/session/consume", {
       method: "POST",
@@ -320,6 +339,8 @@
     getTicketFromLocation,
     stripTicketFromUrl,
     fetchSessionMe,
+    fetchCreditBalance,
+    requestCreditRefund,
     consumeTicket,
     loginWithGoogleCredential,
     changeSubscriptionPlan,

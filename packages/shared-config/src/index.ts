@@ -166,9 +166,22 @@ export function loadConfig() {
   const paddleApiKey = optionalEnv("PADDLE_API_KEY", "").trim();
   const paddlePriceMonthly = optionalEnv("PADDLE_PRICE_ID_PRO_MONTHLY", "").trim();
   const paddlePriceYearly = optionalEnv("PADDLE_PRICE_ID_PRO_YEARLY", "").trim();
+  const paddlePriceCreditsSlides = optionalEnv("PADDLE_PRICE_ID_CREDITS_SLIDES", "").trim();
   const paddleMonthlyAmountCents = optionalBoundedIntEnv("PADDLE_PRICE_AMOUNT_PRO_MONTHLY_CENTS", 999, { min: 1 });
   const paddleYearlyAmountCents = optionalBoundedIntEnv("PADDLE_PRICE_AMOUNT_PRO_YEARLY_CENTS", 11999, { min: 1 });
+  const paddleCreditsSlidesAmountCents = optionalBoundedIntEnv("PADDLE_PRICE_AMOUNT_CREDITS_SLIDES_CENTS", 4, { min: 1 });
+  const paddleMinimumChargeAmountCents = optionalBoundedIntEnv("PADDLE_MINIMUM_CHARGE_CENTS", 70, { min: 1 });
+  const paddleCreditsSlidesMinUnits = Math.max(
+    1,
+    Math.ceil(paddleMinimumChargeAmountCents / paddleCreditsSlidesAmountCents)
+  );
   const paddleWebhookSecret = optionalEnv("PADDLE_WEBHOOK_SECRET", "").trim();
+
+  if (paddleCreditsSlidesMinUnits > 100) {
+    throw new Error(
+      "PADDLE_PRICE_AMOUNT_CREDITS_SLIDES_CENTS is too low for the configured PADDLE_MINIMUM_CHARGE_CENTS"
+    );
+  }
 
   if (nodeEnv === "production") {
     if (!paddleClientToken) {
@@ -242,10 +255,22 @@ export function loadConfig() {
         priceIds: {
           pro_monthly: paddlePriceMonthly,
           pro_yearly: paddlePriceYearly,
+          credits_slides: paddlePriceCreditsSlides,
         },
         priceAmounts: {
           pro_monthly: paddleMonthlyAmountCents,
           pro_yearly: paddleYearlyAmountCents,
+          credits_slides: paddleCreditsSlidesAmountCents,
+        },
+        creditSkus: {
+          slides: {
+            unit: "slides_pages" as const,
+            minUnits: paddleCreditsSlidesMinUnits,
+            maxUnits: 100,
+            priceId: paddlePriceCreditsSlides,
+            amountCents: paddleCreditsSlidesAmountCents,
+            minimumChargeAmountCents: paddleMinimumChargeAmountCents,
+          },
         },
         webhookToleranceSeconds: optionalBoundedIntEnv(
           "PADDLE_WEBHOOK_TOLERANCE_SECONDS",
