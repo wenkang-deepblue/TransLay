@@ -135,6 +135,22 @@ function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onCreditsChe
   const creditSku = window.TransLayLandingConfig?.getCreditSku?.("slides") || {};
   const purchaseMinUnits = Number.isInteger(creditSku.minUnits) ? creditSku.minUnits : 18;
   const purchaseMaxUnits = Number.isInteger(creditSku.maxUnits) ? creditSku.maxUnits : 100;
+  const normalizePurchaseQuantity = (value, clampIncomplete = false) => {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed)) {
+      return clampIncomplete ? String(purchaseMinUnits) : value;
+    }
+    if (parsed > purchaseMaxUnits) {
+      return String(purchaseMaxUnits);
+    }
+    if (
+      parsed < purchaseMinUnits &&
+      (clampIncomplete || String(Math.abs(parsed)).length >= String(purchaseMinUnits).length)
+    ) {
+      return String(purchaseMinUnits);
+    }
+    return value;
+  };
   React.useEffect(() => {
     if (refundableUnits > 0 && Number(refundQuantity) > refundableUnits) {
       setRefundQuantity(String(refundableUnits));
@@ -207,12 +223,12 @@ function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onCreditsChe
         <div style={{
           display: "flex",
           flexDirection: plan === "payg" ? "column" : "row",
-          alignItems: plan === "payg" ? "center" : "baseline",
-          justifyContent: "space-between",
-          gap: plan === "payg" ? 8 : 12,
+          alignItems: plan === "payg" ? "flex-start" : "center",
+          justifyContent: plan === "payg" ? "center" : "flex-start",
+          gap: plan === "payg" ? 10 : 12,
           minHeight: 88,
           marginBottom: 8,
-          textAlign: plan === "payg" ? "center" : "start",
+          textAlign: "start",
         }}>
           <div style={{fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 600, color: "var(--text-soft)"}}>{data.name}</div>
           {plan === "payg" && availableCredits !== null ? (
@@ -223,6 +239,7 @@ function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onCreditsChe
               maxWidth: "100%",
               overflowWrap: "anywhere",
               textAlign: "center",
+              transform: "translateY(4px)",
             }}>
               {pendingRefundUnits > 0 ? (
                 <>
@@ -312,9 +329,14 @@ function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onCreditsChe
                   value={creditPanel === "purchase" ? creditQuantity : refundQuantity}
                   onChange={(event) => {
                     if (creditPanel === "purchase") {
-                      setCreditQuantity(event.target.value);
+                      setCreditQuantity(normalizePurchaseQuantity(event.target.value));
                     } else {
                       setRefundQuantity(event.target.value);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (creditPanel === "purchase") {
+                      setCreditQuantity((value) => normalizePurchaseQuantity(value, true));
                     }
                   }}
                   style={creditInputStyle}

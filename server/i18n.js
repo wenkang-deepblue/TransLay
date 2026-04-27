@@ -199,6 +199,8 @@ window.TRANSLATIONS = {
             title: "3. Subscriptions & Billing",
             paragraphs: [
               "TransLay offers a one-time free quota of 20 slides on install, monthly subscriptions, annual commitment plans, and pay-as-you-go credits. Subscription fees are billed in advance on a recurring basis. You may cancel at any time from the Manage Subscription panel; cancellation takes effect at the end of the current billing period or annual term.",
+              "Pay-as-you-go credits are separate usage credits. You may buy them whether or not you have an active subscription, including when your subscription quota is not enough during a billing period. Subscription quota is used first for eligible jobs, and pay-as-you-go credits can cover additional usage after subscription quota is exhausted.",
+              "Because Paddle applies a minimum transaction amount, each pay-as-you-go credit order has a minimum purchase of 18 slides, currently $0.72 at $0.04 per slide, and a maximum purchase of 100 slides per order. If you need fewer than 18 slides, you may purchase 18 slides first and then request a refund for the unused extra credits.",
               "For Google Slides™ translation jobs, quota billing follows delivered output. A slide is billed as <strong>1 slide</strong> only after the slide content is fully translated and written back successfully. If a slide contains speaker notes, the slide content and notes together still count as <strong>1 slide</strong> when both are translated and written back successfully; if only one side succeeds, the slide is billed as <strong>0.5 slide</strong>. If any element on the slide page fails to translate or fails to write back, the slide page content is not billed.",
               "TransLay also uses provisional billing during active jobs. Once a slide has already been translated successfully, that successful slide may be counted first and then finalized if you manually cancel the task afterward. For that reason, please confirm your task settings before starting. If you cancel before any slide translation succeeds, no slide quota is charged. If you have any billing question, include the Task ID in your email to <strong>support@example.com</strong> so we can investigate faster."
             ]
@@ -206,7 +208,10 @@ window.TRANSLATIONS = {
           {
             title: "4. Refunds",
             paragraphs: [
-              "Monthly subscriptions are non-refundable. Annual commitment plans are also non-refundable, except that first-time annual commitment customers may request a one-time refund within 14 days of purchase if no pages have been used since that payment. This exception is limited to one use per account. Pay-as-you-go credits, including credits purchased while a subscription is active, may be refunded in full for the unused portion; used credits are non-refundable. Refunds may also be issued in cases of billing errors, unauthorized payments, major service failures, or where required by applicable law."
+              "Monthly subscriptions are non-refundable. Annual commitment plans are also non-refundable, except that first-time annual commitment customers may request a one-time refund within 14 days of purchase if no pages have been used since that payment. This exception is limited to one use per account. Pay-as-you-go credits, including credits purchased while a subscription is active, may be refunded in full for the unused portion; used credits are non-refundable. Refunds may also be issued in cases of billing errors, unauthorized payments, major service failures, or where required by applicable law.",
+              "Unused pay-as-you-go credits may be refunded in units of 1 slide. Refunds are calculated against the original Paddle transaction that granted the credits. If one refund request uses credits from more than one purchase, Paddle may process it as multiple separate refunds and send separate refund notifications; the total refund amount to you does not change.",
+              "Pay-as-you-go credits purchased during an active subscription remain independent usage credits and follow the same unused-credit refund rule; they do not inherit the subscription-period non-refund rule.",
+              "If you cancel a monthly subscription and then decide to upgrade to an annual commitment plan before the monthly period ends, we may first restore the monthly subscription, credit the first month's paid $9.99 toward the annual subscription charge, and upgrade that first month to the annual plan's 500-slide monthly quota."
             ]
           },
           {
@@ -4077,6 +4082,20 @@ window.TRANSLATIONS = {
       cancel_dialog_dismiss: "取消：放弃取消订阅",
       opening_checkout_notice: "正在打开安全结账...",
       purchase_received_notice: "已收到购买结果，正在确认您的订阅状态...",
+      credits_purchase_received_notice: "已收到额度购买结果，正在确认您的余额...",
+      credits_balance_label: "按需额度余额",
+      credits_refundable_label: "可退额度",
+      credits_quantity_label: "购买页数",
+      credits_minimum_quantity_notice: "支付通道最低收款 {amount}，当前最少购买 {min} 页。",
+      credits_refund_quantity_label: "退款页数",
+      credits_refund_in_progress_label: "退款中",
+      credits_purchase_cta: "购买",
+      credits_refund_cta: "退款",
+      credits_cancel_cta: "取消",
+      credits_refund_pending_notice: "正在提交退款申请...",
+      credits_refund_submitted_notice: "退款申请已提交。",
+      credits_refund_provider_pending_notice: "退款已提交，支付平台正在处理。",
+      credits_refund_processing_banner: "我们已将您的退款申请发送到支付平台处理中，最长可能30分钟，稍后您将收到支付平台的通知邮件，请注意查收。如果有任何问题，请发送邮件至：support@example.com。当前处理中退款额度：{units}，预计退款：{amount}。",
       subscription_confirmation_delayed_notice: "已收到购买结果，订阅状态确认可能还需要几秒钟。",
       sign_in_required_notice: "请先使用 Google 登录后再开始订阅。",
       payment_failed_notice: "付款未完成，请重试或更换付款方式。",
@@ -4103,10 +4122,13 @@ window.TRANSLATIONS = {
       payg_per: "/页",
       payg_sub: "无承诺，无每月上限",
       payg_f1: "无限用量",
-      payg_f2: "全部语言",
-      payg_f3: "额度可滚存",
-      payg_f4: "标准客服",
-      payg_cta: "购买额度"
+      payg_f2: "未使用额度随时可退",
+      payg_f3: "额度可累加",
+      payg_f4: "请注意：受支付平台限制，单次最小购买额度为18页",
+      payg_cta: "购买额度",
+      payg_available_credits_label: "剩余额度",
+      payg_buy_entry_cta: "购买按需额度",
+      payg_refund_entry_cta: "未使用额度退款"
     },
     faq: {
       kicker: "常见问题",
@@ -4190,13 +4212,18 @@ window.TRANSLATIONS = {
             paragraphs: [
               "TransLay 在安装后提供一次性的 20 张幻灯片免费额度，同时提供月度订阅、年度承诺计划和按量额度。订阅费用按周期预先收取。您可以随时在 Manage Subscription 面板中取消；取消将在当前计费周期或年度承诺周期结束时生效。",
               "对于 Google Slides™ 翻译任务，额度计费以实际交付结果为准。仅当某一张幻灯片的页面内容已完整翻译并成功写回时，该页才计为 <strong>1 slide</strong>。如果该页包含 speaker notes，则页面内容和 notes 都翻译并成功写回时，合计仍计为 <strong>1 slide</strong>；若仅其中一侧成功，则该页计为 <strong>0.5 slide</strong>。如果该页任一元素翻译失败或写回失败，则该页页面内容不计费。",
-              "TransLay 在任务执行过程中也会采用临时预扣的计费方式。一旦某一页已经成功翻译，该成功页面可能会先被计入，随后在您手动取消任务后完成结算。因此，请您在开始前确认任务设置。如果您在任何页面成功翻译之前取消，则不会扣减任何幻灯片额度。如对计费有疑问，请在邮件中附上 Task ID 并发送至 <strong>support@example.com</strong>，以便我们更快核查。"
+              "TransLay 在任务执行过程中也会采用临时预扣的计费方式。一旦某一页已经成功翻译，该成功页面可能会先被计入，随后在您手动取消任务后完成结算。因此，请您在开始前确认任务设置。如果您在任何页面成功翻译之前取消，则不会扣减任何幻灯片额度。如对计费有疑问，请在邮件中附上 Task ID 并发送至 <strong>support@example.com</strong>，以便我们更快核查。",
+              "按量额度是用于 Google Slides™ 翻译的预付使用额度，独立于订阅套餐内额度。无论您处于免费计划，还是处于有效付费订阅期内，都可以额外购买按量额度；当订阅额度和按量额度同时存在时，TransLay 会优先使用当前周期内的订阅额度，超出部分再使用预付按量额度。",
+              "受 Paddle 支付平台限制，单笔交易的可收款金额必须大于 USD 0.70。由于 TransLay 当前按量额度价格为每页 USD 0.04，因此单次最少购买数量为 18 页，即 USD 0.72。当前单次最多可购买 100 页。如果您实际需要少于 18 页，也可以先购买 18 页，再对未使用的多余额度申请退款。"
             ]
           },
           {
             title: "4. 退款",
             paragraphs: [
-              "月付订阅默认不退款。年度承诺计划默认也不退款；但首次购买年度承诺计划的客户，如在购买后 14 天内提出申请，且自该笔付款起尚未使用任何页面，可申请一次性退款。每个账户仅可使用一次该例外。按量购买的额度，包括订阅期内额外购买的按量额度，未使用部分可申请全额退款；已使用部分不可退款。若发生计费错误、未经授权的付款、重大服务故障，或适用法律另有要求时，我们也可能提供退款。"
+              "月付订阅默认不退款。年度承诺计划默认也不退款；但首次购买年度承诺计划的客户，如在购买后 14 天内提出申请，且自该笔付款起尚未使用任何页面，可申请一次性退款。每个账户仅可使用一次该例外。按量购买的额度，包括订阅期内额外购买的按量额度，未使用部分可申请全额退款；已使用部分不可退款。若发生计费错误、未经授权的付款、重大服务故障，或适用法律另有要求时，我们也可能提供退款。",
+              "按量额度退款的最小申请单位为 1 页。退款只根据未使用的按量额度计算；已经被成功翻译任务消耗的额度不可退款。",
+              "Paddle 会基于原始购买交易处理退款。如果一次退款申请覆盖了多笔按量购买交易中的额度，TransLay 可能会按原始交易拆分为多笔 Paddle 退款处理。您的总退款金额不会因此改变，但可能会分别收到多封 Paddle 退款通知邮件。",
+              "如果您已将月度订阅设置为周期结束时取消，但在当前月度周期结束前选择升级为年度承诺计划，TransLay 会先恢复该月度订阅，再将其升级为年度承诺。您本月已支付的 USD 9.99 会抵扣年度承诺的应付金额，并且当前订阅权益会更新为年度承诺对应的每月 500 页 Google Slides™ 额度。"
             ]
           },
           {
@@ -4523,6 +4550,8 @@ window.TRANSLATIONS = {
             title: "3. 訂閱與計費",
             paragraphs: [
               "TransLay 在安裝後提供一次性的 20 張投影片免費額度，同時提供月度訂閱、年度承諾方案與按量額度。訂閱費用按週期預先收取。您可以隨時在 Manage Subscription 面板中取消；取消將於目前計費週期或年度承諾週期結束時生效。",
+              "按量購買額度屬於獨立的 usage credit。無論您是否處於訂閱期內，都可以額外購買按量額度；當訂閱週期內額度不足時，也可以用按量額度覆蓋額外用量。符合條件的任務會優先消耗訂閱額度，訂閱額度用完後再消耗按量購買額度。",
+              "由於 Paddle 對單筆交易設有最低付款金額限制，按量額度的單次訂單最小購買額度為 18 頁，按目前 $0.04/頁計算為 $0.72；單次訂單最多購買 100 頁。如果您不需要 18 頁，可以先購買 18 頁，然後對未使用的多餘額度申請退款。",
               "對於 Google Slides™ 翻譯任務，額度計費以實際交付結果為準。只有在某一張投影片的頁面內容已完整翻譯並成功寫回後，該頁才計為 <strong>1 slide</strong>。若該頁包含 speaker notes，則頁面內容與 notes 都翻譯並成功寫回時，合計仍計為 <strong>1 slide</strong>；若僅其中一側成功，則該頁計為 <strong>0.5 slide</strong>。若該頁任一元素翻譯失敗或寫回失敗，則該頁頁面內容不計費。",
               "TransLay 在任務執行過程中也會採用臨時預扣的計費方式。一旦某一頁已成功翻譯，該成功頁面可能會先被計入，之後在您手動取消任務後完成結算。因此，請您在開始前確認任務設定。如果您在任何頁面成功翻譯之前取消，則不會扣減任何投影片額度。如對計費有疑問，請在郵件中附上 Task ID 並寄送至 <strong>support@example.com</strong>，以便我們更快核查。"
             ]
@@ -4530,7 +4559,10 @@ window.TRANSLATIONS = {
           {
             title: "4. 退款",
             paragraphs: [
-              "月付訂閱預設不退款。年度承諾方案預設也不退款；但首次購買年度承諾方案的客戶，若在購買後 14 天內提出申請，且自該筆付款起尚未使用任何頁面，可申請一次性退款。每個帳戶僅可使用一次該例外。按量購買的額度，包括訂閱期內額外購買的按量額度，未使用部分可申請全額退款；已使用部分不可退款。若發生計費錯誤、未經授權的付款、重大服務故障，或適用法律另有要求時，我們也可能提供退款。"
+              "月付訂閱預設不退款。年度承諾方案預設也不退款；但首次購買年度承諾方案的客戶，若在購買後 14 天內提出申請，且自該筆付款起尚未使用任何頁面，可申請一次性退款。每個帳戶僅可使用一次該例外。按量購買的額度，包括訂閱期內額外購買的按量額度，未使用部分可申請全額退款；已使用部分不可退款。若發生計費錯誤、未經授權的付款、重大服務故障，或適用法律另有要求時，我們也可能提供退款。",
+              "按量購買額度的退款最小單位為 1 頁。退款會按授予額度的原始 Paddle 交易處理；如果一次退款申請涉及多筆購買交易，Paddle 可能會拆分為多筆獨立退款並分別發送通知，但您最終收到的總退款金額不變。",
+              "訂閱期內額外購買的按量額度仍屬於獨立的 usage credit，適用同樣的未使用部分退款規則，不繼承訂閱週期內不退款的規則。",
+              "如果您取消月度訂閱後，在目前月度週期結束前決定升級為年度承諾方案，我們可能會先恢復月度訂閱，並將第一個月已支付的 $9.99 抵扣年度訂閱費用；同時，第一個月的額度會按年度承諾方案升級為每月 500 頁。"
             ]
           },
           {
