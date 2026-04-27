@@ -46,12 +46,32 @@
 
   function getTranslations() {
     const currentLang = getResolvedLang();
-    return (
+    const base = window.TRANSLATIONS?.en || {};
+    const current =
       window.TRANSLATIONS?.[currentLang] ||
       window.TRANSLATIONS?.[currentLang.split("-")[0]] ||
-      window.TRANSLATIONS?.en ||
-      { auth: {}, footer: {}, legal: {}, nav: {}, settings: {} }
-    );
+      {};
+
+    function mergeObjects(baseValue, currentValue) {
+      if (
+        !baseValue ||
+        typeof baseValue !== "object" ||
+        Array.isArray(baseValue) ||
+        !currentValue ||
+        typeof currentValue !== "object" ||
+        Array.isArray(currentValue)
+      ) {
+        return currentValue === undefined ? baseValue : currentValue;
+      }
+
+      const merged = { ...baseValue };
+      for (const key of Object.keys(currentValue)) {
+        merged[key] = mergeObjects(baseValue[key], currentValue[key]);
+      }
+      return merged;
+    }
+
+    return mergeObjects(base, current) || { auth: {}, footer: {}, legal: {}, nav: {}, settings: {}, successPage: {} };
   }
 
   function localizeLegalPage() {
@@ -60,6 +80,7 @@
     const footer = translations?.footer || {};
     const legal = translations?.legal || {};
     const legalPages = translations?.legalPages || {};
+    const successPage = translations?.successPage || {};
 
     const assignText = (selector, value) => {
       if (typeof value !== "string" || !value.trim()) {
@@ -80,6 +101,22 @@
     assignText("[data-legal-footer-privacy]", footer.privacy);
     assignText("[data-legal-footer-copyright]", footer.copyright);
     assignText("[data-legal-back-home]", legal.back_home);
+    assignText("[data-success-kicker]", successPage.kicker);
+    assignText("[data-success-title]", successPage.title);
+    assignText("[data-success-body]", successPage.body);
+    assignText("[data-success-back-pricing]", successPage.back_pricing);
+    assignText("[data-success-home]", successPage.go_home);
+
+    document.querySelectorAll("[data-legal-nav-label]").forEach((node) => {
+      node.setAttribute("aria-label", nav.primary_label || "Primary");
+    });
+    document.querySelectorAll("[data-legal-footer-support]").forEach((node) => {
+      const subject = footer.support_subject || "TransLay Support Needed";
+      node.setAttribute("href", `mailto:support@example.com?subject=${encodeURIComponent(subject)}`);
+    });
+    if (successPage.document_title && document.querySelector("[data-success-title]")) {
+      document.title = successPage.document_title;
+    }
 
     const documentRoot = document.querySelector("[data-legal-document]");
     const page = documentRoot?.getAttribute("data-legal-page");

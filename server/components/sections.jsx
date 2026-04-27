@@ -408,15 +408,17 @@ function PricingSection({ t, onPlanCheckout, onCreditsCheckout, onCreditRefund, 
   );
 }
 
-function renderFaqAnswer(answer) {
+function renderFaqAnswer(answer, supportSubjectValue) {
   const supportEmail =
     typeof window.SUPPORT_EMAIL === "string" && window.SUPPORT_EMAIL.trim()
       ? window.SUPPORT_EMAIL.trim()
       : FAQ_SUPPORT_EMAIL;
   const supportSubject =
-    typeof window.SUPPORT_SUBJECT === "string" && window.SUPPORT_SUBJECT.trim()
-      ? window.SUPPORT_SUBJECT.trim()
-      : FAQ_SUPPORT_SUBJECT;
+    typeof supportSubjectValue === "string" && supportSubjectValue.trim()
+      ? supportSubjectValue.trim()
+      : typeof window.SUPPORT_SUBJECT === "string" && window.SUPPORT_SUBJECT.trim()
+        ? window.SUPPORT_SUBJECT.trim()
+        : FAQ_SUPPORT_SUBJECT;
   const mailtoHref = `mailto:${supportEmail}?subject=${encodeURIComponent(supportSubject)}`;
 
   const parts = String(answer || "").split(supportEmail);
@@ -437,7 +439,7 @@ function renderFaqAnswer(answer) {
   });
 }
 
-function FAQItem({ q, a, idx }) {
+function FAQItem({ q, a, idx, supportSubject }) {
   const [open, setOpen] = useState(false);
   return (
     <Reveal delay={idx * 50}>
@@ -453,7 +455,7 @@ function FAQItem({ q, a, idx }) {
           </span>
         </button>
         <div style={{maxHeight: open ? 420 : 0, overflow: "hidden", transition: "max-height 0.4s ease"}}>
-          <div style={{padding: "0 26px 22px", color: "var(--text-soft)", fontSize: 15, lineHeight: 1.65}}>{renderFaqAnswer(a)}</div>
+          <div style={{padding: "0 26px 22px", color: "var(--text-soft)", fontSize: 15, lineHeight: 1.65}}>{renderFaqAnswer(a, supportSubject)}</div>
         </div>
       </div>
     </Reveal>
@@ -478,7 +480,7 @@ function FAQSection({ t }) {
           <Reveal delay={60}><h2 className="section-title">{t.faq.title}</h2></Reveal>
         </div>
         <div style={{maxWidth: 780, margin: "0 auto"}}>
-          {items.map((it, i) => <FAQItem key={i} {...it} idx={i} />)}
+          {items.map((it, i) => <FAQItem key={i} {...it} idx={i} supportSubject={t.footer.support_subject} />)}
         </div>
       </div>
     </section>

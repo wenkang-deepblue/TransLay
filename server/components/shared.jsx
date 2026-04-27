@@ -3,8 +3,8 @@ const { useState, useEffect, useRef, useMemo, useCallback } = React;
 const SUPPORT_EMAIL = "support@example.com";
 const SUPPORT_SUBJECT = "TransLay Support Needed";
 
-function getSupportMailtoHref() {
-  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(SUPPORT_SUBJECT)}`;
+function getSupportMailtoHref(subject = SUPPORT_SUBJECT) {
+  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject || SUPPORT_SUBJECT)}`;
 }
 
 // ============ i18n hook ============
@@ -363,7 +363,7 @@ function TopBar({ t, theme, setTheme, lang, setLang, authState, onGoogleCredenti
           <BrandMark />
           <span>TransLay</span>
         </a>
-        <nav className="nav-links" aria-label="Primary">
+        <nav className="nav-links" aria-label={t.nav.primary_label}>
           <a className="nav-link" href="#features">{t.nav.features}</a>
           <a className="nav-link" href="#pricing">{t.nav.pricing}</a>
           <a className="nav-link" href="#faq">{t.nav.faq}</a>
@@ -395,7 +395,7 @@ function Footer({ t }) {
           <div className="footer-left-group">
             <a className="brand footer-brand" href="/"><BrandMark /><span>TransLay</span></a>
             <div>{t.footer.copyright}</div>
-            <a className="footer-support-link" href={getSupportMailtoHref()}>{SUPPORT_EMAIL}</a>
+            <a className="footer-support-link" href={getSupportMailtoHref(t.footer.support_subject)}>{SUPPORT_EMAIL}</a>
           </div>
           <div className="footer-legal">
             <a href="/terms">{t.footer.terms}</a>

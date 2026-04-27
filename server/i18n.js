@@ -1,7 +1,11 @@
 // Translations for TransLay landing page
 window.TRANSLATIONS = {
   en: {
+    meta: {
+      document_title: "TransLay — LLM translation for Google Slides™"
+    },
     nav: {
+      primary_label: "Primary",
       home: "Home",
       features: "Features",
       pricing: "Pricing",
@@ -145,10 +149,19 @@ window.TRANSLATIONS = {
       tagline: "LLM translation for Google Slides™.",
       terms: "Terms of Service",
       privacy: "Privacy Policy",
+      support_subject: "TransLay Support Needed",
       copyright: "© 2026 example.com All rights reserved."
     },
     legal: {
       back_home: "Back to home"
+    },
+    successPage: {
+      document_title: "Purchase Complete — TransLay",
+      kicker: "Payment status",
+      title: "Purchase complete",
+      body: "Your payment was received. If you started this flow from the Add-on, you can return to Google Slides™ and refresh your entitlement state there.",
+      back_pricing: "Back to pricing",
+      go_home: "Go to home"
     },
     settings: {
       title: "Settings",
@@ -3996,6 +4009,9 @@ window.TRANSLATIONS = {
     }
   },
   zh: {
+    meta: {
+      document_title: "TransLay — Google Slides™ LLM 翻译工具"
+    },
     nav: {
       home: "主页",
       features: "功能",
@@ -4157,10 +4173,19 @@ window.TRANSLATIONS = {
       tagline: "为 Google Slides™ 而生的 LLM 翻译工具。",
       terms: "服务条款",
       privacy: "隐私政策",
+      support_subject: "TransLay 技术支持请求",
       copyright: "© 2026 example.com 版权所有。"
     },
     legal: {
       back_home: "返回首页"
+    },
+    successPage: {
+      document_title: "购买完成 — TransLay",
+      kicker: "支付状态",
+      title: "购买完成",
+      body: "我们已收到您的付款。如果您是从插件中开始此流程，可以返回 Google Slides™，并在那里刷新您的权益状态。",
+      back_pricing: "返回价格页",
+      go_home: "返回首页"
     },
     settings: {
       title: "设置",
@@ -4352,6 +4377,9 @@ window.TRANSLATIONS = {
     }
   },
   "zh-TW": {
+    meta: {
+      document_title: "TransLay — Google Slides™ LLM 翻譯工具"
+    },
     nav: {
       home: "主頁",
       features: "功能",
@@ -4496,10 +4524,19 @@ window.TRANSLATIONS = {
       tagline: "為 Google Slides™ 而生的 LLM 翻譯工具。",
       terms: "服務條款",
       privacy: "隱私政策",
+      support_subject: "TransLay 技術支援請求",
       copyright: "© 2026 example.com 版權所有。"
     },
     legal: {
       back_home: "返回首頁"
+    },
+    successPage: {
+      document_title: "購買完成 — TransLay",
+      kicker: "付款狀態",
+      title: "購買完成",
+      body: "我們已收到您的付款。如果您是從外掛中開始此流程，可以返回 Google Slides™，並在那裡重新整理您的權益狀態。",
+      back_pricing: "返回價格頁",
+      go_home: "返回首頁"
     },
     settings: {
       title: "設定",
