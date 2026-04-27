@@ -367,7 +367,7 @@ function TopBar({ t, theme, setTheme, lang, setLang, authState, onGoogleCredenti
           <a className="nav-link" href="#features">{t.nav.features}</a>
           <a className="nav-link" href="#pricing">{t.nav.pricing}</a>
           <a className="nav-link" href="#faq">{t.nav.faq}</a>
-          <a className="nav-link btn btn-primary btn-sm keep nav-install-btn" href="#install">
+          <a className="nav-link btn btn-primary btn-sm keep nav-install-btn" href="#install" data-fit-button-group="topbar-actions">
             {t.nav.install}
             <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </a>
@@ -398,6 +398,7 @@ function Footer({ t }) {
             <a className="footer-support-link" href={getSupportMailtoHref(t.footer.support_subject)}>{SUPPORT_EMAIL}</a>
           </div>
           <div className="footer-legal">
+            <a href="/support">{t.footer.support || "Support"}</a>
             <a href="/terms">{t.footer.terms}</a>
             <a href="/privacy">{t.footer.privacy}</a>
           </div>

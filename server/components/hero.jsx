@@ -1,105 +1,41 @@
 // Hero section — 5-group 16:9 slide carousel with crossfade within, slide+fade between
 
 // 5 demo groups — each is a pair: original + translated
-// Replace these with real screenshots later — just swap `imgOriginal` / `imgTranslated` per group.
 const DEMO_GROUPS = [
   {
-    id: "apac",
-    kicker: { orig: "ORIGINAL DECK", trans: "NACH DER ÜBERSETZUNG" },
-    title: { orig: "Market opportunity in APAC", trans: "Marktchance in der APAC-Region" },
-    body: {
-      orig: "The addressable market across APAC is growing 2.4× faster than global averages.",
-      trans: "Der adressierbare Markt in APAC wächst 2,4× schneller als globale Durchschnitte.",
-    },
-    bullets: {
-      orig: ["740M users in 2026", "CAGR 18.7% through 2030", "Top targets: JP, KR, SG, VN"],
-      trans: ["740 Mio. Nutzer im Jahr 2026", "CAGR 18,7 % bis 2030", "Top-Ziele: JP, KR, SG, VN"],
-    },
-    accent: "#4285F4",
+    id: "group-1",
+    imgOriginal: "assets/group-1-1.png",
+    imgTranslated: "assets/group-1-2.png",
   },
   {
-    id: "product",
-    kicker: { orig: "PRODUCT ROADMAP", trans: "ROADMAP DU PRODUIT" },
-    title: { orig: "What we're shipping this quarter", trans: "Ce que nous livrons ce trimestre" },
-    body: {
-      orig: "Three flagship launches focused on collaboration, speed, and reliability.",
-      trans: "Trois lancements phares axés sur la collaboration, la vitesse et la fiabilité.",
-    },
-    bullets: {
-      orig: ["Real-time co-editing", "2× faster sync engine", "99.99% uptime SLA"],
-      trans: ["Co-édition en temps réel", "Moteur de sync 2× plus rapide", "SLA de 99,99%"],
-    },
-    accent: "#8a7cff",
+    id: "group-2",
+    imgOriginal: "assets/group-2-1.png?v=2",
+    imgTranslated: "assets/group-2-2.png?v=2",
   },
   {
-    id: "finance",
-    kicker: { orig: "FY25 FINANCIALS", trans: "ESTADOS FINANCIEROS 25" },
-    title: { orig: "Record revenue growth", trans: "Crecimiento récord de ingresos" },
-    body: {
-      orig: "Revenue up 62% year over year, driven by enterprise expansion.",
-      trans: "Los ingresos aumentaron un 62% interanual, impulsados por la expansión empresarial.",
-    },
-    bullets: {
-      orig: ["$184M ARR", "143% NRR", "41% operating margin"],
-      trans: ["184M$ ARR", "143% NRR", "41% margen operativo"],
-    },
-    accent: "#06b6d4",
+    id: "group-3",
+    imgOriginal: "assets/group-3-1.png",
+    imgTranslated: "assets/group-3-2.png",
   },
   {
-    id: "team",
-    kicker: { orig: "TEAM & HIRING", trans: "チームと採用" },
-    title: { orig: "Scaling the engineering org", trans: "エンジニア組織の拡大" },
-    body: {
-      orig: "We doubled the team in 2025 while keeping ship velocity steady.",
-      trans: "出荷速度を維持しながら、2025年にチームを倍増させました。",
-    },
-    bullets: {
-      orig: ["86 engineers", "12 new hires in Q4", "3 regional hubs"],
-      trans: ["86名のエンジニア", "Q4に12名の新規採用", "3つの地域拠点"],
-    },
-    accent: "#10b981",
+    id: "group-4",
+    imgOriginal: "assets/group-4-1.png",
+    imgTranslated: "assets/group-4-2.png",
   },
   {
-    id: "vision",
-    kicker: { orig: "2030 VISION", trans: "RÜYA 2030" },
-    title: { orig: "The next billion presentations", trans: "Önümüzdeki milyar sunum" },
-    body: {
-      orig: "Making every deck feel native in every language, everywhere.",
-      trans: "Her sunumu her dilde, her yerde yerel hissettirmek.",
-    },
-    bullets: {
-      orig: ["150+ languages", "50M creators", "Real-time translation"],
-      trans: ["150+ dil", "50M içerik üreticisi", "Gerçek zamanlı çeviri"],
-    },
-    accent: "#f59e0b",
+    id: "group-5",
+    imgOriginal: "assets/group-5-1.png",
+    imgTranslated: "assets/group-5-2.png",
   },
 ];
 
 // 16:9 slide card — renders ORIGINAL or TRANSLATED side of a group
 function DemoSlide({ group, side }) {
-  const k = group.kicker[side];
-  const title = group.title[side];
-  const body = group.body[side];
-  const bullets = group.bullets[side];
+  const src = side === "trans" ? group.imgTranslated : group.imgOriginal;
+  const sideLabel = side === "trans" ? "translated" : "original";
   return (
-    <div className="demo-slide" style={{"--slide-accent": group.accent}}>
-      {/* placeholder badge — shows this is a screenshot placeholder spot */}
-      <div className="demo-slide-placeholder-tag">SLIDE PLACEHOLDER · 16:9</div>
-
-      <span className="demo-slide-kicker">{k}</span>
-      <h3 className="demo-slide-title">{title}</h3>
-      <p className="demo-slide-body">{body}</p>
-      <ul className="demo-slide-bullets">
-        {bullets.map((b, i) => <li key={i}>{b}</li>)}
-      </ul>
-      <div className="demo-slide-chart">
-        {[14,22,18,28,36,44,38,52,46].map((h,i) => (
-          <span key={i} style={{height: `${h * 1.6}px`}} />
-        ))}
-      </div>
-      <div className="demo-slide-ribbon">
-        {side === "trans" ? "TRANSLATED" : "ORIGINAL"}
-      </div>
+    <div className="demo-slide">
+      <img className="demo-slide-image" src={src} alt={`TransLay ${group.id} ${sideLabel} screenshot`} loading="eager" decoding="async" />
     </div>
   );
 }
@@ -250,11 +186,11 @@ function HeroA({ t }) {
           </Reveal>
           <Reveal delay={220}>
             <div style={{display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap"}}>
-              <a className="btn btn-primary btn-lg" href="#install" id="install">
+              <a className="btn btn-primary btn-lg" href="#install" id="install" data-fit-button-group="hero-actions">
                 {t.hero.cta}
                 <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </a>
-              <a className="btn btn-ghost btn-lg" href="#demo">
+              <a className="btn btn-ghost btn-lg" href="#demo" data-fit-button-group="hero-actions">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6"/><path d="M10 9l5 3-5 3V9z" fill="currentColor"/></svg>
                 {t.hero.secondary}
               </a>
@@ -295,11 +231,11 @@ function HeroB({ t }) {
         </Reveal>
         <Reveal delay={220}>
           <div style={{display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap"}}>
-            <a className="btn btn-primary btn-lg" href="#install-b">
+            <a className="btn btn-primary btn-lg" href="#install-b" data-fit-button-group="hero-actions">
               {t.hero.cta}
               <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </a>
-            <a className="btn btn-ghost btn-lg" href="#demo">{t.hero.secondary}</a>
+            <a className="btn btn-ghost btn-lg" href="#demo" data-fit-button-group="hero-actions">{t.hero.secondary}</a>
           </div>
         </Reveal>
       </div>

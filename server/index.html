@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://accounts.google.com">
 <link rel="preconnect" href="https://accounts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=11" />
+<link rel="stylesheet" href="styles.css?v=14" />
 <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
 <script>
 (() => {
@@ -37,14 +37,14 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
-<script src="i18n.js?v=29"></script>
+<script src="i18n.js?v=40"></script>
 <script src="js/landing-config.js?v=12"></script>
 <script src="js/landing-session.js?v=12"></script>
 <script src="js/landing-auth.js?v=12"></script>
 <script src="js/landing-checkout.js?v=5"></script>
-<script type="text/babel" src="components/shared.jsx?v=11"></script>
-<script type="text/babel" src="components/hero.jsx?v=8"></script>
-<script type="text/babel" src="components/sections.jsx?v=25"></script>
+<script type="text/babel" src="components/shared.jsx?v=13"></script>
+<script type="text/babel" src="components/hero.jsx?v=11"></script>
+<script type="text/babel" src="components/sections.jsx?v=30"></script>
 <script type="text/babel" src="components/tweaks.jsx?v=3"></script>
 
 <script type="text/babel">
@@ -104,6 +104,156 @@ function formatCreditRefundAmount(balance) {
   return `$${((pendingUnits * amountCents) / 100).toFixed(2)}`;
 }
 
+const ButtonTextFit = (() => {
+  const MIN_FONT_SIZE = 8;
+  let timerId = 0;
+  let resizeInstalled = false;
+  let observer = null;
+
+  function isVisible(element) {
+    return element.getClientRects().length > 0 && element.clientWidth > 0;
+  }
+
+  function getHorizontalPadding(element) {
+    const styles = window.getComputedStyle(element);
+    return (
+      (Number.parseFloat(styles.paddingLeft) || 0) +
+      (Number.parseFloat(styles.paddingRight) || 0)
+    );
+  }
+
+  function getAvailableContentWidth(element) {
+    return Math.max(1, element.clientWidth - getHorizontalPadding(element));
+  }
+
+  function measureContentWidth(button) {
+    const range = document.createRange();
+    range.selectNodeContents(button);
+    const width = Math.max(1, range.getBoundingClientRect().width);
+    range.detach?.();
+    return width;
+  }
+
+  function hasChineseButtonText(groupButtons) {
+    return groupButtons.some((button) => /[\u3400-\u9fff\uf900-\ufaff]/.test(button.textContent || ""));
+  }
+
+  function hasConstrainedButton(groupButtons) {
+    return groupButtons.some((button) => {
+      return measureContentWidth(button) > getAvailableContentWidth(button) + 1;
+    });
+  }
+
+  function fit() {
+    timerId = 0;
+    const buttons = Array.from(document.querySelectorAll("[data-fit-button-group]"))
+      .filter((element) => element instanceof HTMLElement && isVisible(element));
+    if (!buttons.length) {
+      return;
+    }
+
+    buttons.forEach((button) => {
+      button.style.fontSize = "";
+    });
+
+    const groups = new Map();
+    buttons.forEach((button) => {
+      const group = button.getAttribute("data-fit-button-group") || "default";
+      if (!groups.has(group)) {
+        groups.set(group, []);
+      }
+      groups.get(group).push(button);
+    });
+
+    const activeLang = String(document.documentElement.lang || "").toLowerCase();
+    const isChineseLocale = activeLang === "zh" || activeLang.startsWith("zh-");
+    groups.forEach((groupButtons) => {
+      if (isChineseLocale && hasChineseButtonText(groupButtons)) {
+        return;
+      }
+
+      if (!hasConstrainedButton(groupButtons)) {
+        return;
+      }
+
+      let targetSize = Infinity;
+      groupButtons.forEach((button) => {
+        const baseSize = Number.parseFloat(window.getComputedStyle(button).fontSize) || 14.5;
+        const availableTextWidth = getAvailableContentWidth(button);
+        const intrinsicTextWidth = measureContentWidth(button);
+        const fitSize =
+          intrinsicTextWidth > availableTextWidth + 1
+            ? Math.max(MIN_FONT_SIZE, baseSize * (availableTextWidth / intrinsicTextWidth))
+            : baseSize;
+        targetSize = Math.min(targetSize, fitSize);
+      });
+
+      if (!Number.isFinite(targetSize)) {
+        return;
+      }
+
+      let roundedSize = Math.max(MIN_FONT_SIZE, Math.floor(targetSize * 10) / 10);
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        groupButtons.forEach((button) => {
+          button.style.fontSize = `${roundedSize}px`;
+        });
+
+        let nextSize = roundedSize;
+        let hasOverflow = false;
+        groupButtons.forEach((button) => {
+          const availableTextWidth = getAvailableContentWidth(button);
+          const intrinsicTextWidth = measureContentWidth(button);
+          if (intrinsicTextWidth <= availableTextWidth + 1) {
+            return;
+          }
+          hasOverflow = true;
+          nextSize = Math.min(nextSize, roundedSize * (availableTextWidth / intrinsicTextWidth));
+        });
+
+        if (!hasOverflow) {
+          break;
+        }
+
+        const adjustedSize = Math.max(MIN_FONT_SIZE, Math.floor(nextSize * 10) / 10);
+        if (adjustedSize >= roundedSize || adjustedSize <= MIN_FONT_SIZE) {
+          roundedSize = adjustedSize;
+          groupButtons.forEach((button) => {
+            button.style.fontSize = `${roundedSize}px`;
+          });
+          break;
+        }
+        roundedSize = adjustedSize;
+      }
+    });
+  }
+
+  function schedule() {
+    if (timerId) {
+      return;
+    }
+    timerId = window.setTimeout(fit, 0);
+  }
+
+  function install(root) {
+    if (!resizeInstalled) {
+      resizeInstalled = true;
+      window.addEventListener("resize", schedule, { passive: true });
+      document.fonts?.ready?.then(schedule).catch(() => {});
+    }
+    if (observer || !root) {
+      schedule();
+      return;
+    }
+    observer = new MutationObserver(schedule);
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    schedule();
+  }
+
+  return { install, schedule };
+})();
+
+window.TransLayButtonTextFit = ButtonTextFit;
+
 function App() {
   const { lang, t, setLang } = useI18n();
   const { theme, setTheme } = useTheme();
@@ -141,6 +291,24 @@ function App() {
   const [creditActionCompletedKey, setCreditActionCompletedKey] = useState(0);
   const creditBalanceRef = useRef(authState.creditBalance);
   const pendingCreditPurchaseRef = useRef(null);
+
+  useEffect(() => {
+    window.TransLayButtonTextFit?.install(document.getElementById("app"));
+  }, []);
+
+  useEffect(() => {
+    window.TransLayButtonTextFit?.schedule();
+  }, [
+    lang,
+    t,
+    upgradeDialogMode,
+    cancelDialogPlan,
+    successDialogOpen,
+    authState,
+    authState.creditBalance,
+    checkoutNotice,
+    creditActionCompletedKey,
+  ]);
 
   useEffect(() => {
     document.title = t.meta?.document_title || "";
@@ -806,6 +974,7 @@ function App() {
                     <button
                       type="button"
                       className="btn btn-primary"
+                      data-fit-button-group="upgrade-dialog-actions"
                       onClick={handleConfirmUpgrade}
                     >
                       {t.pricing.upgrade_notice_confirm}
@@ -813,6 +982,7 @@ function App() {
                     <button
                       type="button"
                       className="btn btn-ghost"
+                      data-fit-button-group="upgrade-dialog-actions"
                       onClick={() => {
                         setUpgradeDialogMode("");
                         setUpgradeDialogMessage("");
@@ -825,6 +995,7 @@ function App() {
                   <button
                     type="button"
                     className="btn btn-primary"
+                    data-fit-button-group="upgrade-dialog-single"
                     onClick={() => {
                       setUpgradeDialogMode("");
                       setUpgradeDialogMessage("");
@@ -849,6 +1020,7 @@ function App() {
               <button
                 type="button"
                 className="btn btn-primary"
+                data-fit-button-group="cancel-dialog-actions"
                 onClick={handleConfirmCancel}
               >
                 {t.pricing.cancel_dialog_confirm}
@@ -856,6 +1028,7 @@ function App() {
               <button
                 type="button"
                 className="btn btn-ghost"
+                data-fit-button-group="cancel-dialog-actions"
                 onClick={() => setCancelDialogPlan("")}
               >
                 {t.pricing.cancel_dialog_dismiss}
@@ -873,6 +1046,7 @@ function App() {
               <button
                 type="button"
                 className="btn btn-primary"
+                data-fit-button-group="success-dialog-actions"
                 onClick={() => {
                   setSuccessDialogPlan("");
                   window.TransLayLandingCheckout?.clearPendingSuccessDialog?.();

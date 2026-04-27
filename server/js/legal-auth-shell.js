@@ -99,6 +99,7 @@
     assignText("[data-legal-nav-install]", nav.install);
     assignText("[data-legal-footer-terms]", footer.terms);
     assignText("[data-legal-footer-privacy]", footer.privacy);
+    assignText("[data-legal-footer-support-page]", footer.support || "Support");
     assignText("[data-legal-footer-copyright]", footer.copyright);
     assignText("[data-legal-back-home]", legal.back_home);
     assignText("[data-success-kicker]", successPage.kicker);
@@ -116,6 +117,11 @@
     });
     if (successPage.document_title && document.querySelector("[data-success-title]")) {
       document.title = successPage.document_title;
+    }
+
+    const supportRoot = document.querySelector("[data-support-document]");
+    if (supportRoot) {
+      renderSupportPage(supportRoot);
     }
 
     const documentRoot = document.querySelector("[data-legal-document]");
@@ -145,6 +151,49 @@
     `;
     if (typeof doc.title === "string" && doc.title.trim()) {
       document.title = doc.title;
+    }
+  }
+
+  function getSupportPageTranslations() {
+    const lang = getResolvedLang();
+    const supportTranslations = window.SUPPORT_PAGE_TRANSLATIONS || {};
+    return (
+      supportTranslations[lang] ||
+      supportTranslations[lang.split("-")[0]] ||
+      supportTranslations.en ||
+      null
+    );
+  }
+
+  function renderSupportPage(root) {
+    const support = getSupportPageTranslations();
+    if (!support) {
+      return;
+    }
+
+    const questions = Array.isArray(support.questions)
+      ? support.questions.map((item) => `
+        <div class="support-faq-item">
+          <h2>${item.q || ""}</h2>
+          <p>${item.a || ""}</p>
+        </div>
+      `).join("")
+      : "";
+
+    root.innerHTML = `
+      <h1>${support.title || "Support"}</h1>
+      <div class="meta">${support.last_updated || ""}</div>
+      <p>${support.intro || ""}</p>
+      <div class="support-actions">
+        <a class="btn btn-primary keep" href="mailto:support@example.com?subject=${encodeURIComponent(support.email_subject || "TransLay Support Request")}">${support.contact_cta || "Contact support"}</a>
+        <a class="btn btn-ghost keep" href="/pricing">${support.pricing_cta || "View pricing"}</a>
+      </div>
+      <h2>${support.faq_title || "FAQ"}</h2>
+      <div class="support-faq-list">${questions}</div>
+    `;
+
+    if (typeof support.document_title === "string" && support.document_title.trim()) {
+      document.title = support.document_title;
     }
   }
 

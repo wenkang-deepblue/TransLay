@@ -56,6 +56,11 @@ function FeaturesSection({ t }) {
 }
 
 function DemoSection({ t }) {
+  const screenshotLabels = t.demo.screenshot_labels || [
+    "Function: appending",
+    "Function: custom pages",
+    "Function: create new file",
+  ];
   return (
     <section id="demo" className="section">
       <div className="container">
@@ -67,16 +72,14 @@ function DemoSection({ t }) {
         <Reveal delay={180}>
           <div className="card" style={{padding: 20, maxWidth: 1020, margin: "0 auto"}}>
             <div style={{aspectRatio: "16/9", borderRadius: 14, overflow: "hidden", background: "linear-gradient(135deg, #eaf1ff, #f5f8ff)", border: "1px solid var(--line)", display: "grid", placeItems: "center", position: "relative"}}>
-              {/* YouTube iframe placeholder */}
-              <div style={{textAlign: "center", color: "var(--text-soft)"}}>
-                <div style={{width: 74, height: 74, borderRadius: "50%", background: "var(--accent-grad)", display: "grid", placeItems: "center", margin: "0 auto 16px", boxShadow: "0 20px 50px rgba(66,133,244,0.4)"}}>
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
-                </div>
-                <div style={{fontSize: 14, fontFamily: "monospace", opacity: 0.7}}>
-                  &lt;iframe src="https://www.youtube.com/embed/..." /&gt;
-                </div>
-                <div style={{fontSize: 12, marginTop: 6, color: "var(--text-mute)"}}>Video placeholder — replace with production demo</div>
-              </div>
+              <iframe
+                src="https://www.youtube-nocookie.com/embed/FTY-kyovdQU"
+                title="TransLay product demo"
+                style={{width: "100%", height: "100%", border: 0}}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+              />
             </div>
           </div>
         </Reveal>
@@ -86,12 +89,10 @@ function DemoSection({ t }) {
           {[1,2,3].map((i) => (
             <Reveal key={i} delay={i * 80}>
               <div className="card" style={{padding: 18}}>
-                <div style={{aspectRatio: "4/5", borderRadius: 12, overflow: "hidden", background: "linear-gradient(135deg, #f0f5ff, #fafbff)", border: "1px solid var(--line)", display: "grid", placeItems: "center"}}>
-                  <div style={{transform: "scale(0.78)", transformOrigin: "center"}}>
-                    <TransLaySidebarMock variant={i} />
-                  </div>
+                <div style={{borderRadius: 12, overflow: "hidden", background: "linear-gradient(135deg, #f0f5ff, #fafbff)", border: "1px solid var(--line)"}}>
+                  <img src={`assets/translay-${i}.png`} alt={screenshotLabels[i - 1]} style={{display: "block", width: "100%", height: "auto"}} loading="eager" decoding="sync" />
                 </div>
-                <div style={{fontSize: 13, color: "var(--text-mute)", textAlign: "center", marginTop: 10}}>Screenshot {i}</div>
+                <div style={{fontSize: 13, color: "var(--text-mute)", textAlign: "center", marginTop: 10}}>{screenshotLabels[i - 1]}</div>
               </div>
             </Reveal>
           ))}
@@ -274,6 +275,7 @@ function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onCreditsChe
           <button
             type="button"
             className="btn btn-pricing-cta"
+            data-fit-button-group="pricing-card-actions"
             style={{justifyContent: "center"}}
             disabled={buttonState.disabled}
             onClick={() => {
@@ -299,6 +301,7 @@ function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onCreditsChe
                 <button
                   type="button"
                   className="btn btn-pricing-cta payg-action-btn"
+                  data-fit-button-group="pricing-card-actions"
                   style={{justifyContent: "center"}}
                   onClick={() => setCreditPanel("purchase")}
                 >
@@ -307,6 +310,7 @@ function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onCreditsChe
                 <button
                   type="button"
                   className="btn btn-ghost payg-action-btn"
+                  data-fit-button-group="pricing-card-actions"
                   style={{justifyContent: "center"}}
                   disabled={refundableUnits <= 0}
                   onClick={() => setCreditPanel("refund")}
@@ -345,6 +349,7 @@ function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onCreditsChe
                   <button
                     type="button"
                     className="btn btn-ghost payg-action-btn"
+                    data-fit-button-group="pricing-credit-panel-actions"
                     style={{justifyContent: "center"}}
                     onClick={() => setCreditPanel("")}
                   >
@@ -353,6 +358,7 @@ function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onCreditsChe
                   <button
                     type="button"
                     className="btn btn-pricing-cta payg-action-btn"
+                    data-fit-button-group="pricing-credit-panel-actions"
                     style={{justifyContent: "center"}}
                     disabled={creditPanel === "purchase" ? !purchaseQuantity : !refundableQuantity}
                     onClick={() => {
@@ -374,7 +380,7 @@ function PriceCard({ plan, t, delay = 0, highlight, onPlanCheckout, onCreditsChe
             )}
           </div>
         ) : (
-          <a href="#install" className="btn btn-pricing-cta" style={{justifyContent: "center"}}>{data.cta}</a>
+          <a href="#install" className="btn btn-pricing-cta" data-fit-button-group="pricing-card-actions" style={{justifyContent: "center"}}>{data.cta}</a>
         )}
       </div>
     </Reveal>
@@ -495,7 +501,7 @@ function CTASection({ t }) {
           <div className="card" style={{padding: "60px 40px", textAlign: "center", background: "linear-gradient(135deg, rgba(66,133,244,0.08), rgba(26,115,232,0.04))", border: "1px solid rgba(66,133,244,0.2)", maxWidth: 900, margin: "0 auto"}}>
             <h2 className="section-title" style={{margin: "0 0 12px"}}>{t.cta.title}</h2>
             <p style={{color: "var(--text-soft)", fontSize: 17, margin: "0 0 28px"}}>{t.cta.subtitle}</p>
-            <a className="btn btn-primary btn-lg" href="#install">
+            <a className="btn btn-primary btn-lg" href="#install" data-fit-button-group="final-cta-actions">
               {t.cta.button}
               <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </a>
