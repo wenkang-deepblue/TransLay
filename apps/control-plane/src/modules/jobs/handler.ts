@@ -911,11 +911,13 @@ function previewSlidesQuota(
     return null;
   }
 
-  if (selected.length <= availableUnits) {
+  if (!Number.isFinite(availableUnits) || selected.length <= availableUnits) {
     return {
       ok: true,
       required_units: selected.length,
-      available_units: Math.max(0, Math.floor(availableUnits)),
+      available_units: Number.isFinite(availableUnits)
+        ? Math.max(0, Math.floor(availableUnits))
+        : selected.length,
       accepted_range_expression: rangeExpression,
     };
   }
@@ -1006,7 +1008,7 @@ export function previewJobHandler(pool: Pool) {
       getHostUsed(usage, "slides")
     );
     const remaining = planRemaining + credits.slides_balance;
-    if (remaining <= 0) {
+    if (Number.isFinite(remaining) && remaining <= 0) {
       sendError(res, "QUOTA_EXCEEDED");
       return;
     }
@@ -1097,7 +1099,7 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
     const remaining =
       getRemainingQuota(sub.plan_type, body.host_type, getHostUsed(usage, body.host_type)) +
       creditBalance;
-    if (remaining <= 0) {
+    if (Number.isFinite(remaining) && remaining <= 0) {
       sendError(res, "QUOTA_EXCEEDED");
       return;
     }

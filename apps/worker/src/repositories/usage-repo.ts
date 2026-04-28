@@ -84,6 +84,7 @@ export async function getActivePlanForUser(
      WHERE user_id = $1
      ORDER BY
        CASE WHEN status IN ('active', 'grace_period') THEN 0 ELSE 1 END,
+       CASE WHEN plan_type = 'super' THEN 0 ELSE 1 END,
        CASE WHEN plan_type != 'free' THEN 0 ELSE 1 END,
        updated_at DESC
      LIMIT 1`,

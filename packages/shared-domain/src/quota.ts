@@ -18,6 +18,11 @@ const PLAN_LIMITS: Record<PlanType, QuotaLimits> = {
   free: { slides: 20, docs_pages: 5, sheets_cells: 2000 },
   pro_monthly: { slides: 300, docs_pages: 100, sheets_cells: 40000 },
   pro_yearly: { slides: 500, docs_pages: 200, sheets_cells: 100000 },
+  super: {
+    slides: Number.POSITIVE_INFINITY,
+    docs_pages: Number.POSITIVE_INFINITY,
+    sheets_cells: Number.POSITIVE_INFINITY,
+  },
 };
 
 /** Max jobs per billing period for free-tier users. */

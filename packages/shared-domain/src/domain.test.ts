@@ -36,6 +36,28 @@ test("getQuotaLimits matches the frozen free-tier caps", () => {
   });
 });
 
+test("super entitlement stays active with unlimited host quotas", () => {
+  assert.deepEqual(
+    computeEntitlement({
+      plan_type: "super",
+      subscription_status: "active",
+      cancel_at_period_end: false,
+      current_period_end: new Date("2099-12-31T23:59:59Z"),
+    }),
+    {
+      access: "super",
+      active: true,
+      cancellation_notice: null,
+    }
+  );
+
+  assert.deepEqual(getQuotaLimits("super"), {
+    slides: Number.POSITIVE_INFINITY,
+    docs_pages: Number.POSITIVE_INFINITY,
+    sheets_cells: Number.POSITIVE_INFINITY,
+  });
+});
+
 test("billingPeriodKey uses UTC boundaries", () => {
   assert.equal(billingPeriodKey(new Date("2026-01-31T23:59:59-08:00")), "2026-02");
 });

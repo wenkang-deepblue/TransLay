@@ -166,6 +166,7 @@ window.TRANSLATIONS = {
       tagline: "LLM translation for Google Slides™.",
       terms: "Terms of Service",
       privacy: "Privacy Policy",
+      support: "Support",
       support_subject: "TransLay Technical Support Request",
       copyright: "© 2026 example.com All rights reserved."
     },
@@ -535,6 +536,7 @@ window.TRANSLATIONS = {
       tagline: "Outil de traduction LLM pour Google Slides™.",
       terms: "Conditions d'utilisation",
       privacy: "Politique de confidentialité",
+      support: "Assistance",
       support_subject: "Demande d'assistance technique TransLay",
       copyright: "© 2026 example.com Tous droits réservés."
     },
@@ -904,6 +906,7 @@ window.TRANSLATIONS = {
       tagline: "LLM-Übersetzungstool für Google Slides™.",
       terms: "Nutzungsbedingungen",
       privacy: "Datenschutzerklärung",
+      support: "Support",
       support_subject: "TransLay Support-Anfrage",
       copyright: "© 2026 example.com Alle Rechte vorbehalten."
     },
@@ -1273,6 +1276,7 @@ window.TRANSLATIONS = {
       tagline: "Strumento di traduzione LLM per Google Slides™.",
       terms: "Termini di servizio",
       privacy: "Informativa sulla privacy",
+      support: "Supporto",
       support_subject: "Richiesta di supporto tecnico TransLay",
       copyright: "© 2026 example.com Tutti i diritti riservati."
     },
@@ -1642,6 +1646,7 @@ window.TRANSLATIONS = {
       tagline: "Herramienta de traducción LLM para Google Slides™.",
       terms: "Condiciones de servicio",
       privacy: "Política de privacidad",
+      support: "Soporte",
       support_subject: "Solicitud de soporte técnico de TransLay",
       copyright: "© 2026 example.com Todos los derechos reservados."
     },
@@ -2011,6 +2016,7 @@ window.TRANSLATIONS = {
       tagline: "Tradução LLM criada para Google Slides™.",
       terms: "Termos de Serviço",
       privacy: "Política de Privacidade",
+      support: "Suporte",
       support_subject: "Solicitação de suporte técnico TransLay",
       copyright: "© 2026 example.com. Todos os direitos reservados."
     },
@@ -2380,6 +2386,7 @@ window.TRANSLATIONS = {
       tagline: "LLM-переводчик, созданный для Google Slides™.",
       terms: "Условия использования",
       privacy: "Политика конфиденциальности",
+      support: "Поддержка",
       support_subject: "Запрос технической поддержки TransLay",
       copyright: "© 2026 example.com. Все права защищены."
     },
@@ -2749,6 +2756,7 @@ window.TRANSLATIONS = {
       tagline: "LLM-vertaaltool voor Google Slides™.",
       terms: "Servicevoorwaarden",
       privacy: "Privacybeleid",
+      support: "Ondersteuning",
       support_subject: "TransLay-verzoek om technische support",
       copyright: "© 2026 example.com Alle rechten voorbehouden."
     },
@@ -3118,6 +3126,7 @@ window.TRANSLATIONS = {
       tagline: "LLM-översättning byggd för Google Slides™.",
       terms: "Användarvillkor",
       privacy: "Integritetspolicy",
+      support: "Support",
       support_subject: "Begäran om teknisk support för TransLay",
       copyright: "© 2026 example.com Alla rättigheter förbehållna."
     },
@@ -3322,332 +3331,369 @@ window.TRANSLATIONS = {
     }
   },
   el: {
+    meta: {
+      document_title: "TransLay — εργαλείο LLM μετάφρασης για Google Slides™"
+    },
     nav: {
       home: "Αρχική",
-      features: "Δυνατότητες",
+      features: "Λειτουργίες",
       pricing: "Τιμές",
       faq: "Συχνές ερωτήσεις",
-      install: "Εγκατάσταση"
+      install: "Εγκατάσταση πρόσθετου"
     },
     hero: {
-      badge: "Τώρα στο Google Workspace™",
-      title1: "Μεταφράστε Slides.",
-      title2: "Διατηρήστε τα πάντα.",
-      subtitle: "Υψηλής ποιότητας μετάφραση LLM για Google Slides™ — γραμματοσειρές, στυλ και διάταξη παραμένουν ακέραια.",
-      cta: "Εγκατάσταση",
-      cta_sub: "Δωρεάν — 20 διαφάνειες",
+      badge: "Τώρα διαθέσιμο στο Google Workspace™",
+      title1: "Μεταφράστε Slides",
+      title2: "Διατηρήστε τα πάντα",
+      subtitle: "Υψηλής ποιότητας AI μετάφραση για Google Slides™ που διατηρεί κάθε γραμματοσειρά, στυλ και διάταξη.",
+      cta: "Εγκατάσταση πρόσθετου",
+      cta_sub: "Δωρεάν — 20 διαφάνειες δώρο",
       secondary: "Δείτε demo"
     },
-    trust: "Trusted by teams at",
+    trust: "Το εμπιστεύονται ομάδες",
     features: {
-      kicker: "Features",
-      title: "Built for presentations that matter",
-      subtitle: "TransLay was designed from the ground up to respect the craft of your deck.",
-      f1_title: "AI-powered translation quality",
-      f1_body: "Context-aware translations that read at a professional human level.",
-      f2_title: "Pixel-perfect layout",
-      f2_body: "Fonts, colors, spacing, and animations stay true to the original, with little to no reflow.",
-      f3_title: "Describe the target language naturally",
-      f3_body: "Type \"Icelandic\" or \"Thai\" — TransLay understands.",
-      f4_title: "Two output modes",
-      f4_body: "Create a new deck, or append translated slides after each original.",
-      f5_title: "One click inside Slides",
-      f5_body: "No uploads or exports. Open it directly in the Google Slides™ sidebar.",
-      f6_title: "Stable for real-world decks",
-      f6_body: "Support a single Google Slides™ deck with up to 50 slides, with stable background processing."
+      kicker: "Λειτουργίες",
+      title: "Φτιαγμένο για σημαντικές παρουσιάσεις",
+      subtitle: "Το TransLay σχεδιάστηκε από τη βάση του για να σέβεται τη δουλειά πίσω από κάθε παρουσίασή σας.",
+      f1_title: "Ποιότητα μετάφρασης με AI",
+      f1_body: "Μεταφράσεις με κατανόηση συμφραζομένων, σε επαγγελματικό ανθρώπινο επίπεδο.",
+      f2_title: "Διατήρηση διάταξης σε επίπεδο pixel",
+      f2_body: "Γραμματοσειρές, χρώματα, αποστάσεις και animations μένουν όπως στο πρωτότυπο, με ελάχιστες διορθώσεις.",
+      f3_title: "Περιγράψτε φυσικά τη γλώσσα στόχο",
+      f3_body: "Πληκτρολογήστε ισλανδικά ή ταϊλανδικά — το TransLay καταλαβαίνει.",
+      f4_title: "Δύο τρόποι εξόδου",
+      f4_body: "Δημιουργήστε νέο μεταφρασμένο αρχείο ή προσθέστε μετάφραση μετά από κάθε πρωτότυπη διαφάνεια.",
+      f5_title: "Ένα κλικ μέσα στα Slides",
+      f5_body: "Χωρίς μεταφορτώσεις ή εξαγωγές. Ανοίγει απευθείας στην πλαϊνή μπάρα του Google Slides™.",
+      f6_title: "Άνετα και για μεγάλες παρουσιάσεις",
+      f6_body: "Υποστηρίζει ένα αρχείο Google Slides™ με έως 50 διαφάνειες και σταθερή επεξεργασία στο παρασκήνιο."
     },
     demo: {
-      kicker: "See it in action",
-      title: "Product demo",
+      kicker: "Στην πράξη",
+      title: "Demo προϊόντος",
       subtitle: "",
-      screenshot_labels: ["Λειτουργία: προσθήκη", "Λειτουργία: προσαρμοσμένες σελίδες", "Λειτουργία: δημιουργία νέου αρχείου"]
+      screenshot_labels: ["Λειτουργία: προσθήκη μετάφρασης", "Λειτουργία: προσαρμοσμένες σελίδες", "Λειτουργία: δημιουργία νέου αρχείου"]
     },
     pricing: {
-      kicker: "Pricing",
-      title: "Simple, transparent pricing",
-      subtitle: "Start free, upgrade anytime, no subscription required, and pay only for what you need.",
-      free_name: "Free",
+      kicker: "Τιμές",
+      title: "Απλή και διαφανής τιμολόγηση",
+      subtitle: "Ξεκινήστε δωρεάν, αναβαθμίστε όποτε θέλετε, χωρίς υποχρεωτική συνδρομή και πληρώστε μόνο όταν χρειάζεται.",
+      free_name: "Δωρεάν",
       free_price: "$0",
-      free_sub: "One-time, on install",
-      free_f1: "20 slides total",
-      free_f2: "All languages",
-      free_f3: "Full layout preservation",
-      free_f4: "Email support",
-      free_cta: "Install free",
-      monthly_name: "Monthly",
+      free_sub: "Εφάπαξ δώρο μετά την εγκατάσταση",
+      free_f1: "20 διαφάνειες συνολικά",
+      free_f2: "Όλες οι γλώσσες",
+      free_f3: "Πλήρης διατήρηση διάταξης",
+      free_f4: "Υποστήριξη μέσω email",
+      free_cta: "Δωρεάν εγκατάσταση",
+      monthly_name: "Μηνιαίο",
       monthly_price: "$9.99",
-      monthly_per: "/month",
-      monthly_sub: "Cancel anytime",
-      monthly_f1: "300 slides / month",
-      monthly_f2: "All languages",
-      monthly_f3: "Priority translation speed",
-      monthly_f4: "Priority support",
-      monthly_cta: "Get Monthly",
-      cancel_cta: "Cancel subscription",
-      cancel_scheduled_cta: "Cancellation scheduled",
-      resume_monthly_cta: "Resume Monthly",
-      resume_yearly_cta: "Resume Annual commitment",
-      upgrade_yearly_cta: "Upgrade to Annual commitment",
-      yearly_badge: "Best value",
-      yearly_name: "Annual commitment",
+      monthly_per: "/μήνα",
+      monthly_sub: "Ακύρωση οποιαδήποτε στιγμή",
+      monthly_f1: "300 διαφάνειες / μήνα",
+      monthly_f2: "Όλες οι γλώσσες",
+      monthly_f3: "Προτεραιότητα στην ταχύτητα μετάφρασης",
+      monthly_f4: "Προτεραιότητα στην υποστήριξη",
+      monthly_cta: "Μηνιαία συνδρομή",
+      cancel_cta: "Ακύρωση συνδρομής",
+      cancel_scheduled_cta: "Η ακύρωση έχει προγραμματιστεί",
+      resume_monthly_cta: "Συνέχιση μηνιαίας συνδρομής",
+      resume_yearly_cta: "Συνέχιση ετήσιας δέσμευσης",
+      upgrade_yearly_cta: "Αναβάθμιση σε ετήσια δέσμευση",
+      yearly_badge: "Καλύτερη αξία",
+      yearly_name: "Ετήσια δέσμευση",
       yearly_price: "$119.99",
-      yearly_per: "/year",
-      yearly_sub: "Save 40% vs monthly",
-      yearly_f1: "500 slides / month",
-      yearly_f2: "All languages",
-      yearly_f3: "Priority translation speed",
-      yearly_f4: "Priority support",
-      yearly_cta: "Get Annual commitment",
-      subscription_success_title: "Thanks for subscribing!",
-      subscription_success_body_monthly: "You have successfully subscribed to TransLay on the monthly plan. Please sign in to Google Slides™. If TransLay is already open in the sidebar, close it, then reopen TransLay from Extensions. Your subscription status will update automatically.",
-      subscription_success_body_yearly: "You have successfully subscribed to TransLay on the annual commitment plan. Please sign in to Google Slides™. If TransLay is already open in the sidebar, close it, then reopen TransLay from Extensions. Your subscription status will update automatically.",
+      yearly_per: "/έτος",
+      yearly_sub: "Εξοικονόμηση 40% έναντι του μηνιαίου",
+      yearly_f1: "500 διαφάνειες / μήνα",
+      yearly_f2: "Όλες οι γλώσσες",
+      yearly_f3: "Προτεραιότητα στην ταχύτητα μετάφρασης",
+      yearly_f4: "Προτεραιότητα στην υποστήριξη",
+      yearly_cta: "Συνδρομή με ετήσια δέσμευση",
+      subscription_success_title: "Ευχαριστούμε για τη συνδρομή!",
+      subscription_success_body_monthly: "Έχετε εγγραφεί επιτυχώς στο TransLay με μηνιαία συνδρομή. Συνδεθείτε στο Google Slides™. Αν το TransLay είναι ήδη ανοιχτό στην πλαϊνή μπάρα, κλείστε το και ανοίξτε το ξανά από τις Επεκτάσεις. Η κατάσταση της συνδρομής σας θα ενημερωθεί αυτόματα.",
+      subscription_success_body_yearly: "Έχετε εγγραφεί επιτυχώς στο TransLay με ετήσια δέσμευση. Συνδεθείτε στο Google Slides™. Αν το TransLay είναι ήδη ανοιχτό στην πλαϊνή μπάρα, κλείστε το και ανοίξτε το ξανά από τις Επεκτάσεις. Η κατάσταση της συνδρομής σας θα ενημερωθεί αυτόματα.",
       subscription_success_confirm: "OK",
-      cancel_dialog_title: "Cancel subscription?",
-      cancel_dialog_body_monthly: "After cancellation, you can keep using the current subscription until the end of the current billing period. Unused time is non-refundable. The cancellation takes effect at the start of the next billing period.",
-      cancel_dialog_body_yearly: "After cancellation, you can keep using the current annual commitment subscription until the end of the current annual term. Unused time is non-refundable. Annual commitment plans are generally non-refundable. First-time annual commitment customers may request a one-time refund within 14 days of purchase only if no pages have been used since that payment. The cancellation takes effect in the next subscription term.",
-      cancel_dialog_confirm: "Confirm cancellation",
-      cancel_dialog_dismiss: "Keep subscription",
-      opening_checkout_notice: "Opening secure checkout...",
-      purchase_received_notice: "Purchase received. Confirming your subscription state...",
-      subscription_confirmation_delayed_notice: "Purchase received. Subscription confirmation may take a few seconds.",
-      sign_in_required_notice: "Sign in with Google before starting checkout.",
-      payment_failed_notice: "Payment was not completed. Please try again or use another payment method.",
-      checkout_unavailable_notice: "Unable to complete this billing action right now.",
-      subscription_change_pending_notice: "Updating your subscription...",
-      cancellation_redirect_notice: "Opening Paddle's secure cancellation page...",
-      cancellation_scheduled_notice: "Your subscription has been canceled. You can keep using TransLay until {date}.",
-      cancellation_failed_notice: "Unable to schedule cancellation right now.",
-      subscription_resumed_notice: "Your subscription has been resumed.",
-      upgrade_success_notice: "Your annual commitment upgrade is complete. The one-time upgrade charge was {amount}.",
-      upgrade_notice_title: "Friendly reminder",
-      upgrade_notice_body: "Upgrading to annual commitment will credit your current monthly payment and charge only the upgrade difference of {amount}.",
-      upgrade_notice_confirm: "Agree",
-      upgrade_notice_cancel: "Cancel",
-      upgrade_processing_title: "Processing payment...",
-      upgrade_processing_body: "Please keep this page open while Paddle confirms your upgrade.",
-      upgrade_completed_title: "Upgrade complete",
-      upgrade_completed_body: "You have upgraded to the annual commitment subscription. Valid until {date}.",
+      cancel_dialog_title: "Ακύρωση συνδρομής;",
+      cancel_dialog_body_monthly: "Μετά την ακύρωση, μπορείτε να συνεχίσετε να χρησιμοποιείτε την τρέχουσα συνδρομή έως το τέλος της τρέχουσας περιόδου χρέωσης. Το αχρησιμοποίητο διάστημα δεν επιστρέφεται. Η ακύρωση ισχύει από την επόμενη περίοδο χρέωσης.",
+      cancel_dialog_body_yearly: "Μετά την ακύρωση, μπορείτε να συνεχίσετε να χρησιμοποιείτε την τρέχουσα ετήσια δέσμευση έως το τέλος της ετήσιας περιόδου. Το αχρησιμοποίητο διάστημα δεν επιστρέφεται. Τα πλάνα ετήσιας δέσμευσης κατά κανόνα δεν επιστρέφονται· οι πελάτες που αγοράζουν ετήσια δέσμευση για πρώτη φορά μπορούν να ζητήσουν μία εφάπαξ επιστροφή εντός 14 ημερών μόνο αν από την πληρωμή αυτή έχουν χρησιμοποιηθεί 0 σελίδες. Η ακύρωση ισχύει στην επόμενη περίοδο συνδρομής.",
+      cancel_dialog_confirm: "Επιβεβαίωση: έναρξη ακύρωσης",
+      cancel_dialog_dismiss: "Άκυρο: διατήρηση συνδρομής",
+      opening_checkout_notice: "Άνοιγμα ασφαλούς checkout...",
+      purchase_received_notice: "Το αποτέλεσμα αγοράς ελήφθη. Επιβεβαιώνουμε την κατάσταση της συνδρομής σας...",
+      credits_purchase_received_notice: "Το αποτέλεσμα αγοράς credits ελήφθη. Επιβεβαιώνουμε το υπόλοιπό σας...",
+      credits_balance_label: "Υπόλοιπο pay-as-you-go credits",
+      credits_refundable_label: "Επιστρέψιμα credits",
+      credits_quantity_label: "Σελίδες για αγορά",
+      credits_minimum_quantity_notice: "Το κανάλι πληρωμής έχει ελάχιστη χρέωση {amount}. Η τρέχουσα ελάχιστη αγορά είναι {min} σελίδες.",
+      credits_refund_quantity_label: "Σελίδες για επιστροφή",
+      credits_refund_in_progress_label: "Επιστροφή σε εξέλιξη",
+      credits_purchase_cta: "Αγορά",
+      credits_refund_cta: "Επιστροφή",
+      credits_cancel_cta: "Άκυρο",
+      credits_refund_pending_notice: "Υποβολή αιτήματος επιστροφής...",
+      credits_refund_submitted_notice: "Το αίτημα επιστροφής υποβλήθηκε.",
+      credits_refund_provider_pending_notice: "Η επιστροφή υποβλήθηκε και η πλατφόρμα πληρωμών την επεξεργάζεται.",
+      credits_refund_processing_banner: "Στείλαμε το αίτημα επιστροφής σας στην πλατφόρμα πληρωμών για επεξεργασία. Μπορεί να χρειαστούν έως 30 λεπτά. Θα λάβετε αργότερα email ειδοποίησης από την πλατφόρμα πληρωμών, οπότε ελέγξτε τα εισερχόμενά σας. Αν έχετε ερωτήσεις, στείλτε email στο support@example.com. Credits σε επιστροφή: {units}. Εκτιμώμενη επιστροφή: {amount}.",
+      subscription_confirmation_delayed_notice: "Το αποτέλεσμα αγοράς ελήφθη. Η επιβεβαίωση της συνδρομής μπορεί να χρειαστεί λίγα δευτερόλεπτα.",
+      sign_in_required_notice: "Συνδεθείτε με Google πριν ξεκινήσετε τη συνδρομή.",
+      payment_failed_notice: "Η πληρωμή δεν ολοκληρώθηκε. Δοκιμάστε ξανά ή χρησιμοποιήστε άλλη μέθοδο πληρωμής.",
+      checkout_unavailable_notice: "Δεν είναι δυνατή η ολοκλήρωση αυτής της ενέργειας συνδρομής αυτή τη στιγμή.",
+      subscription_change_pending_notice: "Ενημερώνουμε τη συνδρομή σας...",
+      cancellation_redirect_notice: "Άνοιγμα της ασφαλούς σελίδας ακύρωσης της Paddle...",
+      cancellation_scheduled_notice: "Η συνδρομή σας ακυρώθηκε με επιτυχία. Μπορείτε να τη χρησιμοποιείτε κανονικά έως {date}.",
+      cancellation_failed_notice: "Δεν είναι δυνατός ο προγραμματισμός ακύρωσης αυτή τη στιγμή.",
+      subscription_resumed_notice: "Η συνδρομή σας συνεχίστηκε.",
+      upgrade_success_notice: "Η αναβάθμιση σε ετήσια δέσμευση ολοκληρώθηκε. Η εφάπαξ χρέωση αναβάθμισης ήταν {amount}.",
+      upgrade_notice_title: "Υπενθύμιση",
+      upgrade_notice_body: "Κατά την αναβάθμιση σε ετήσια δέσμευση, το σύστημα συμψηφίζει την τρέχουσα μηνιαία πληρωμή και πληρώνετε μόνο τη διαφορά αναβάθμισης {amount}.",
+      upgrade_notice_confirm: "Συμφωνώ",
+      upgrade_notice_cancel: "Άκυρο",
+      upgrade_processing_title: "Επεξεργασία πληρωμής...",
+      upgrade_processing_body: "Η Paddle επιβεβαιώνει την αναβάθμισή σας. Μην κλείσετε αυτή τη σελίδα.",
+      upgrade_completed_title: "Η αναβάθμιση ολοκληρώθηκε",
+      upgrade_completed_body: "Έχετε αναβαθμιστεί σε συνδρομή ετήσιας δέσμευσης. Ισχύει έως: {date}.",
       upgrade_completed_confirm: "OK",
-      upgrade_failed_title: "Upgrade not completed",
+      upgrade_failed_title: "Η αναβάθμιση δεν ολοκληρώθηκε",
       upgrade_failed_confirm: "OK",
-      payg_name: "Pay as you go",
+      payg_name: "Πληρωμή ανά χρήση",
       payg_price: "$0.04",
-      payg_per: "/slide",
-      payg_sub: "No commitment, no monthly cap",
-      payg_f1: "Unlimited volume",
-      payg_f2: "All languages",
-      payg_f3: "Rollover credits",
-      payg_f4: "Standard support",
-      payg_cta: "Buy credits"
+      payg_per: "/σελίδα",
+      payg_sub: "Χωρίς δέσμευση, χωρίς μηνιαίο όριο",
+      payg_f1: "Απεριόριστη χρήση",
+      payg_f2: "Τα αχρησιμοποίητα credits επιστρέφονται οποτεδήποτε",
+      payg_f3: "Τα credits μπορούν να συσσωρεύονται",
+      payg_f4: "Σημείωση: λόγω περιορισμών της πλατφόρμας πληρωμών, η ελάχιστη αγορά είναι 18 σελίδες ανά φορά",
+      payg_cta: "Αγορά credits",
+      payg_available_credits_label: "Υπόλοιπο credits",
+      payg_buy_entry_cta: "Αγορά pay-as-you-go credits",
+      payg_refund_entry_cta: "Επιστροφή αχρησιμοποίητων credits"
     },
     faq: {
-      kicker: "FAQ",
-      title: "Questions, answered.",
-      q1: "How do I install TransLay?",
-      a1: "Search \"TransLay\" in the Google Workspace Marketplace and click Install. Grant access to Google Slides™, and the add-on will appear under Extensions → TransLay inside any presentation.",
-      q2: "How do I use it after installing?",
-      a2: "Open a Google Slides™ deck, go to Extensions → TransLay → Start. Pick your target language (preset or type any language in natural language), choose whether to create a new deck or append translated slides, and hit Translate.",
-      q3: "What's your refund policy?",
-      a3: "Monthly subscriptions are non-refundable. Annual commitment plans are also non-refundable, except that first-time annual commitment customers may request a one-time refund within 14 days of purchase if no pages have been used since that payment. Unused pay-as-you-go credits may be refunded in full; used credits are non-refundable. Refunds may also be issued for billing errors, unauthorized payments, major service failures, or where required by law.",
-      q4: "How do I get technical support?",
-      a4: "Every translation job has a Task ID you can copy from the sidebar. Email it to support@example.com and we typically respond within 24 hours. Priority plans get a 4-hour SLA.",
-      q5: "What is the maximum document size supported?",
-      a5: "TransLay currently supports a single Google Slides™ deck with up to 50 slides, which covers the vast majority of everyday usage scenarios.",
-      q6: "Does TransLay reproduce the original layout and styling 100% exactly?",
-      a6: "Not always. Different languages can require very different text lengths for the same meaning. TransLay uses AI and layout-preservation techniques to restore the original styling and structure as closely as possible, but 100% fidelity cannot be guaranteed. You can use the free 20-slide quota with your own real deck to evaluate the result before purchasing.",
-      q7: "How do I contact technical support?",
-      a7: "If you need support or feedback, please contact us: support@example.com"
+      kicker: "Συχνές ερωτήσεις",
+      title: "Οι απαντήσεις που χρειάζεστε.",
+      q1: "Πώς εγκαθιστώ το TransLay;",
+      a1: "Αναζητήστε «TransLay» στο Google Workspace Marketplace και πατήστε Εγκατάσταση. Δώστε πρόσβαση στο Google Slides™ και το πρόσθετο θα εμφανιστεί στο Επεκτάσεις → TransLay μέσα σε κάθε παρουσίαση.",
+      q2: "Πώς το χρησιμοποιώ μετά την εγκατάσταση;",
+      a2: "Ανοίξτε ένα αρχείο Google Slides™ και επιλέξτε Επεκτάσεις → TransLay → Έναρξη. Επιλέξτε γλώσσα στόχο, από τις προεπιλογές ή με φυσική γλώσσα, επιλέξτε νέα παρουσίαση ή προσθήκη μετάφρασης στο αρχικό αρχείο και πατήστε Μετάφραση.",
+      q3: "Ποια είναι η πολιτική επιστροφών;",
+      a3: "Οι μηνιαίες συνδρομές κατά κανόνα δεν επιστρέφονται. Τα πλάνα ετήσιας δέσμευσης επίσης κατά κανόνα δεν επιστρέφονται· οι πελάτες που αγοράζουν ετήσια δέσμευση για πρώτη φορά μπορούν να ζητήσουν μία εφάπαξ επιστροφή εντός 14 ημερών, αν από την πληρωμή αυτή έχουν χρησιμοποιηθεί 0 σελίδες. Τα αχρησιμοποίητα pay-as-you-go credits μπορούν να επιστραφούν πλήρως, ενώ τα χρησιμοποιημένα credits δεν επιστρέφονται. Σε σφάλμα χρέωσης, μη εξουσιοδοτημένη πληρωμή, σοβαρή αστοχία υπηρεσίας ή νομική απαίτηση, επεξεργαζόμαστε επιστροφές σύμφωνα με τους ισχύοντες κανόνες.",
+      q4: "Πώς λαμβάνω τεχνική υποστήριξη;",
+      a4: "Κάθε εργασία μετάφρασης έχει Task ID που μπορείτε να αντιγράψετε από την πλαϊνή μπάρα. Στείλτε το στο support@example.com. Συνήθως απαντάμε μέσα σε 24 ώρες. Τα πλάνα προτεραιότητας έχουν απόκριση 4 ωρών.",
+      q5: "Ποιο είναι το μέγιστο μέγεθος εγγράφου;",
+      a5: "Το TransLay υποστηρίζει προς το παρόν ένα αρχείο Google Slides™ με έως 50 διαφάνειες, καλύπτοντας τη μεγάλη πλειονότητα καθημερινών περιπτώσεων χρήσης.",
+      q6: "Αναπαράγει το TransLay 100% τη διάταξη και το στυλ του αρχικού εγγράφου;",
+      a6: "Όχι πάντα. Κάθε γλώσσα μπορεί να χρειάζεται πολύ διαφορετικό μήκος κειμένου για την ίδια σημασία. Το TransLay χρησιμοποιεί AI και τεχνικές διατήρησης διάταξης για να αποδώσει όσο γίνεται καλύτερα το αρχικό στυλ και τη δομή, αλλά δεν μπορεί να εγγυηθεί 100% πιστότητα. Μπορείτε να χρησιμοποιήσετε τις 20 δωρεάν σελίδες με ένα πραγματικό δικό σας αρχείο πριν αποφασίσετε να αγοράσετε.",
+      q7: "Πώς επικοινωνώ με την τεχνική υποστήριξη;",
+      a7: "Αν χρειάζεστε υποστήριξη ή θέλετε να στείλετε σχόλια, επικοινωνήστε μαζί μας: support@example.com"
     },
     cta: {
-      title: "Μεταφράστε τις πρώτες 20 διαφάνειες δωρεάν.",
-      subtitle: "Εγκατάσταση σε 30 δευτερόλεπτα.",
-      button: "Εγκατάσταση"
+      title: "Μεταφράστε δωρεάν τις πρώτες 20 διαφάνειες",
+      subtitle: "Εγκαταστήστε με ένα κλικ από το Google Workspace Marketplace και χρησιμοποιήστε αμέσως το δωρεάν όριό σας.",
+      button: "Εγκατάσταση πρόσθετου"
     },
     footer: {
-      tagline: "Μετάφραση LLM για Google Slides™.",
-      terms: "Όροι χρήσης",
+      tagline: "LLM μετάφραση φτιαγμένη για Google Slides™.",
+      terms: "Όροι υπηρεσίας",
       privacy: "Πολιτική απορρήτου",
+      support: "Υποστήριξη",
+      support_subject: "Αίτημα τεχνικής υποστήριξης TransLay",
       copyright: "© 2026 example.com Με επιφύλαξη παντός δικαιώματος."
     },
     legal: {
-      back_home: "Back to home"
+      back_home: "Επιστροφή στην αρχική"
+    },
+    successPage: {
+      document_title: "Η αγορά ολοκληρώθηκε — TransLay",
+      kicker: "Κατάσταση πληρωμής",
+      title: "Η αγορά ολοκληρώθηκε",
+      body: "Λάβαμε την πληρωμή σας. Αν ξεκινήσατε αυτή τη ροή από το πρόσθετο, μπορείτε να επιστρέψετε στο Google Slides™ και να ανανεώσετε εκεί την κατάσταση των δικαιωμάτων σας.",
+      back_pricing: "Επιστροφή στις τιμές",
+      go_home: "Προς αρχική"
     },
     settings: {
       title: "Ρυθμίσεις",
       theme: "Θέμα",
-      light: "Φωτεινό",
-      dark: "Σκοτεινό",
+      light: "Ανοιχτό",
+      dark: "Σκούρο",
       system: "Σύστημα",
       language: "Γλώσσα"
     },
     auth: {
-      loading: "Checking session...",
-      consuming_ticket: "Signing you in...",
-      signing_in: "Completing sign-in...",
-      sign_out: "Sign out",
-      signed_in_as: "Signed in as",
-      plan_free: "Free",
-      plan_paid: "Paid",
-      google_client_missing: "Google sign-in is not configured yet."
+      loading: "Έλεγχος συνεδρίας...",
+      consuming_ticket: "Σύνδεση σε εξέλιξη...",
+      signing_in: "Ολοκλήρωση σύνδεσης...",
+      sign_out: "Αποσύνδεση",
+      signed_in_as: "Τρέχων λογαριασμός",
+      plan_free: "Δωρεάν πλάνο",
+      plan_paid: "Πληρωμένο πλάνο",
+      google_client_missing: "Η σύνδεση Google δεν έχει ρυθμιστεί ακόμη."
     },
     hero2: {
-      badge: "For Google Slides™",
-      title: "Your deck.",
-      title_accent: "In any language.",
-      title_end: "Untouched.",
-      subtitle: "TransLay translates Google Slides™ with the quality of an LLM and the fidelity of the original — every font, every box, exactly as you designed it."
+      badge: "Φτιαγμένο για Google Slides™",
+      title: "Η παρουσίασή σας.",
+      title_accent: "Σε κάθε γλώσσα.",
+      title_end: "Όπως σχεδιάστηκε.",
+      subtitle: "Το TransLay μεταφράζει Google Slides™ με ποιότητα LLM και πιστότητα διάταξης σε επίπεδο pixel — κάθε γραμματοσειρά και κάθε πλαίσιο κειμένου μένουν συνεπή με το πρωτότυπο."
     },
     legalPages: {
       terms: {
-        title: "Oroi ypiresias tou TransLay",
-        last_updated: "Teleutaia enimerosi: 23 Apriliou 2026",
+        title: "Όροι υπηρεσίας TransLay",
+        last_updated: "Τελευταία ενημέρωση: 2026-04-23",
         intro: [
-          "Καλωσορίσατε στο TransLay. Το TransLay είναι μια υπηρεσία μετάφρασης για το Google Workspace™ και προς το παρόν το Google Slides™ είναι ο μόνος επίσημα διαθέσιμος host. Με την εγκατάσταση, την πρόσβαση ή τη χρήση του TransLay, συμφωνείτε με αυτούς τους Όρους υπηρεσίας. Αν δεν συμφωνείτε, μην χρησιμοποιείτε το TransLay."
+          "Καλωσορίσατε στο TransLay. Το TransLay είναι υπηρεσία μετάφρασης για το Google Workspace™ και ο επίσημα διαθέσιμος host αυτή τη στιγμή είναι το Google Slides™. Με την εγκατάσταση, πρόσβαση ή χρήση του TransLay συμφωνείτε ότι δεσμεύεστε από αυτούς τους Όρους υπηρεσίας. Αν δεν συμφωνείτε, μην χρησιμοποιείτε το TransLay."
         ],
         sections: [
           {
-            title: "1. Η υπηρεσία",
+            title: "1. Περιγραφή υπηρεσίας",
             paragraphs: [
-              "Το TransLay εστιάζει προς το παρόν στη μετάφραση παρουσιάσεων Google Slides™ και προσπαθεί να διατηρεί όσο γίνεται περισσότερο τις γραμματοσειρές, το στυλ, τη διάταξη και την αρχική δομή των σελίδων. Ανάλογα με τη ροή εργασίας που επιλέγετε, το αποτέλεσμα γράφεται σε νέα παρουσίαση ή στο αρχικό αρχείο. Τα speaker notes περιλαμβάνονται επίσης στο τρέχον πεδίο υποστήριξης. Οι λειτουργίες για Google Docs™ και Google Sheets™ βρίσκονται ακόμη σε ανάπτυξη και δεν είναι ακόμη επίσημα διαθέσιμες."
+              "Το TransLay χρησιμοποιείται επί του παρόντος κυρίως για τη μετάφραση περιεχομένου παρουσιάσεων Google Slides™ και προσπαθεί να διατηρεί τις αρχικές γραμματοσειρές, στυλ, διατάξεις και δομή σελίδων όσο το δυνατόν περισσότερο. Ανάλογα με την επιλογή σας στο πρόσθετο, το μεταφρασμένο αποτέλεσμα μπορεί να εξαχθεί σε νέα παρουσίαση ή να προστεθεί στο αρχικό έγγραφο. Για σελίδες που περιλαμβάνουν speaker notes, το TransLay τις επεξεργάζεται επίσης μέσα στα όρια της υποστηριζόμενης λειτουργικότητας. Οι λειτουργίες για Google Docs™ και Google Sheets™ βρίσκονται ακόμη σε ανάπτυξη και δεν είναι ακόμη επίσημα διαθέσιμες."
             ]
           },
           {
-            title: "2. Λογαριασμός και καταλληλότητα",
+            title: "2. Λογαριασμός και δικαίωμα χρήσης",
             paragraphs: [
-              "Για να εγκαταστήσετε και να χρησιμοποιήσετε το TransLay, πρέπει να έχετε έγκυρο λογαριασμό Google. Πρέπει επίσης να βεβαιωθείτε ότι έχετε το δικαίωμα να έχετε πρόσβαση στα αρχεία που υποβάλλετε, να τα μεταφράζετε και να επιτρέπετε την επεξεργασία τους. Αν χρησιμοποιείτε το TransLay για λογαριασμό ομάδας, εταιρείας ή άλλου οργανισμού, πρέπει επίσης να έχετε την εξουσιοδότηση να αποδεχθείτε αυτούς τους όρους για λογαριασμό τους."
+              "Χρειάζεστε έγκυρο λογαριασμό Google για να εγκαταστήσετε και να χρησιμοποιήσετε το TransLay. Πρέπει να διασφαλίζετε ότι έχετε δικαίωμα πρόσβασης, μετάφρασης και επεξεργασίας του περιεχομένου των εγγράφων που υποβάλλετε. Αν χρησιμοποιείτε το TransLay για ομάδα, εταιρεία ή άλλο οργανισμό, πρέπει επίσης να διασφαλίζετε ότι έχετε δικαίωμα να αποδεχθείτε αυτούς τους όρους και να χρησιμοποιήσετε τα σχετικά αρχεία για λογαριασμό αυτού του φορέα."
             ]
           },
           {
             title: "3. Συνδρομές και χρέωση",
             paragraphs: [
-              "Το TransLay προσφέρει μία εφάπαξ δωρεάν ποσόστωση 20 slides κατά την εγκατάσταση, μηνιαίες συνδρομές, ετήσια πλάνα δέσμευσης και credits βάσει χρήσης. Οι χρεώσεις συνδρομής προπληρώνονται στην αρχή κάθε περιόδου. Μπορείτε να ακυρώσετε οποιαδήποτε στιγμή από το πάνελ Manage Subscription και η ακύρωση θα ισχύσει στο τέλος της τρέχουσας περιόδου χρέωσης ή της ετήσιας περιόδου. Η χρέωση για μεταφράσεις Google Slides™ βασίζεται στο πραγματικό αποτέλεσμα που παραδίδεται: <strong>1 slide</strong> αν το περιεχόμενο του slide μεταφραστεί και γραφτεί πίσω με επιτυχία, <strong>0.5 slide</strong> αν ολοκληρωθεί μόνο μέρος του αναμενόμενου αποτελέσματος, και χωρίς χρέωση για το περιεχόμενο της σελίδας αν η μετάφραση ή η επανεγγραφή αποτύχει. Αν ακυρώσετε πριν παραχθεί οποιοδήποτε χρήσιμο αποτέλεσμα, δεν καταναλώνεται ποσόστωση. Για ερωτήσεις χρέωσης, στείλτε το Task ID στο <strong>support@example.com</strong>."
+              "Το TransLay παρέχει μετά την εγκατάσταση ένα εφάπαξ δωρεάν όριο 20 διαφανειών και προσφέρει μηνιαίες συνδρομές, πλάνα ετήσιας δέσμευσης και pay-as-you-go credits. Τα τέλη συνδρομής χρεώνονται προκαταβολικά ανά περίοδο. Μπορείτε να ακυρώσετε οποιαδήποτε στιγμή από τον πίνακα Manage Subscription· η ακύρωση θα ισχύσει στο τέλος της τρέχουσας περιόδου χρέωσης ή της περιόδου ετήσιας δέσμευσης.",
+              "Για εργασίες μετάφρασης Google Slides™, η χρέωση ορίου βασίζεται στο πραγματικά παραδοθέν αποτέλεσμα. Μία σελίδα υπολογίζεται ως <strong>1 slide</strong> μόνο όταν το περιεχόμενο της διαφάνειας έχει μεταφραστεί πλήρως και έχει γραφτεί πίσω με επιτυχία. Αν η σελίδα περιλαμβάνει speaker notes, το περιεχόμενο της σελίδας και τα notes μαζί εξακολουθούν να υπολογίζονται ως <strong>1 slide</strong> όταν και τα δύο μεταφραστούν και γραφτούν πίσω με επιτυχία· αν πετύχει μόνο η μία πλευρά, η σελίδα υπολογίζεται ως <strong>0.5 slide</strong>. Αν οποιοδήποτε στοιχείο της σελίδας αποτύχει στη μετάφραση ή στην επανεγγραφή, το περιεχόμενο αυτής της σελίδας δεν χρεώνεται.",
+              "Το TransLay μπορεί επίσης να χρησιμοποιεί προσωρινή δέσμευση χρέωσης κατά την εκτέλεση της εργασίας. Μόλις κάποια σελίδα μεταφραστεί με επιτυχία, αυτή η επιτυχημένη σελίδα μπορεί πρώτα να μετρηθεί και έπειτα να οριστικοποιηθεί ο υπολογισμός αν ακυρώσετε χειροκίνητα την εργασία. Γι αυτό, επιβεβαιώστε τις ρυθμίσεις της εργασίας πριν ξεκινήσετε. Αν ακυρώσετε πριν μεταφραστεί με επιτυχία οποιαδήποτε σελίδα, δεν αφαιρείται κανένα όριο διαφανειών. Για απορίες χρέωσης, συμπεριλάβετε το Task ID στο email σας προς <strong>support@example.com</strong>, ώστε να ελέγξουμε πιο γρήγορα.",
+              "Τα pay-as-you-go credits είναι προπληρωμένα credits χρήσης για μετάφραση Google Slides™ και είναι ανεξάρτητα από το όριο που περιλαμβάνεται σε ένα πλάνο συνδρομής. Είτε βρίσκεστε στο δωρεάν πλάνο είτε έχετε ενεργή πληρωμένη συνδρομή, μπορείτε να αγοράσετε επιπλέον pay-as-you-go credits. Όταν υπάρχουν ταυτόχρονα όριο συνδρομής και pay-as-you-go credits, το TransLay χρησιμοποιεί πρώτα το όριο της τρέχουσας περιόδου συνδρομής και στη συνέχεια τα προπληρωμένα pay-as-you-go credits για την επιπλέον χρήση.",
+              "Λόγω περιορισμών της πλατφόρμας πληρωμών Paddle, το ποσό που μπορεί να εισπραχθεί ανά συναλλαγή πρέπει να είναι μεγαλύτερο από USD 0.70. Επειδή η τρέχουσα τιμή των pay-as-you-go credits του TransLay είναι USD 0.04 ανά σελίδα, η ελάχιστη αγορά είναι 18 σελίδες, δηλαδή USD 0.72. Το τρέχον μέγιστο ανά παραγγελία είναι 100 σελίδες. Αν χρειάζεστε λιγότερες από 18 σελίδες, μπορείτε να αγοράσετε πρώτα 18 σελίδες και μετά να ζητήσετε επιστροφή για τα αχρησιμοποίητα επιπλέον credits."
             ]
           },
           {
             title: "4. Επιστροφές χρημάτων",
             paragraphs: [
-              "Οι μηνιαίες συνδρομές δεν επιστρέφονται. Τα ετήσια πλάνα επίσης γενικά δεν επιστρέφονται, εκτός από μια πρώτη ετήσια αγορά: σε αυτή την περίπτωση μπορεί να ζητηθεί μία επιστροφή μέσα σε 14 ημέρες από την αγορά, εφόσον δεν έχει χρησιμοποιηθεί καμία σελίδα μετά από αυτή την πληρωμή. Αυτή η εξαίρεση περιορίζεται σε μία φορά ανά λογαριασμό. Μπορούμε επίσης να παρέχουμε επιστροφές σε περιπτώσεις σφαλμάτων χρέωσης, μη εξουσιοδοτημένων χρεώσεων, σοβαρών αποτυχιών της υπηρεσίας ή όταν αυτό απαιτείται από το εφαρμοστέο δίκαιο. Τα pay-as-you-go credits που έχουν καταναλωθεί δεν επιστρέφονται. Οι μονάδες pay-as-you-go, συμπεριλαμβανομένων όσων αγοράζονται ενώ μια συνδρομή είναι ενεργή, μπορούν να επιστραφούν πλήρως για το αχρησιμοποίητο μέρος· οι χρησιμοποιημένες μονάδες δεν επιστρέφονται."
+              "Οι μηνιαίες συνδρομές κατά κανόνα δεν επιστρέφονται. Τα πλάνα ετήσιας δέσμευσης κατά κανόνα επίσης δεν επιστρέφονται· όμως οι πελάτες που αγοράζουν πλάνο ετήσιας δέσμευσης για πρώτη φορά μπορούν να ζητήσουν μία εφάπαξ επιστροφή εντός 14 ημερών από την αγορά, εφόσον από αυτή την πληρωμή δεν έχει χρησιμοποιηθεί καμία σελίδα. Κάθε λογαριασμός μπορεί να χρησιμοποιήσει αυτή την εξαίρεση μόνο μία φορά. Τα pay-as-you-go credits, συμπεριλαμβανομένων των επιπλέον credits που αγοράζονται κατά τη διάρκεια συνδρομής, μπορούν να επιστραφούν πλήρως για το αχρησιμοποίητο μέρος· το χρησιμοποιημένο μέρος δεν επιστρέφεται. Μπορεί επίσης να παρέχουμε επιστροφές σε περίπτωση σφάλματος χρέωσης, μη εξουσιοδοτημένης πληρωμής, σοβαρής αστοχίας υπηρεσίας ή όταν το απαιτεί η εφαρμοστέα νομοθεσία.",
+              "Η ελάχιστη μονάδα αιτήματος επιστροφής για pay-as-you-go credits είναι 1 σελίδα. Οι επιστροφές υπολογίζονται μόνο βάσει αχρησιμοποίητων pay-as-you-go credits. Credits που έχουν ήδη καταναλωθεί από επιτυχώς παραδοθείσες εργασίες μετάφρασης δεν επιστρέφονται.",
+              "Η Paddle επεξεργάζεται επιστροφές με βάση την αρχική συναλλαγή αγοράς. Αν ένα αίτημα επιστροφής καλύπτει credits από πολλές αγορές pay-as-you-go, το TransLay μπορεί να διαχωρίσει το αίτημα σε πολλές επιστροφές Paddle με βάση τις αρχικές συναλλαγές. Το συνολικό ποσό επιστροφής σας δεν αλλάζει, αλλά μπορεί να λάβετε ξεχωριστά emails ειδοποίησης επιστροφής από την Paddle.",
+              "Αν έχετε ορίσει μια μηνιαία συνδρομή να ακυρωθεί στο τέλος της περιόδου αλλά πριν λήξει η τρέχουσα μηνιαία περίοδος επιλέξετε αναβάθμιση σε πλάνο ετήσιας δέσμευσης, το TransLay θα επαναφέρει πρώτα τη μηνιαία συνδρομή και έπειτα θα την αναβαθμίσει σε ετήσια δέσμευση. Τα USD 9.99 που έχετε ήδη πληρώσει για τον τρέχοντα μήνα θα συμψηφιστούν με το οφειλόμενο ποσό της ετήσιας δέσμευσης, και τα τρέχοντα δικαιώματα συνδρομής σας θα ενημερωθούν στο όριο της ετήσιας δέσμευσης, δηλαδή 500 σελίδες Google Slides™ ανά μήνα."
             ]
           },
           {
-            title: "5. Επιτρεπτή χρήση",
+            title: "5. Ορθή χρήση",
             paragraphs: [
-              "Συμφωνείτε να μη χρησιμοποιείτε το TransLay για παράνομο περιεχόμενο, περιεχόμενο που παραβιάζει δικαιώματα τρίτων, σαφώς μη εξουσιοδοτημένο περιεχόμενο ή άλλο ακατάλληλο περιεχόμενο. Επίσης δεν μπορείτε να παρακάμπτετε ποσοστώσεις ή μέτρα ασφαλείας ούτε να υπονομεύετε τη σταθερότητα της υπηρεσίας. Είστε υπεύθυνοι για το περιεχόμενο που υποβάλλετε και για τις συνέπειες της χρήσης του."
+              "Συμφωνείτε ότι δεν θα χρησιμοποιείτε το TransLay για να επεξεργάζεστε περιεχόμενο που είναι παράνομο, παραβιαστικό, προφανώς παραβιάζει δικαιώματα τρίτων ή υπερβαίνει το πεδίο της εξουσιοδότησής σας. Επίσης δεν πρέπει να κάνετε κατάχρηση του TransLay παρακάμπτοντας όρια, παρακάμπτοντας περιορισμούς ασφαλείας, παρεμβαίνοντας κακόβουλα στη σταθερότητα της υπηρεσίας ή χρησιμοποιώντας την υπηρεσία με άλλο ακατάλληλο τρόπο. Είστε υπεύθυνοι για το περιεχόμενο που υποβάλλετε για μετάφραση και για τις συνέπειες που προκύπτουν."
             ]
           },
           {
             title: "6. Το περιεχόμενό σας και η άδειά σας",
             paragraphs: [
-              "Διατηρείτε όλα τα δικαιώματα στα έγγραφα, στις παρουσιάσεις και στο περιεχόμενό σας. Για να ολοκληρώσει ένα αίτημα μετάφρασης που ξεκινήσατε εσείς, το TransLay έχει την άδεια να αποκτήσει πρόσβαση στο επιλεγμένο αρχείο, να διαβάσει το κείμενο προς μετάφραση, να δημιουργήσει τη μετάφραση και να γράψει το αποτέλεσμα πίσω στο αρχικό αρχείο ή σε νέο αρχείο προορισμού σύμφωνα με τις οδηγίες σας. Αυτή η άδεια υπάρχει μόνο για την παροχή της υπηρεσίας και δεν μας μεταφέρει την κυριότητα του περιεχομένου σας.",
-              "Το αρχικό κείμενο, οι μεταφράσεις, τα comments και τα notes υποβάλλονται μόνο σε σύντομη επεξεργασία όσο εκτελείται η εργασία. Όταν η εργασία ολοκληρωθεί, αυτό το περιεχόμενο διαγράφεται αμέσως από τη βάση δεδομένων και το cache μας και δεν διατηρείται ως αντίγραφο ασφαλείας. Γι αυτό πρέπει να φυλάσσετε μόνοι σας τα μεταφρασμένα αρχεία. Αν αργότερα θελήσετε να μεταφράσετε ξανά το ίδιο έγγραφο στην ίδια γλώσσα, θα το αντιμετωπίσουμε ως νέα ξεχωριστή εργασία και θα χρεωθεί πλήρως ξανά."
+              "Διατηρείτε όλα τα υφιστάμενα δικαιώματα στα έγγραφα, τις παρουσιάσεις και το περιεχόμενό τους. Για να ολοκληρωθεί το αίτημα μετάφρασης που ξεκινάτε ενεργά, εξουσιοδοτείτε το TransLay, στον βαθμό που είναι απαραίτητος για τη λειτουργία της υπηρεσίας, να έχει πρόσβαση στο επιλεγμένο αρχείο, να διαβάζει το προς μετάφραση περιεχόμενο, να δημιουργεί τη μετάφραση και να γράφει το αποτέλεσμα στο αρχικό έγγραφο ή να δημιουργεί νέο έγγραφο προορισμού σύμφωνα με τις οδηγίες σας. Αυτή η εξουσιοδότηση χρησιμοποιείται μόνο για την ολοκλήρωση της ίδιας της υπηρεσίας και δεν σημαίνει ότι αποκτούμε κυριότητα στο περιεχόμενό σας.",
+              "Το κύριο κείμενο, οι μεταφράσεις, τα comments και τα notes που σχετίζονται με μια εργασία μετάφρασης επεξεργάζονται μόνο σύντομα κατά την εκτέλεση της εργασίας. Μετά το τέλος της εργασίας, αυτό το περιεχόμενο διαγράφεται αμέσως από τις βάσεις δεδομένων και την cache μας και δεν συνεχίζει να αποθηκεύεται ως cloud backup για εσάς. Επομένως, φυλάξτε μόνοι σας το μεταφρασμένο έγγραφο προορισμού. Αν αργότερα ζητήσετε ξανά μετάφραση του ίδιου εγγράφου στην ίδια γλώσσα, θα τη θεωρήσουμε νέα ανεξάρτητη εργασία και θα τη χρεώσουμε πλήρως σύμφωνα με τους κανόνες εκείνης της εργασίας."
             ]
           },
           {
-            title: "7. Αποτελέσματα μετάφρασης και διαθεσιμότητα",
+            title: "7. Αποτελέσματα μετάφρασης και διαθεσιμότητα υπηρεσίας",
             paragraphs: [
-              "Το TransLay χρησιμοποιεί τεχνολογία μετάφρασης βασισμένη σε AI. Στοχεύουμε σε υψηλή ποιότητα μετάφρασης και στη μεγαλύτερη δυνατή πιστότητα της διάταξης, αλλά μπορεί να υπάρξουν διαφορές στο νόημα, στο μήκος, στα σπασίματα γραμμής ή στη τοπική μορφοποίηση. Για νομικό, οικονομικό, ιατρικό, συμβατικό ή άλλο σημαντικό περιεχόμενο, πρέπει να ελέγχετε μόνοι σας το αποτέλεσμα πριν το χρησιμοποιήσετε. Η υπηρεσία μπορεί επίσης προσωρινά να καθυστερεί, να διακόπτεται ή να μην είναι διαθέσιμη λόγω συντήρησης, αλλαγών σε εξωτερικές πλατφόρμες, προβλημάτων δικτύου ή υπηρεσιών τρίτων."
+              "Το TransLay παρέχει υπηρεσία με δυνατότητες AI μετάφρασης. Καταβάλλουμε προσπάθεια να βελτιώνουμε την ποιότητα της μετάφρασης και να διατηρούμε την αρχική διάταξη, αλλά τα αποτελέσματα μπορεί ακόμη να περιέχουν αποκλίσεις νοήματος, αλλαγές μήκους, αλλαγές αλλαγής γραμμής, τοπικές διαφορές διάταξης ή άλλα αποτελέσματα που δεν ανταποκρίνονται πλήρως στις προσδοκίες. Για συμβάσεις, νομικό, οικονομικό, ιατρικό ή άλλο σημαντικό περιεχόμενο, πρέπει να ελέγχετε μόνοι σας το αποτέλεσμα πριν το χρησιμοποιήσετε ή το δημοσιεύσετε. Η υπηρεσία μπορεί επίσης να καταστεί προσωρινά μη διαθέσιμη, να καθυστερήσει ή να διακοπεί λόγω συντήρησης, αλλαγών σε upstream πλατφόρμες, προβλημάτων δικτύου ή προβλημάτων με υπηρεσίες τρίτων."
             ]
           },
           {
             title: "8. Περιορισμός ευθύνης",
             paragraphs: [
-              "Στον μέγιστο βαθμό που επιτρέπει το εφαρμοστέο δίκαιο, το TransLay παρέχεται ως έχει. Δεν ευθυνόμαστε για έμμεσες, τυχαίες, ειδικές ή επακόλουθες ζημίες που προκύπτουν από τη χρήση ή την αδυναμία χρήσης της υπηρεσίας, από ανακρίβειες στη μετάφραση, από περιορισμούς πλατφορμών τρίτων, από διακοπές υπηρεσίας ή από σφάλματα στην επανεγγραφή."
+              "Στον μέγιστο βαθμό που επιτρέπει η εφαρμοστέα νομοθεσία, το TransLay παρέχεται ως έχει. Δεν ευθυνόμαστε για έμμεσες, παρεπόμενες, ειδικές ή επακόλουθες ζημίες που προκύπτουν από τη χρήση, την αδυναμία χρήσης, αποκλίσεις στα αποτελέσματα μετάφρασης, περιορισμούς πλατφορμών τρίτων, διακοπή υπηρεσίας ή αποτυχία επανεγγραφής δεδομένων."
             ]
           },
           {
-            title: "9. Αλλαγές σε αυτούς τους όρους",
+            title: "9. Ενημέρωση όρων",
             paragraphs: [
-              "Μπορούμε να ενημερώσουμε αυτούς τους όρους λόγω αλλαγών στο προϊόν, νομικών απαιτήσεων, απαιτήσεων πληρωμής ή λειτουργικών αναγκών. Οι ενημερωμένες εκδόσεις θα δημοσιεύονται στον επίσημο ιστότοπο. Αν συνεχίσετε να χρησιμοποιείτε το TransLay αφού οι αλλαγές τεθούν σε ισχύ, αποδέχεστε τους ενημερωμένους όρους."
+              "Μπορεί να ενημερώνουμε αυτούς τους όρους λόγω εξέλιξης του προϊόντος, νομικών απαιτήσεων ή αναγκών πληρωμών και λειτουργίας. Οι ενημερωμένες εκδόσεις θα δημοσιεύονται στις σχετικές σελίδες του επίσημου ιστότοπου. Αν συνεχίσετε να χρησιμοποιείτε το TransLay μετά την έναρξη ισχύος των αλλαγών, σημαίνει ότι αποδέχεστε τους ενημερωμένους όρους."
             ]
           },
           {
             title: "10. Επικοινωνία",
             paragraphs: [
-              "Αν έχετε ερωτήσεις για αυτούς τους όρους, στείλτε μας στο <strong>support@example.com</strong>."
+              "Αν έχετε ερωτήσεις για αυτούς τους όρους, στείλτε email στο <strong>support@example.com</strong>."
             ]
           }
         ]
       },
       privacy: {
-        title: "Politiki aporritou tou TransLay",
-        last_updated: "Teleutaia enimerosi: 23 Apriliou 2026",
+        title: "Πολιτική απορρήτου TransLay",
+        last_updated: "Τελευταία ενημέρωση: 2026-04-23",
         intro: [
-          "Η βασική μας αρχή είναι απλή: να συλλέγουμε λιγότερα, να αποθηκεύουμε λιγότερα και να εκθέτουμε λιγότερα. Όταν χρησιμοποιείτε το TransLay, επεξεργαζόμαστε μόνο τις ελάχιστες πληροφορίες που χρειάζονται για μετάφραση, σύνδεση, συνδρομή και υποστήριξη. Ό,τι δεν χρειάζεται να συλλεχθεί ή να αποθηκευτεί, προσπαθούμε να μην το αγγίζουμε καθόλου. Αυτή η πολιτική εξηγεί πώς χειριζόμαστε αυτές τις πληροφορίες."
+          "Θεωρούμε το «συλλέγουμε λιγότερα, αποθηκεύουμε λιγότερα, εκθέτουμε λιγότερα» βασική αρχή του TransLay. Όταν χρησιμοποιείτε το TransLay, επεξεργαζόμαστε μόνο τις ελάχιστες πληροφορίες που είναι απαραίτητες για να λειτουργούν η μετάφραση, η σύνδεση, η συνδρομή και η υποστήριξη μετά την αγορά. Ό,τι δεν πρέπει να συλλέγεται ή δεν πρέπει να διατηρείται μακροπρόθεσμα προσπαθούμε να μην το αγγίζουμε. Αυτή η Πολιτική απορρήτου εξηγεί πώς το TransLay επεξεργάζεται αυτές τις πληροφορίες."
         ],
         sections: [
           {
-            title: "1. Η αρχή μας για το απόρρητο",
+            title: "1. Οι αρχές απορρήτου μας",
             paragraphs: [
-              "Το TransLay επεξεργάζεται μόνο τις πληροφορίες που χρειάζονται για να ολοκληρωθεί η υπηρεσία που ζητάτε ενεργά. Δεν συλλέγουμε πληροφορίες άσχετες με την υπηρεσία, δεν τις χρησιμοποιούμε για διαφήμιση και δεν κάνουμε προφίλ χρηστών ή ανάλυση συμπεριφοράς. Ειδικά για το κείμενο εγγράφου, το μεταφρασμένο κείμενο, τα comments και τα notes εφαρμόζουμε αυστηρή αρχή ελαχιστοποίησης: μόλις ολοκληρωθεί η εργασία, δεν κρατάμε αυτό το περιεχόμενο στη βάση δεδομένων, στο cache ή στα logs της εφαρμογής."
+              "Η βασική αρχή του TransLay είναι απλή: επεξεργαζόμαστε μόνο τις απαραίτητες πληροφορίες για να ολοκληρώσουμε την υπηρεσία που ξεκινάτε ενεργά. Δεν συλλέγουμε πληροφορίες άσχετες με την υπηρεσία, δεν χρησιμοποιούμε πληροφορίες για διαφήμιση, δεν δημιουργούμε προφίλ χρηστών και δεν κάνουμε ανάλυση συμπεριφοράς. Ειδικά για το κύριο κείμενο, τις μεταφράσεις, τα comments και τα notes στα έγγραφά σας, ακολουθούμε αυστηρή αρχή ελαχιστοποίησης και δεν διατηρούμε μακροπρόθεσμα αυτό το περιεχόμενο σε βάσεις δεδομένων, cache ή logs εφαρμογής."
             ]
           },
           {
-            title: "2. Τι επεξεργαζόμαστε για να παρέχουμε την υπηρεσία",
+            title: "2. Ποιες ελάχιστες πληροφορίες επεξεργαζόμαστε για να παρέχουμε την υπηρεσία",
             paragraphs: [
-              "Μπορεί να επεξεργαζόμαστε βασικές πληροφορίες του λογαριασμού Google σας, όπως account ID, διεύθυνση email, όνομα εμφάνισης και avatar, για να σας αναγνωρίζουμε, να συνδέουμε σωστά τη συνδρομή και την ποσόστωση, να εμφανίζουμε τον συνδεδεμένο λογαριασμό και να παρέχουμε υποστήριξη.",
-              "Επεξεργαζόμαστε το περιεχόμενο του Google Slides™ που επιλέγετε ρητά για μετάφραση, αλλά μόνο αφού ξεκινήσετε εργασία μετάφρασης και μόνο για να ολοκληρωθεί αυτή η εργασία και να γραφτεί το αποτέλεσμα.",
-              "Επεξεργαζόμαστε επίσης τις ελάχιστες πληροφορίες σχετικά με εργασία και ποσόστωση που χρειάζονται για να εμφανίζουμε πρόοδο, να υπολογίζουμε χρήση, να ερευνούμε προβλήματα χρέωσης και να παρέχουμε υποστήριξη, όπως Task ID, κατάσταση εργασίας, χρήση σελίδων, χρονικές σημάνσεις και περιορισμένα τεχνικά metadata για διερεύνηση προβλημάτων.",
-              "Αν αγοράσετε πλάνο ή credits, επεξεργαζόμαστε τις ελάχιστες πληροφορίες παραγγελίας και συνδρομής που χρειάζονται για να επιβεβαιώσουμε τα δικαιώματά σας, όπως κατάσταση πληρωμής, αριθμό παραγγελίας, χρόνο αγοράς ή επιστροφής και κατάσταση συνδρομής. Τα πλήρη στοιχεία κάρτας τα χειρίζεται η Paddle, όχι εμείς.",
-              "Για τις sessions του ιστότοπου χρησιμοποιούμε μόνο τις ελάχιστες πληροφορίες που χρειάζονται για να λειτουργεί ο επίσημος ιστότοπος και οι σελίδες πληρωμής. Τα cookies αποθηκεύουν μόνο ένα opaque session id και όχι άμεσα αναγνώσιμες πληροφορίες όπως email, πλάνο ή ποσόστωση."
+              "Μπορεί να επεξεργαζόμαστε βασικές πληροφορίες λογαριασμού Google, όπως αναγνωριστικό λογαριασμού Google, email, εμφανιζόμενο όνομα και avatar, για να επιβεβαιώνουμε την ταυτότητά σας, να συνδέουμε συνδρομές και όρια με τον σωστό λογαριασμό, να εμφανίζουμε τον τρέχοντα συνδεδεμένο λογαριασμό και να παρέχουμε υποστήριξη μετά την αγορά.",
+              "Επεξεργαζόμαστε περιεχόμενο Google Slides™ που επιλέγετε ρητά για μετάφραση μόνο αφού ξεκινήσετε ενεργά μια εργασία μετάφρασης, και μόνο για να ολοκληρωθεί εκείνη η μετάφραση και να γραφτεί πίσω το αποτέλεσμα.",
+              "Επεξεργαζόμαστε επίσης τις ελάχιστες πληροφορίες εργασίας και ορίου που απαιτούνται για να εμφανίζουμε την πρόοδο εργασίας, να εκκαθαρίζουμε τη χρήση, να ελέγχουμε ζητήματα χρέωσης και να παρέχουμε υποστήριξη, όπως Task ID, κατάσταση εργασίας, χρήση σελίδων, χρονικές σημάνσεις και περιορισμένα metadata αντιμετώπισης προβλημάτων.",
+              "Αν αγοράσετε πλάνο ή credits, επεξεργαζόμαστε τις ελάχιστες πληροφορίες παραγγελίας και συνδρομής που απαιτούνται για να επιβεβαιώσουμε τα δικαιώματά σας, όπως κατάσταση πληρωμής, αριθμό παραγγελίας, χρόνο αγοράς ή επιστροφής και κατάσταση συνδρομής. Τα πλήρη στοιχεία κάρτας τα επεξεργάζεται η Paddle και δεν τα αποθηκεύουμε εμείς.",
+              "Για τις συνεδρίες του ιστότοπου, χρησιμοποιούμε μόνο τις ελάχιστες πληροφορίες συνεδρίας που απαιτούνται για να λειτουργούν σωστά ο επίσημος ιστότοπος και οι σελίδες συνδρομής. Τα cookies αποθηκεύουν μόνο ένα αδιαφανές session id και δεν αποθηκεύουν απευθείας αναγνώσιμο απλό κείμενο όπως email, πλάνο ή όριο."
             ]
           },
           {
-            title: "3. Τι δεν κρατάμε και δεν συλλέγουμε",
+            title: "3. Τι δεν αποθηκεύουμε ή συλλέγουμε",
             paragraphs: [
-              "Δεν κρατάμε απλό κείμενο από το περιεχόμενο των εγγράφων σας, τα αποτελέσματα μετάφρασης, τα comments ή τα notes στη βάση δεδομένων, στο cache ή στα logs μας. Μόλις ολοκληρωθεί μια εργασία μετάφρασης, αυτό το περιεχόμενο διαγράφεται από τη βάση δεδομένων και το cache και δεν διατηρείται ως αντίγραφο εγγράφου. Γι αυτό πρέπει να φυλάσσετε μόνοι σας τα μεταφρασμένα αρχεία.",
-              "Αν αργότερα ζητήσετε να μεταφράσετε ξανά το ίδιο έγγραφο στην ίδια γλώσσα, θα το αντιμετωπίσουμε ως νέα ξεχωριστή εργασία. Επειδή δεν κρατάμε προηγούμενο περιεχόμενο εγγράφου ή προηγούμενη μετάφραση, δεν επαναχρησιμοποιούμε άμεσα το προηγούμενο αποτέλεσμα και η νέα εργασία θα χρεωθεί πλήρως.",
-              "Δεν χρησιμοποιούμε τις πληροφορίες σας για διαφήμιση, απόδοση διαφήμισης, profiling χρηστών ή ανάλυση συμπεριφοράς. Δεν πουλάμε τα δεδομένα σας και δεν παρακολουθούμε τη δραστηριότητά σας σε άλλους ιστότοπους, έγγραφα ή προϊόντα μόνο και μόνο επειδή χρησιμοποιείτε το TransLay.",
-              "Δεν κρατάμε πλήρεις αριθμούς καρτών, πλήρεις αριθμούς τραπεζικών λογαριασμών ή άλλα πλήρη στοιχεία πληρωμής. Οι πληρωμές επεξεργάζονται από την Paddle· εμείς λαμβάνουμε μόνο τις ελάχιστες πληροφορίες που χρειάζονται για παραγγελίες και υποστήριξη."
+              "Δεν αποθηκεύουμε το απλό κείμενο του περιεχομένου των εγγράφων σας, των αποτελεσμάτων μετάφρασης, των comments ή των notes σε βάσεις δεδομένων, cache ή logs. Μετά το τέλος της εργασίας μετάφρασης, αυτό το περιεχόμενο διαγράφεται αμέσως από τις βάσεις δεδομένων και την cache μας και δεν συνεχίζει να διατηρείται ως backup του εγγράφου σας. Επομένως, φυλάξτε μόνοι σας το μεταφρασμένο έγγραφο προορισμού.",
+              "Αν αργότερα ζητήσετε ξανά μετάφραση του ίδιου εγγράφου στην ίδια γλώσσα, θα τη θεωρήσουμε νέα ανεξάρτητη εργασία. Επειδή δεν διατηρούμε προηγούμενο περιεχόμενο εγγράφου ή προηγούμενη μετάφραση, δεν επαναχρησιμοποιούμε απευθείας το προηγούμενο αποτέλεσμα, και η νέα εργασία θα χρεωθεί πλήρως σύμφωνα με τους κανόνες της.",
+              "Δεν χρησιμοποιούμε τις πληροφορίες σας για διαφήμιση, απόδοση διαφήμισης, δημιουργία προφίλ χρηστών ή ανάλυση συμπεριφοράς. Δεν πουλάμε τα δεδομένα σας και δεν παρακολουθούμε τη δραστηριότητά σας σε άλλους ιστότοπους, άλλα έγγραφα ή άλλα προϊόντα επειδή χρησιμοποιείτε το TransLay.",
+              "Δεν αποθηκεύουμε τον πλήρη αριθμό τραπεζικής κάρτας, τον πλήρη αριθμό τραπεζικού λογαριασμού ή άλλα πλήρη διαπιστευτήρια πληρωμής. Οι πληρωμές επεξεργάζονται από την Paddle· εμείς λαμβάνουμε μόνο τις ελάχιστες πληροφορίες αποτελέσματος που χρειάζονται για παραγγελίες και υποστήριξη μετά την αγορά."
             ]
           },
           {
-            title: "4. Γιατί χρειαζόμαστε άδειες Google",
+            title: "4. Γιατί χρειάζονται άδειες Google",
             paragraphs: [
-              "Το TransLay είναι add-on του Google Workspace™. Για να λειτουργεί σωστά μέσα στο Google Slides™, ζητάμε μόνο τις άδειες που είναι άμεσα απαραίτητες για το τρέχον πεδίο του προϊόντος.",
-              "Η άδεια Google Slides™ είναι απαραίτητη για να διαβάσουμε το περιεχόμενο της παρουσίασης που πρέπει να μεταφραστεί και να γράψουμε τη μετάφραση πίσω στο αρχικό αρχείο ή στο αρχείο προορισμού.",
-              "Η άδεια Google Drive™ είναι απαραίτητη για να εντοπίσουμε την ενεργή παρουσίαση, να δημιουργήσουμε αντίγραφα που ανήκουν στον χρήστη στη ροή Νέο αρχείο, να τοποθετήσουμε το αρχείο προορισμού στη σωστή θέση και να χειριστούμε προσωρινή πρόσβαση κατά την εκτέλεση.",
-              "Η άδεια Google Drive™ file μάς βοηθά να περιορίζουμε όσο γίνεται περισσότερο τις ενέργειες αρχείων μόνο στα αρχεία που συμμετέχουν στη ενεργή ροή.",
-              "Η άδεια Google Workspace™ container UI είναι απαραίτητη για να εμφανίζουμε την πλαϊνή μπάρα του TransLay μέσα στο Google Slides™.",
-              "Η άδεια εξωτερικών αιτήσεων είναι απαραίτητη ώστε το add-on να μπορεί να επικοινωνεί με ασφάλεια με το backend του TransLay για εργασίες μετάφρασης, ενημέρωση δικαιωμάτων, σύνδεση και χρέωση.",
-              "Οι άδειες που σχετίζονται με το email και το avatar του λογαριασμού Google είναι απαραίτητες για την ταυτότητα σύνδεσης, την εμφάνιση του τρέχοντος λογαριασμού, τη σύνδεση συνδρομών και την υποστήριξη."
+              "Το TransLay είναι πρόσθετο Google Workspace™. Για να λειτουργεί κανονικά στο Google Slides™, ζητάμε μόνο τις άδειες που χρειάζονται άμεσα για το τρέχον πεδίο του προϊόντος.",
+              "Η άδεια Google Slides™ χρησιμοποιείται για την ανάγνωση του περιεχομένου της παρουσίασης που θέλετε να μεταφράσετε και για την επανεγγραφή της μετάφρασης στο αρχικό αρχείο ή στο αρχείο προορισμού. Χωρίς αυτή την άδεια, το TransLay δεν μπορεί να διαβάσει το περιεχόμενο ή να ολοκληρώσει την επανεγγραφή.",
+              "Η άδεια Google Drive™ χρησιμοποιείται για τον εντοπισμό της τρέχουσας παρουσίασης, τη δημιουργία αντιγράφων που ανήκουν στον χρήστη στη λειτουργία «έξοδος σε νέο αρχείο», την τοποθέτηση του αρχείου προορισμού στη σωστή θέση και τη διαχείριση προσωρινής πρόσβασης κατά την εκτέλεση της εργασίας. Χωρίς αυτή την άδεια, ορισμένες ροές αντιγραφής και επανεγγραφής δεν μπορούν να λειτουργήσουν σταθερά.",
+              "Η άδεια Google Drive™ file μάς βοηθά να περιορίζουμε όσο το δυνατόν περισσότερο τις ενέργειες αρχείων στα αρχεία που εμπλέκονται στην τρέχουσα ροή εργασίας.",
+              "Η άδεια διεπαφής container του Google Workspace™ χρησιμοποιείται για να εμφανίζεται η πλαϊνή μπάρα του TransLay μέσα στο Google Slides™.",
+              "Η άδεια εξωτερικών αιτημάτων χρησιμοποιείται ώστε το πρόσθετο να επικοινωνεί με ασφάλεια με το backend του TransLay για εργασίες μετάφρασης, ανανέωση δικαιωμάτων, σύνδεση και ροές συνδρομής.",
+              "Οι άδειες email και avatar λογαριασμού Google χρησιμοποιούνται για αναγνώριση σύνδεσης, εμφάνιση του τρέχοντος λογαριασμού, σύνδεση συνδρομών και χειρισμό υποστήριξης μετά την αγορά."
             ]
           },
           {
-            title: "5. Πώς δίνετε αυτές τις άδειες",
+            title: "5. Πώς παραχωρείτε αυτές τις άδειες",
             paragraphs: [
-              "Αφού εγκαταστήσετε το TransLay από το Google Workspace Marketplace, την πρώτη φορά που θα το ανοίξετε και θα το τρέξετε μέσα στο Google Slides™, η Google θα σας ζητήσει να ολοκληρώσετε τη διαδικασία εξουσιοδότησης. Στην πράξη, εγκαθιστάτε το add-on, ανοίγετε μια παρουσίαση Google Slides™, πηγαίνετε στο Extensions, εκκινείτε το TransLay και μετά ακολουθείτε τον σύνδεσμο προς τη σελίδα επιβεβαίωσης αδειών της Google.",
-              "Σε εκείνη τη σελίδα, συνδεθείτε με τον λογαριασμό Google που θέλετε να χρησιμοποιήσετε με το TransLay, επιλέξτε τις απαραίτητες άδειες αν η Google εμφανίσει ένα γενικό checkbox και μετά πατήστε Allow ή Confirm. Χωρίς αυτές τις άδειες, το TransLay δεν μπορεί να διαβάσει σωστά τα έγγραφα, να εκτελέσει τη μετάφραση, να δημιουργήσει αρχεία προορισμού, να γράψει πίσω τα αποτελέσματα ή να ολοκληρώσει τις ροές σύνδεσης και συνδρομής."
+              "Αφού εγκαταστήσετε το TransLay μέσω του Google Workspace Marketplace, την πρώτη φορά που θα το ανοίξετε και θα το εκκινήσετε στο Google Slides™, η Google θα σας ζητήσει να ολοκληρώσετε τη ροή εξουσιοδότησης. Συνήθως, αφού εγκαταστήσετε το πρόσθετο, ανοίγετε οποιαδήποτε παρουσίαση Google Slides™, πηγαίνετε στις Επεκτάσεις, εκκινείτε το TransLay και ακολουθείτε την προτροπή προς τη σελίδα επιβεβαίωσης αδειών της Google.",
+              "Στη σελίδα επιβεβαίωσης, συνδεθείτε με τον λογαριασμό Google που σκοπεύετε να χρησιμοποιήσετε με το TransLay. Αν η Google εμφανίσει πλαίσιο ελέγχου «επιλογή όλων», επιλέξτε τις απαιτούμενες άδειες και μετά πατήστε Allow ή Confirm. Αν δεν παραχωρήσετε αυτές τις απαραίτητες άδειες, το TransLay δεν θα μπορεί να διαβάζει σωστά έγγραφα, να εκτελεί μετάφραση, να δημιουργεί αρχεία προορισμού, να γράφει πίσω αποτελέσματα ή να ολοκληρώνει ροές σύνδεσης και συνδρομής."
             ]
           },
           {
             title: "6. Πώς χρησιμοποιούμε αυτές τις πληροφορίες",
             paragraphs: [
-              "Χρησιμοποιούμε αυτές τις πληροφορίες μόνο για να εκτελέσουμε τη μετάφραση που ζητάτε, να εμφανίσουμε την κατάσταση σύνδεσής σας, να συνδέσουμε συνδρομές και ποσοστώσεις, να χειριστούμε χρεώσεις και επιστροφές, να απαντήσουμε σε αιτήματα υποστήριξης, να αποτρέψουμε κατάχρηση και να διατηρούμε αξιόπιστη την υπηρεσία. Δεν τις χρησιμοποιούμε για διαφήμιση, profiling ή προτάσεις marketing. Ούτε χρησιμοποιούμε το περιεχόμενο των εγγράφων σας για να εκπαιδεύσουμε δικά μας μοντέλα."
+              "Αυτές οι πληροφορίες χρησιμοποιούνται μόνο για να ολοκληρώνουμε τη μετάφραση που ζητήσατε, να εμφανίζουμε την τρέχουσα κατάσταση σύνδεσης, να συνδέουμε συνδρομές και credits, να χειριζόμαστε χρεώσεις και επιστροφές, να απαντάμε σε ζητήματα υποστήριξης μετά την αγορά, να αποτρέπουμε κατάχρηση και να διασφαλίζουμε σταθερή λειτουργία της υπηρεσίας. Δεν χρησιμοποιούμε αυτές τις πληροφορίες για διαφήμιση, προφίλ χρηστών, προτάσεις marketing ή ανάλυση συμπεριφοράς. Επίσης δεν χρησιμοποιούμε το περιεχόμενο των εγγράφων σας για να εκπαιδεύσουμε δικά μας μοντέλα."
             ]
           },
           {
             title: "7. Υπηρεσίες τρίτων",
             paragraphs: [
-              "Για να λειτουργεί το TransLay, βασιζόμαστε όπου χρειάζεται σε μικρό αριθμό υπηρεσιών τρίτων. Αυτές περιλαμβάνουν το Google Workspace™ και το Google Cloud για hosting, πρόσβαση σε έγγραφα και λειτουργία της υπηρεσίας, παρόχους AI και cloud για την επεξεργασία της μετάφρασης και την Paddle για πληρωμές, φόρους και επιστροφές. Αυτές οι υπηρεσίες συμμετέχουν μόνο στον βαθμό που χρειάζεται για τις τρέχουσες δυνατότητες."
+              "Για τη λειτουργία του TransLay βασιζόμαστε, όπου χρειάζεται, σε μικρό αριθμό υπηρεσιών τρίτων, όπως το Google Workspace™ και το Google Cloud για hosting, πρόσβαση σε έγγραφα και λειτουργία υπηρεσίας, παρόχους AI και cloud για επεξεργασία μετάφρασης και την Paddle για πληρωμές, φόρους και επιστροφές. Αυτές οι υπηρεσίες συμμετέχουν μόνο στον βαθμό που είναι απαραίτητος για την παροχή των τρεχουσών λειτουργιών."
             ]
           },
           {
             title: "8. Διατήρηση και διαγραφή",
             paragraphs: [
-              "Στόχος μας είναι να διατηρούμε όσο το δυνατόν λιγότερες πληροφορίες για όσο το δυνατόν μικρότερο χρονικό διάστημα. Κείμενο, μεταφράσεις, comments και notes που σχετίζονται με μεταφρασμένο περιεχόμενο διαγράφονται από τη βάση δεδομένων και το cache αμέσως μόλις τελειώσει η εργασία. Ωστόσο, ένα μικρό ποσό πληροφοριών που σχετίζεται με λογαριασμό, συνδρομή, παραγγελίες ή συμμόρφωση μπορεί να διατηρείται όταν είναι απαραίτητο για να επιβεβαιώσουμε τα δικαιώματά σας, να επεξεργαστούμε επιστροφές ή να απαντήσουμε σε νόμιμα αιτήματα.",
-              "Αν θέλετε να διαγράψετε προσωπικές πληροφορίες που σχετίζονται με τον λογαριασμό σας, ή να κατανοήσετε ποια ελάχιστα αρχεία υπάρχουν ακόμη, επικοινωνήστε μαζί μας στο <strong>support@example.com</strong>. Σημειώστε ότι αν ζητήσετε να διαγραφούν αρχεία που είναι απαραίτητα για να αποδειχθούν και να αποκατασταθούν τα δικαιώματα συνδρομής σας, ίσως να μην μπορέσουμε να τα αποκαταστήσουμε στο μέλλον."
+              "Στόχος μας είναι να διατηρούμε όσο το δυνατόν λιγότερες πληροφορίες για όσο το δυνατόν μικρότερο χρόνο. Το κύριο κείμενο, οι μεταφράσεις, τα comments και τα notes που σχετίζονται με μεταφραστικό περιεχόμενο διαγράφονται αμέσως από τις βάσεις δεδομένων και την cache όταν τελειώσει η εργασία. Μικρή ποσότητα πληροφοριών που είναι απαραίτητη για σύνδεση λογαριασμού, συνδρομές, παραγγελίες και συμμόρφωση μπορεί να συνεχίσει να διατηρείται όταν είναι πραγματικά αναγκαίο για επιβεβαίωση δικαιωμάτων, επεξεργασία επιστροφών ή ανταπόκριση σε νόμιμα αιτήματα.",
+              "Αν θέλετε να διαγράψετε προσωπικές πληροφορίες που σχετίζονται με τον λογαριασμό σας ή να μάθετε ποια ελάχιστα αρχεία εξακολουθούν να διατηρούνται, επικοινωνήστε με το <strong>support@example.com</strong>. Λάβετε υπόψη ότι αν ζητήσετε τη διαγραφή αρχείων που είναι απαραίτητα για την απόδειξη και αποκατάσταση δικαιωμάτων συνδρομής, ενδέχεται αργότερα να μην μπορούμε να αποκαταστήσουμε τα αντίστοιχα δικαιώματα."
             ]
           },
           {
             title: "9. Τα δικαιώματα και οι επιλογές σας",
             paragraphs: [
-              "Μπορείτε να σταματήσετε να χρησιμοποιείτε το TransLay οποτεδήποτε. Μπορείτε επίσης να ακυρώσετε συνδρομή, να αποσυνδεθείτε ή να επικοινωνήσετε μαζί μας για αιτήματα που σχετίζονται με το απόρρητο. Στον βαθμό που το εφαρμοστέο δίκαιο σας δίνει δικαιώματα πρόσβασης, διόρθωσης, διαγραφής ή περιορισμού, θα χειριστούμε τα έγκυρα αιτήματα σύμφωνα με τους εφαρμοστέους κανόνες."
+              "Μπορείτε να σταματήσετε να χρησιμοποιείτε το TransLay οποιαδήποτε στιγμή. Μπορείτε επίσης να ακυρώσετε συνδρομή, να αποσυνδεθείτε ή να επικοινωνήσετε μαζί μας για αιτήματα σχετικά με το απόρρητο. Στον βαθμό που η εφαρμοστέα νομοθεσία σας παρέχει δικαιώματα πρόσβασης, διόρθωσης, διαγραφής ή περιορισμού επεξεργασίας, θα χειριζόμαστε έγκυρα αιτήματα σύμφωνα με τους ισχύοντες κανόνες."
             ]
           },
           {
             title: "10. Ενημερώσεις πολιτικής και επικοινωνία",
             paragraphs: [
-              "Μπορεί να ενημερώσουμε αυτή την πολιτική αν αλλάξει το προϊόν, η ροή πληρωμής ή οι νομικές υποχρεώσεις. Οι ενημερωμένες εκδόσεις θα δημοσιεύονται στον επίσημο ιστότοπο. Αν έχετε ερωτήσεις για το απόρρητο, την επεξεργασία δεδομένων ή την ασφάλεια, στείλτε μας στο <strong>support@example.com</strong>."
+              "Αν αλλάξει η μορφή του προϊόντος, η ροή πληρωμής ή οι νομικές υποχρεώσεις, μπορεί να ενημερώσουμε αυτή την Πολιτική απορρήτου. Οι ενημερωμένες εκδόσεις θα δημοσιεύονται στις σχετικές σελίδες του επίσημου ιστότοπου. Αν έχετε ερωτήσεις για το απόρρητο, την επεξεργασία δεδομένων ή την ασφάλεια, στείλτε email στο <strong>support@example.com</strong>."
             ]
           }
         ]
@@ -3655,6 +3701,9 @@ window.TRANSLATIONS = {
     }
   },
   ar: {
+    meta: {
+      document_title: "TransLay — أداة ترجمة LLM لـ Google Slides™"
+    },
     nav: {
       home: "الرئيسية",
       features: "الميزات",
@@ -3664,323 +3713,357 @@ window.TRANSLATIONS = {
     },
     hero: {
       badge: "متاح الآن على Google Workspace™",
-      title1: "ترجم الشرائح.",
-      title2: "احفظ كل شيء.",
-      subtitle: "ترجمة عالية الجودة بتقنية LLM لـ Google Slides™ — الخطوط والأنماط والتخطيط كما هي.",
+      title1: "ترجمة Slides",
+      title2: "مع الحفاظ على كل شيء",
+      subtitle: "ترجمة AI عالية الجودة لـ Google Slides™ مع الحفاظ الكامل على الخطوط والأنماط والتنسيق.",
       cta: "تثبيت الإضافة",
-      cta_sub: "مجاناً — 20 شريحة هدية",
-      secondary: "شاهد العرض"
+      cta_sub: "مجانًا — 20 شريحة هدية",
+      secondary: "مشاهدة العرض"
     },
-    trust: "Trusted by teams at",
+    trust: "موثوق به لدى الفرق",
     features: {
-      kicker: "Features",
-      title: "Built for presentations that matter",
-      subtitle: "TransLay was designed from the ground up to respect the craft of your deck.",
-      f1_title: "AI-powered translation quality",
-      f1_body: "Context-aware translations that read at a professional human level.",
-      f2_title: "Pixel-perfect layout",
-      f2_body: "Fonts, colors, spacing, and animations stay true to the original, with little to no reflow.",
-      f3_title: "Describe the target language naturally",
-      f3_body: "Type \"Icelandic\" or \"Thai\" — TransLay understands.",
-      f4_title: "Two output modes",
-      f4_body: "Create a new deck, or append translated slides after each original.",
-      f5_title: "One click inside Slides",
-      f5_body: "No uploads or exports. Open it directly in the Google Slides™ sidebar.",
-      f6_title: "Stable for real-world decks",
-      f6_body: "Support a single Google Slides™ deck with up to 50 slides, with stable background processing."
+      kicker: "الميزات",
+      title: "مصمم للعروض المهمة",
+      subtitle: "صُمم TransLay من الأساس ليحترم جهدك في كل عرض.",
+      f1_title: "جودة ترجمة مدعومة بالذكاء الاصطناعي",
+      f1_body: "ترجمة تفهم السياق وتقترب من مستوى مترجم محترف.",
+      f2_title: "حفظ التنسيق بدقة عالية",
+      f2_body: "تبقى الخطوط والألوان والمسافات والحركات كما هي تقريبًا، مع حاجة قليلة جدًا لإعادة التنسيق.",
+      f3_title: "اكتب اللغة الهدف بصيغة طبيعية",
+      f3_body: "اكتب الآيسلندية أو التايلاندية، وسيفهم TransLay.",
+      f4_title: "وضعان للإخراج",
+      f4_body: "أنشئ ملفًا مترجمًا جديدًا، أو أضف الترجمة بعد كل صفحة أصلية.",
+      f5_title: "نقرة واحدة داخل Slides",
+      f5_body: "لا رفع ولا تصدير. افتحه مباشرة من الشريط الجانبي في Google Slides™.",
+      f6_title: "جاهز للعروض الكبيرة",
+      f6_body: "يدعم ملف Google Slides™ واحدًا حتى 50 شريحة، مع معالجة مستقرة في الخلفية."
     },
     demo: {
-      kicker: "See it in action",
-      title: "Product demo",
+      kicker: "النتيجة الفعلية",
+      title: "عرض المنتج",
       subtitle: "",
-      screenshot_labels: ["الوظيفة: الإلحاق", "الوظيفة: صفحات مخصصة", "الوظيفة: إنشاء ملف جديد"]
+      screenshot_labels: ["الميزة: إلحاق الترجمة", "الميزة: صفحات مخصصة", "الميزة: إنشاء ملف جديد"]
     },
     pricing: {
-      kicker: "Pricing",
-      title: "Simple, transparent pricing",
-      subtitle: "Start free, upgrade anytime, no subscription required, and pay only for what you need.",
-      free_name: "Free",
+      kicker: "الأسعار",
+      title: "أسعار بسيطة وشفافة",
+      subtitle: "ابدأ مجانًا، وارقَ في أي وقت، بلا اشتراك إلزامي، وادفع حسب حاجتك فقط.",
+      free_name: "مجاني",
       free_price: "$0",
-      free_sub: "One-time, on install",
-      free_f1: "20 slides total",
-      free_f2: "All languages",
-      free_f3: "Full layout preservation",
-      free_f4: "Email support",
-      free_cta: "Install free",
-      monthly_name: "Monthly",
+      free_sub: "هدية لمرة واحدة بعد التثبيت",
+      free_f1: "20 شريحة",
+      free_f2: "كل اللغات",
+      free_f3: "حفظ كامل للتنسيق",
+      free_f4: "دعم عبر البريد",
+      free_cta: "ثبّت مجانًا",
+      monthly_name: "شهري",
       monthly_price: "$9.99",
-      monthly_per: "/month",
-      monthly_sub: "Cancel anytime",
-      monthly_f1: "300 slides / month",
-      monthly_f2: "All languages",
-      monthly_f3: "Priority translation speed",
-      monthly_f4: "Priority support",
-      monthly_cta: "Get Monthly",
-      cancel_cta: "Cancel subscription",
-      cancel_scheduled_cta: "Cancellation scheduled",
-      resume_monthly_cta: "Resume Monthly",
-      resume_yearly_cta: "Resume Annual commitment",
-      upgrade_yearly_cta: "Upgrade to Annual commitment",
-      yearly_badge: "Best value",
-      yearly_name: "Annual commitment",
+      monthly_per: "/شهر",
+      monthly_sub: "إلغاء في أي وقت",
+      monthly_f1: "300 شريحة / شهر",
+      monthly_f2: "كل اللغات",
+      monthly_f3: "سرعة ترجمة ذات أولوية",
+      monthly_f4: "دعم أولوية",
+      monthly_cta: "اشترك شهريًا",
+      cancel_cta: "إلغاء الاشتراك",
+      cancel_scheduled_cta: "تم جدولة الإلغاء",
+      resume_monthly_cta: "استئناف الاشتراك الشهري",
+      resume_yearly_cta: "استئناف الالتزام السنوي",
+      upgrade_yearly_cta: "الترقية إلى الالتزام السنوي",
+      yearly_badge: "الأفضل قيمة",
+      yearly_name: "التزام سنوي",
       yearly_price: "$119.99",
-      yearly_per: "/year",
-      yearly_sub: "Save 40% vs monthly",
-      yearly_f1: "500 slides / month",
-      yearly_f2: "All languages",
-      yearly_f3: "Priority translation speed",
-      yearly_f4: "Priority support",
-      yearly_cta: "Get Annual commitment",
-      subscription_success_title: "Thanks for subscribing!",
-      subscription_success_body_monthly: "You have successfully subscribed to TransLay on the monthly plan. Please sign in to Google Slides™. If TransLay is already open in the sidebar, close it, then reopen TransLay from Extensions. Your subscription status will update automatically.",
-      subscription_success_body_yearly: "You have successfully subscribed to TransLay on the annual commitment plan. Please sign in to Google Slides™. If TransLay is already open in the sidebar, close it, then reopen TransLay from Extensions. Your subscription status will update automatically.",
-      subscription_success_confirm: "OK",
-      cancel_dialog_title: "Cancel subscription?",
-      cancel_dialog_body_monthly: "After cancellation, you can keep using the current subscription until the end of the current billing period. Unused time is non-refundable. The cancellation takes effect at the start of the next billing period.",
-      cancel_dialog_body_yearly: "After cancellation, you can keep using the current annual commitment subscription until the end of the current annual term. Unused time is non-refundable. Annual commitment plans are generally non-refundable. First-time annual commitment customers may request a one-time refund within 14 days of purchase only if no pages have been used since that payment. The cancellation takes effect in the next subscription term.",
-      cancel_dialog_confirm: "Confirm cancellation",
-      cancel_dialog_dismiss: "Keep subscription",
-      opening_checkout_notice: "Opening secure checkout...",
-      purchase_received_notice: "Purchase received. Confirming your subscription state...",
-      subscription_confirmation_delayed_notice: "Purchase received. Subscription confirmation may take a few seconds.",
-      sign_in_required_notice: "Sign in with Google before starting checkout.",
-      payment_failed_notice: "Payment was not completed. Please try again or use another payment method.",
-      checkout_unavailable_notice: "Unable to complete this billing action right now.",
-      subscription_change_pending_notice: "Updating your subscription...",
-      cancellation_redirect_notice: "Opening Paddle's secure cancellation page...",
-      cancellation_scheduled_notice: "Your subscription has been canceled. You can keep using TransLay until {date}.",
-      cancellation_failed_notice: "Unable to schedule cancellation right now.",
-      subscription_resumed_notice: "Your subscription has been resumed.",
-      upgrade_success_notice: "Your annual commitment upgrade is complete. The one-time upgrade charge was {amount}.",
-      upgrade_notice_title: "Friendly reminder",
-      upgrade_notice_body: "Upgrading to annual commitment will credit your current monthly payment and charge only the upgrade difference of {amount}.",
-      upgrade_notice_confirm: "Agree",
-      upgrade_notice_cancel: "Cancel",
-      upgrade_processing_title: "Processing payment...",
-      upgrade_processing_body: "Please keep this page open while Paddle confirms your upgrade.",
-      upgrade_completed_title: "Upgrade complete",
-      upgrade_completed_body: "You have upgraded to the annual commitment subscription. Valid until {date}.",
-      upgrade_completed_confirm: "OK",
-      upgrade_failed_title: "Upgrade not completed",
-      upgrade_failed_confirm: "OK",
-      payg_name: "Pay as you go",
+      yearly_per: "/سنة",
+      yearly_sub: "وفّر 40% مقارنة بالشهري",
+      yearly_f1: "500 شريحة / شهر",
+      yearly_f2: "كل اللغات",
+      yearly_f3: "سرعة ترجمة ذات أولوية",
+      yearly_f4: "دعم أولوية",
+      yearly_cta: "اشترك في الالتزام السنوي",
+      subscription_success_title: "شكرًا لاشتراكك!",
+      subscription_success_body_monthly: "لقد اشتركت في TransLay بالخطة الشهرية بنجاح. يرجى تسجيل الدخول إلى Google Slides™. إذا كان TransLay مفتوحًا بالفعل في الشريط الجانبي، فأغلقه ثم افتحه من جديد من Extensions. سيتم تحديث حالة اشتراكك تلقائيًا.",
+      subscription_success_body_yearly: "لقد اشتركت في TransLay بخطة الالتزام السنوي بنجاح. يرجى تسجيل الدخول إلى Google Slides™. إذا كان TransLay مفتوحًا بالفعل في الشريط الجانبي، فأغلقه ثم افتحه من جديد من Extensions. سيتم تحديث حالة اشتراكك تلقائيًا.",
+      subscription_success_confirm: "حسنًا",
+      cancel_dialog_title: "تأكيد إلغاء الاشتراك؟",
+      cancel_dialog_body_monthly: "بعد الإلغاء، يمكنك الاستمرار في استخدام الاشتراك الحالي حتى نهاية دورة الاشتراك الحالية. الجزء غير المستخدم غير قابل للاسترداد. يسري الإلغاء في دورة الفوترة التالية.",
+      cancel_dialog_body_yearly: "بعد الإلغاء، يمكنك الاستمرار في استخدام اشتراك الالتزام السنوي الحالي حتى نهاية مدته الحالية. الجزء غير المستخدم غير قابل للاسترداد. خطط الالتزام السنوي غير قابلة للاسترداد افتراضيًا؛ لكن يمكن لعملاء الالتزام السنوي لأول مرة طلب استرداد لمرة واحدة خلال 14 يومًا من الشراء إذا لم تُستخدم أي صفحات منذ تلك الدفعة. يسري الإلغاء في دورة الاشتراك التالية.",
+      cancel_dialog_confirm: "تأكيد: بدء إلغاء الاشتراك",
+      cancel_dialog_dismiss: "إلغاء: عدم إلغاء الاشتراك",
+      opening_checkout_notice: "جارٍ فتح الدفع الآمن...",
+      purchase_received_notice: "تم استلام نتيجة الشراء، جارٍ تأكيد حالة اشتراكك...",
+      credits_purchase_received_notice: "تم استلام نتيجة شراء الرصيد، جارٍ تأكيد رصيدك...",
+      credits_balance_label: "رصيد الاستخدام عند الطلب",
+      credits_refundable_label: "رصيد قابل للاسترداد",
+      credits_quantity_label: "عدد الصفحات للشراء",
+      credits_minimum_quantity_notice: "الحد الأدنى لدى قناة الدفع هو {amount}، والحد الأدنى الحالي للشراء هو {min} صفحة.",
+      credits_refund_quantity_label: "عدد الصفحات للاسترداد",
+      credits_refund_in_progress_label: "استرداد قيد المعالجة",
+      credits_purchase_cta: "شراء",
+      credits_refund_cta: "استرداد",
+      credits_cancel_cta: "إلغاء",
+      credits_refund_pending_notice: "جارٍ إرسال طلب الاسترداد...",
+      credits_refund_submitted_notice: "تم إرسال طلب الاسترداد.",
+      credits_refund_provider_pending_notice: "تم إرسال الاسترداد، ومنصة الدفع تعالجه الآن.",
+      credits_refund_processing_banner: "أرسلنا طلب الاسترداد إلى منصة الدفع للمعالجة، وقد يستغرق ذلك حتى 30 دقيقة. ستصلك لاحقًا رسالة إشعار من منصة الدفع، لذا يرجى متابعة بريدك. إذا كان لديك أي سؤال، راسل support@example.com. الرصيد قيد الاسترداد الآن: {units}. قيمة الاسترداد المتوقعة: {amount}.",
+      subscription_confirmation_delayed_notice: "تم استلام نتيجة الشراء، وقد يستغرق تأكيد حالة الاشتراك بضع ثوانٍ أخرى.",
+      sign_in_required_notice: "يرجى تسجيل الدخول باستخدام Google قبل بدء الاشتراك.",
+      payment_failed_notice: "لم تكتمل عملية الدفع. يرجى المحاولة مرة أخرى أو استخدام طريقة دفع أخرى.",
+      checkout_unavailable_notice: "لا يمكن إكمال إجراء الاشتراك هذا حاليًا. يرجى المحاولة لاحقًا.",
+      subscription_change_pending_notice: "جارٍ تحديث اشتراكك...",
+      cancellation_redirect_notice: "جارٍ فتح صفحة Paddle الآمنة لإلغاء الاشتراك...",
+      cancellation_scheduled_notice: "تم إلغاء اشتراكك بنجاح. يمكنك الاستمرار في استخدامه حتى {date}.",
+      cancellation_failed_notice: "لا يمكن جدولة إلغاء الاشتراك حاليًا. يرجى المحاولة لاحقًا.",
+      subscription_resumed_notice: "تم استئناف اشتراكك.",
+      upgrade_success_notice: "اكتملت الترقية إلى الالتزام السنوي. رسوم الترقية لمرة واحدة هي {amount}.",
+      upgrade_notice_title: "تنبيه لطيف",
+      upgrade_notice_body: "عند الترقية إلى الالتزام السنوي، سيخصم النظام قيمة اشتراكك الشهري الحالي، ولن تدفع إلا فرق الترقية {amount}.",
+      upgrade_notice_confirm: "موافق",
+      upgrade_notice_cancel: "إلغاء",
+      upgrade_processing_title: "جارٍ معالجة الدفع...",
+      upgrade_processing_body: "تؤكد Paddle الترقية الآن. يرجى عدم إغلاق هذه الصفحة.",
+      upgrade_completed_title: "اكتملت الترقية",
+      upgrade_completed_body: "تمت ترقيتك إلى اشتراك الالتزام السنوي. صالح حتى: {date}.",
+      upgrade_completed_confirm: "تأكيد",
+      upgrade_failed_title: "لم تكتمل الترقية",
+      upgrade_failed_confirm: "تأكيد",
+      payg_name: "الدفع حسب الاستخدام",
       payg_price: "$0.04",
-      payg_per: "/slide",
-      payg_sub: "No commitment, no monthly cap",
-      payg_f1: "Unlimited volume",
-      payg_f2: "All languages",
-      payg_f3: "Rollover credits",
-      payg_f4: "Standard support",
-      payg_cta: "Buy credits"
+      payg_per: "/صفحة",
+      payg_sub: "بلا التزام وبلا حد شهري",
+      payg_f1: "استخدام غير محدود",
+      payg_f2: "يمكن استرداد الرصيد غير المستخدم في أي وقت",
+      payg_f3: "يمكن تراكم الرصيد",
+      payg_f4: "ملاحظة: بسبب قيود منصة الدفع، الحد الأدنى للشراء في كل طلب هو 18 صفحة",
+      payg_cta: "شراء رصيد",
+      payg_available_credits_label: "الرصيد المتبقي",
+      payg_buy_entry_cta: "شراء رصيد عند الطلب",
+      payg_refund_entry_cta: "استرداد الرصيد غير المستخدم"
     },
     faq: {
-      kicker: "FAQ",
-      title: "Questions, answered.",
-      q1: "How do I install TransLay?",
-      a1: "Search \"TransLay\" in the Google Workspace Marketplace and click Install. Grant access to Google Slides™, and the add-on will appear under Extensions → TransLay inside any presentation.",
-      q2: "How do I use it after installing?",
-      a2: "Open a Google Slides™ deck, go to Extensions → TransLay → Start. Pick your target language (preset or type any language in natural language), choose whether to create a new deck or append translated slides, and hit Translate.",
-      q3: "What's your refund policy?",
-      a3: "Monthly subscriptions are non-refundable. Annual commitment plans are also non-refundable, except that first-time annual commitment customers may request a one-time refund within 14 days of purchase if no pages have been used since that payment. Unused pay-as-you-go credits may be refunded in full; used credits are non-refundable. Refunds may also be issued for billing errors, unauthorized payments, major service failures, or where required by law.",
-      q4: "How do I get technical support?",
-      a4: "Every translation job has a Task ID you can copy from the sidebar. Email it to support@example.com and we typically respond within 24 hours. Priority plans get a 4-hour SLA.",
-      q5: "What is the maximum document size supported?",
-      a5: "TransLay currently supports a single Google Slides™ deck with up to 50 slides, which covers the vast majority of everyday usage scenarios.",
-      q6: "Does TransLay reproduce the original layout and styling 100% exactly?",
-      a6: "Not always. Different languages can require very different text lengths for the same meaning. TransLay uses AI and layout-preservation techniques to restore the original styling and structure as closely as possible, but 100% fidelity cannot be guaranteed. You can use the free 20-slide quota with your own real deck to evaluate the result before purchasing.",
-      q7: "How do I contact technical support?",
-      a7: "If you need support or feedback, please contact us: support@example.com"
+      kicker: "الأسئلة الشائعة",
+      title: "إجابات على ما قد تسأل عنه.",
+      q1: "كيف أثبّت TransLay؟",
+      a1: "ابحث عن \"TransLay\" في Google Workspace Marketplace واضغط تثبيت. بعد منح إذن Google Slides™، افتح أي عرض تقديمي وستجد الإضافة ضمن Extensions → TransLay.",
+      q2: "كيف أستخدمه بعد التثبيت؟",
+      a2: "افتح ملف Google Slides™، ثم اختر Extensions → TransLay → Start. اختر اللغة الهدف، سواء من القائمة أو بإدخال طبيعي لأي لغة، واختر وضع الإخراج: إنشاء ملف جديد أو إلحاق الترجمة بالملف الأصلي، ثم اضغط Translate.",
+      q3: "ما سياسة الاسترداد؟",
+      a3: "الاشتراكات الشهرية غير قابلة للاسترداد افتراضيًا. خطط الالتزام السنوي غير قابلة للاسترداد افتراضيًا؛ لكن يمكن لمستخدمي الالتزام السنوي لأول مرة طلب استرداد لمرة واحدة خلال 14 يومًا من الشراء إذا لم تُستخدم أي صفحات منذ تلك الدفعة. الرصيد المشترى حسب الاستخدام يمكن استرداد الجزء غير المستخدم منه بالكامل، أما الجزء المستخدم فلا يُسترد. كما قد نعالج الاسترداد وفق القواعد المعمول بها عند حدوث خطأ فوترة أو دفع غير مصرح به أو عطل كبير في الخدمة أو إذا تطلب القانون ذلك.",
+      q4: "كيف أحصل على الدعم الفني؟",
+      a4: "لكل مهمة ترجمة Task ID يمكنك نسخه من الشريط الجانبي. أرسله إلى support@example.com، ونرد عادة خلال 24 ساعة. الخطط ذات الأولوية تحصل على استجابة خلال 4 ساعات.",
+      q5: "ما أكبر حجم ملف مدعوم؟",
+      a5: "يدعم TransLay حاليًا ملف Google Slides™ واحدًا بحد أقصى 50 شريحة، وهو ما يغطي معظم الاستخدامات اليومية.",
+      q6: "هل يمكنه إعادة إنتاج تنسيق الملف الأصلي وأسلوبه بنسبة 100%؟",
+      a6: "ليس دائمًا. تختلف اللغات كثيرًا في طول التعبير عن المعنى نفسه. يستخدم TransLay الذكاء الاصطناعي وتقنيات حفظ التنسيق لاستعادة النمط والتخطيط الأصليين قدر الإمكان، لكن لا يمكن ضمان تطابق 100%. يمكنك استخدام رصيدك المجاني البالغ 20 صفحة مع ملف حقيقي لديك لتقييم النتيجة قبل الشراء.",
+      q7: "كيف أتواصل مع الدعم الفني؟",
+      a7: "إذا احتجت إلى دعم أو أردت إرسال ملاحظات، تواصل معنا: support@example.com"
     },
     cta: {
-      title: "ترجم أول 20 شريحة مجاناً.",
-      subtitle: "التثبيت في 30 ثانية. بدون بطاقة ائتمان.",
+      title: "ترجم أول 20 شريحة مجانًا",
+      subtitle: "ثبّت من Google Workspace Marketplace بنقرة واحدة وابدأ استخدام رصيدك المجاني فورًا.",
       button: "تثبيت الإضافة"
     },
     footer: {
-      tagline: "ترجمة LLM لـ Google Slides™.",
+      tagline: "أداة ترجمة LLM مصممة لـ Google Slides™.",
       terms: "شروط الخدمة",
       privacy: "سياسة الخصوصية",
+      support: "الدعم",
+      support_subject: "طلب دعم فني لـ TransLay",
       copyright: "© 2026 example.com جميع الحقوق محفوظة."
     },
     legal: {
-      back_home: "Back to home"
+      back_home: "العودة إلى الرئيسية"
+    },
+    successPage: {
+      document_title: "اكتمل الشراء — TransLay",
+      kicker: "حالة الدفع",
+      title: "اكتمل الشراء",
+      body: "لقد استلمنا دفعتك. إذا بدأت هذه العملية من الإضافة، يمكنك العودة إلى Google Slides™ وتحديث حالة استحقاقك هناك.",
+      back_pricing: "العودة إلى الأسعار",
+      go_home: "العودة إلى الرئيسية"
     },
     settings: {
       title: "الإعدادات",
       theme: "المظهر",
       light: "فاتح",
       dark: "داكن",
-      system: "النظام",
+      system: "حسب النظام",
       language: "اللغة"
     },
     auth: {
-      loading: "Checking session...",
-      consuming_ticket: "Signing you in...",
-      signing_in: "Completing sign-in...",
-      sign_out: "Sign out",
-      signed_in_as: "Signed in as",
-      plan_free: "Free",
-      plan_paid: "Paid",
-      google_client_missing: "Google sign-in is not configured yet."
+      loading: "جارٍ فحص الجلسة...",
+      consuming_ticket: "جارٍ تسجيل دخولك...",
+      signing_in: "جارٍ إكمال تسجيل الدخول...",
+      sign_out: "تسجيل الخروج",
+      signed_in_as: "الحساب الحالي",
+      plan_free: "الخطة المجانية",
+      plan_paid: "الخطة المدفوعة",
+      google_client_missing: "لم يتم إعداد تسجيل الدخول عبر Google بعد."
     },
     hero2: {
-      badge: "For Google Slides™",
-      title: "Your deck.",
-      title_accent: "In any language.",
-      title_end: "Untouched.",
-      subtitle: "TransLay translates Google Slides™ with the quality of an LLM and the fidelity of the original — every font, every box, exactly as you designed it."
+      badge: "مصمم لـ Google Slides™",
+      title: "عرضك التقديمي.",
+      title_accent: "بأي لغة.",
+      title_end: "كما صممته.",
+      subtitle: "يترجم TransLay ملفات Google Slides™ بجودة LLM وبحفظ تنسيق على مستوى البكسل — كل خط وكل مربع نص يبقى متسقًا مع الأصل."
     },
     legalPages: {
       terms: {
         title: "شروط خدمة TransLay",
-        last_updated: "آخر تحديث: 23 أبريل 2026",
+        last_updated: "آخر تحديث: 2026-04-23",
         intro: [
-          "مرحبًا بك في TransLay. TransLay هي خدمة ترجمة لـ Google Workspace™، وفي الوقت الحالي يُعد Google Slides™ هو المضيف الرسمي الوحيد المتاح. عند تثبيت TransLay أو الوصول إليها أو استخدامها، فإنك توافق على شروط الخدمة هذه. إذا لم توافق، فلا تستخدم TransLay."
+          "مرحبًا بك في TransLay. TransLay خدمة ترجمة موجهة إلى Google Workspace™، والمضيف المتاح رسميًا حاليًا هو Google Slides™. عند تثبيت TransLay أو الوصول إليها أو استخدامها، فإنك توافق على الالتزام بشروط الخدمة هذه. إذا لم توافق، يرجى عدم استخدام TransLay."
         ],
         sections: [
           {
-            title: "1. الخدمة",
+            title: "1. وصف الخدمة",
             paragraphs: [
-              "يركز TransLay حاليًا على ترجمة عروض Google Slides™ ويحاول الحفاظ قدر الإمكان على الخطوط والأسلوب والتخطيط والبنية الأصلية للصفحات. وبحسب مسار العمل الذي تختاره، تُكتب النتيجة في عرض جديد أو في الملف الأصلي. كما أن speaker notes ضمن نطاق الدعم الحالي. أما ميزات Google Docs™ وGoogle Sheets™ فما زالت قيد التطوير ولم تُفتح رسميًا بعد."
+              "يُستخدم TransLay حاليًا أساسًا لترجمة محتوى عروض Google Slides™، مع بذل أفضل الجهود للحفاظ على الخطوط والأنماط والتنسيق وبنية الصفحات الأصلية. بحسب اختيارك داخل الإضافة، يمكن إخراج الترجمة إلى عرض تقديمي جديد أو إلحاقها بالملف الأصلي. وبالنسبة إلى الصفحات التي تتضمن speaker notes، يعالجها TransLay أيضًا ضمن نطاق الدعم الحالي. ما زالت ميزات Google Docs™ وGoogle Sheets™ قيد التطوير ولم تُفتح رسميًا بعد."
             ]
           },
           {
-            title: "2. الحساب والأهلية",
+            title: "2. الحساب وأهلية الاستخدام",
             paragraphs: [
-              "لاستخدام TransLay وتثبيتها، تحتاج إلى حساب Google صالح. كما يجب أن تتأكد من أن لديك الحق في الوصول إلى الملفات التي ترسلها وترجمتها والسماح بمعالجتها. وإذا كنت تستخدم TransLay نيابة عن فريق أو شركة أو جهة أخرى، فيجب أن تكون مخولًا بقبول هذه الشروط نيابة عنهم."
+              "تحتاج إلى حساب Google صالح لتثبيت TransLay واستخدامه. يجب عليك التأكد من أن لديك الحق في الوصول إلى محتوى المستندات التي تقدمها وترجمتها ومعالجتها. وإذا كنت تستخدم TransLay نيابة عن فريق أو شركة أو منظمة أخرى، فعليك أيضًا التأكد من أن لديك صلاحية قبول هذه الشروط واستخدام الملفات ذات الصلة نيابة عن ذلك الكيان."
             ]
           },
           {
             title: "3. الاشتراكات والفوترة",
             paragraphs: [
-              "تقدم TransLay حصة مجانية لمرة واحدة قدرها 20 slides عند التثبيت، واشتراكات شهرية، وخططًا سنوية، وcredits بحسب الاستخدام. تُحصَّل رسوم الاشتراك مقدمًا في بداية كل فترة. ويمكنك الإلغاء في أي وقت من خلال لوحة Manage Subscription، ويصبح الإلغاء ساريًا في نهاية فترة الفوترة الحالية أو الفترة السنوية. وتعتمد فوترة ترجمة Google Slides™ على المخرجات التي تم تسليمها فعليًا: <strong>1 slide</strong> إذا تُرجم محتوى الشريحة وجرى حفظه بنجاح، و<strong>0.5 slide</strong> إذا نجح جزء فقط من النتيجة المقصودة، ولا تُفرض أي رسوم على محتوى الصفحة إذا فشلت الترجمة أو إعادة الكتابة. وإذا ألغيت المهمة قبل تسليم أي نتيجة مفيدة، فلن تُستهلك الحصة. ولأي أسئلة حول الفوترة، أرسل Task ID إلى <strong>support@example.com</strong>."
+              "يوفر TransLay بعد التثبيت رصيدًا مجانيًا لمرة واحدة قدره 20 شريحة، كما يوفر اشتراكات شهرية وخطط التزام سنوي ورصيدًا حسب الاستخدام. تُحصّل رسوم الاشتراك مقدمًا حسب الدورة. يمكنك الإلغاء في أي وقت من لوحة Manage Subscription؛ ويسري الإلغاء عند نهاية دورة الفوترة الحالية أو دورة الالتزام السنوي الحالية.",
+              "بالنسبة إلى مهام ترجمة Google Slides™، تُحتسب الحصة بحسب نتيجة التسليم الفعلية. لا تُحسب الشريحة على أنها <strong>1 slide</strong> إلا عندما يُترجم محتوى الصفحة بالكامل ويُكتب بنجاح. إذا كانت الصفحة تتضمن speaker notes، فإن ترجمة محتوى الصفحة والـ notes وكتابتهما بنجاح تُحسب معًا <strong>1 slide</strong> أيضًا؛ وإذا نجح جانب واحد فقط، تُحسب الصفحة <strong>0.5 slide</strong>. إذا فشل أي عنصر في الصفحة في الترجمة أو الكتابة، فلا يُحتسب محتوى تلك الصفحة.",
+              "يستخدم TransLay أيضًا اقتطاعًا مؤقتًا أثناء تنفيذ المهمة. بمجرد نجاح ترجمة صفحة ما، قد تُحتسب تلك الصفحة الناجحة أولًا ثم تُسوّى بعد إلغائك المهمة يدويًا. لذلك يرجى تأكيد إعدادات المهمة قبل البدء. إذا ألغيت قبل نجاح ترجمة أي صفحة، فلن تُخصم أي حصة شرائح. إذا كان لديك سؤال حول الفوترة، فأرفق Task ID في رسالتك إلى <strong>support@example.com</strong> حتى نتمكن من التحقق بسرعة أكبر.",
+              "الرصيد حسب الاستخدام هو رصيد استخدام مسبق الدفع لترجمة Google Slides™، وهو مستقل عن الحصة المضمنة في خطة الاشتراك. سواء كنت على الخطة المجانية أو لديك اشتراك مدفوع نشط، يمكنك شراء رصيد إضافي حسب الاستخدام. عند وجود حصة اشتراك ورصيد حسب الاستخدام معًا، يستخدم TransLay أولًا حصة الاشتراك داخل الدورة الحالية، ثم يستخدم الرصيد المسبق حسب الاستخدام لأي استخدام إضافي.",
+              "بسبب قيود منصة الدفع Paddle، يجب أن يكون مبلغ كل معاملة قابل للتحصيل أكبر من USD 0.70. وبما أن سعر الرصيد حسب الاستخدام في TransLay حاليًا هو USD 0.04 لكل صفحة، فإن الحد الأدنى للشراء في كل مرة هو 18 صفحة، أي USD 0.72. الحد الأقصى الحالي للشراء في طلب واحد هو 100 صفحة. إذا كنت تحتاج فعليًا إلى أقل من 18 صفحة، يمكنك شراء 18 صفحة أولًا ثم طلب استرداد الرصيد الزائد غير المستخدم."
             ]
           },
           {
             title: "4. الاسترداد",
             paragraphs: [
-              "الاشتراكات الشهرية غير قابلة للاسترداد. والخطط السنوية أيضًا غير قابلة للاسترداد عمومًا، باستثناء أول شراء سنوي: في هذه الحالة يمكن طلب استرداد واحد خلال 14 يومًا من الشراء، بشرط ألا تكون قد استُخدمت أي صفحات بعد ذلك الدفع. وهذه الاستثناءات محدودة بمرة واحدة لكل حساب. وقد نوفر أيضًا استردادًا في حالات أخطاء الفوترة أو الرسوم غير المصرح بها أو الأعطال الجسيمة في الخدمة أو عندما يفرض القانون المعمول به ذلك. أما pay-as-you-go credits التي تم استهلاكها فهي غير قابلة للاسترداد. يمكن استرداد الجزء غير المستخدم بالكامل من أرصدة الدفع حسب الاستخدام، بما في ذلك الأرصدة التي تُشترى أثناء وجود اشتراك نشط؛ أما الأرصدة المستخدمة فلا تُسترد."
+              "الاشتراكات الشهرية غير قابلة للاسترداد افتراضيًا. خطط الالتزام السنوي غير قابلة للاسترداد افتراضيًا أيضًا؛ لكن يمكن للعملاء الذين يشترون خطة الالتزام السنوي لأول مرة طلب استرداد لمرة واحدة خلال 14 يومًا من الشراء إذا لم تُستخدم أي صفحات منذ تلك الدفعة. لا يمكن استخدام هذا الاستثناء إلا مرة واحدة لكل حساب. الرصيد المشترى حسب الاستخدام، بما في ذلك الرصيد الإضافي المشترى أثناء فترة اشتراك، يمكن استرداد الجزء غير المستخدم منه بالكامل؛ أما الجزء المستخدم فلا يُسترد. وقد نقدم استردادًا أيضًا عند حدوث أخطاء فوترة أو مدفوعات غير مصرح بها أو أعطال كبيرة في الخدمة أو عندما يقتضي القانون المعمول به ذلك.",
+              "الحد الأدنى لوحدة طلب استرداد الرصيد حسب الاستخدام هو صفحة واحدة. يُحسب الاسترداد فقط على أساس الرصيد غير المستخدم حسب الاستخدام؛ أما الرصيد الذي استهلكته مهام ترجمة تم تسليمها بنجاح فلا يُسترد.",
+              "تعالج Paddle الاستردادات بناءً على معاملة الشراء الأصلية. إذا غطى طلب استرداد واحد رصيدًا من عدة مشتريات حسب الاستخدام، فقد يقسم TransLay الطلب إلى عدة عمليات استرداد عبر Paddle وفقًا للمعاملات الأصلية. لن يتغير إجمالي مبلغ الاسترداد، لكن قد تصلك عدة رسائل إشعار استرداد من Paddle.",
+              "إذا كنت قد ضبطت الاشتراك الشهري على الإلغاء في نهاية الدورة، ثم اخترت الترقية إلى خطة الالتزام السنوي قبل نهاية الدورة الشهرية الحالية، فسيستأنف TransLay الاشتراك الشهري أولًا ثم يرقيه إلى الالتزام السنوي. سيُخصم مبلغ USD 9.99 الذي دفعته لهذا الشهر من مبلغ الالتزام السنوي المستحق، وستُحدّث حقوق اشتراكك الحالية إلى حصة الالتزام السنوي البالغة 500 صفحة Google Slides™ شهريًا."
             ]
           },
           {
-            title: "5. الاستخدام المسموح",
+            title: "5. الاستخدام المقبول",
             paragraphs: [
-              "أنت توافق على عدم استخدام TransLay في محتوى غير قانوني أو محتوى ينتهك حقوق الغير أو محتوى غير مصرح به بوضوح أو أي محتوى غير مناسب. كما لا يجوز لك التحايل على الحصص أو إجراءات الأمان أو الإضرار باستقرار الخدمة. وأنت مسؤول عن المحتوى الذي ترسله وعن نتائج استخدامه."
+              "توافق على عدم استخدام TransLay لمعالجة محتوى غير قانوني أو منتهك للحقوق أو ينتهك بوضوح حقوق الآخرين أو يتجاوز نطاق التفويض الممنوح لك. كما لا يجوز لك إساءة استخدام TransLay عبر تجاوز الحصص أو تجاوز قيود السلامة أو تعطيل استقرار الخدمة عمدًا أو استخدام الخدمة بأي طريقة غير ملائمة أخرى. أنت مسؤول عن المحتوى الذي تقدمه للترجمة وعن النتائج المترتبة على استخدامه."
             ]
           },
           {
             title: "6. محتواك وتفويضك",
             paragraphs: [
-              "تحتفظ بكل الحقوق في مستنداتك وعروضك ومحتواها. ولكي تُكمل TransLay طلب ترجمة بدأته أنت، فإنك تفوضها بالوصول إلى الملف المحدد وقراءة النص المراد ترجمته وإنشاء الترجمة وكتابة النتيجة مرة أخرى في الملف الأصلي أو في ملف هدف جديد وفقًا لتعليماتك. وهذا التفويض موجود فقط لتقديم الخدمة ولا ينقل إلينا ملكية محتواك.",
-              "يُعالج النص الأصلي والترجمات وcomments وnotes لفترة قصيرة فقط أثناء تشغيل المهمة. وعند انتهاء المهمة، يُحذف هذا المحتوى فورًا من قاعدة بياناتنا ومن cache لدينا، ولا يُحتفظ به كنسخة احتياطية. لذلك يجب أن تحتفظ أنت بنفسك بملفاتك المترجمة. وإذا أردت لاحقًا ترجمة المستند نفسه إلى اللغة نفسها مرة أخرى، فسنتعامل معه على أنه مهمة جديدة مستقلة وسيتم احتساب الرسوم كاملة من جديد."
+              "تحتفظ بحقوقك الأصلية في مستنداتك وعروضك التقديمية ومحتواها. ولإكمال طلب ترجمة تبدأه أنت، تفوض TransLay، ضمن النطاق الضروري لتشغيل الخدمة، بالوصول إلى الملف الذي اخترته وقراءة المحتوى المطلوب ترجمته وإنشاء الترجمة وكتابتها إلى المستند الأصلي أو إنشاء مستند هدف جديد وفق تعليماتك. هذا التفويض مخصص فقط لإتمام الخدمة نفسها ولا يعني انتقال ملكية محتواك إلينا.",
+              "لا تُعالج النصوص الأصلية والترجمات وcomments وnotes المرتبطة بمهمة الترجمة إلا لفترة وجيزة أثناء تنفيذ المهمة. بعد انتهاء المهمة، تُحذف هذه المحتويات فورًا من قاعدة بياناتنا وذاكرتنا المؤقتة، ولا تُحفظ كنسخة احتياطية سحابية لك. لذلك يرجى الاحتفاظ بنفسك بالمستندات الهدف المترجمة. إذا بدأت لاحقًا ترجمة المستند نفسه إلى اللغة نفسها مرة أخرى، فسنعامل ذلك كمهمة مستقلة جديدة ونعالجها من جديد ونحسبها بالكامل وفق قواعد تلك المهمة."
             ]
           },
           {
             title: "7. نتائج الترجمة وتوفر الخدمة",
             paragraphs: [
-              "يستخدم TransLay تقنية ترجمة قائمة على AI. ونحن نسعى إلى جودة ترجمة عالية وإلى أكبر قدر ممكن من الحفاظ على التخطيط، لكن قد تظل هناك فروق في المعنى أو الطول أو فواصل الأسطر أو التنسيق المحلي. وإذا كان المحتوى قانونيًا أو ماليًا أو طبيًا أو تعاقديًا أو مهمًا بأي شكل آخر، فيجب عليك مراجعة النتيجة بنفسك قبل استخدامها. كما قد تتباطأ الخدمة مؤقتًا أو تنقطع أو تصبح غير متاحة بسبب الصيانة أو التغييرات في المنصات العليا أو مشكلات الشبكة أو خدمات الأطراف الثالثة."
+              "يقدم TransLay الخدمة باستخدام قدرات ترجمة بالذكاء الاصطناعي. نسعى إلى تحسين جودة الترجمة والحفاظ على التنسيق الأصلي، لكن النتائج قد تظل تتضمن انحرافًا دلاليًا أو تغيرًا في الطول أو تغيرًا في فواصل الأسطر أو اختلافات موضعية في التنسيق أو نتائج أخرى لا تلبي التوقعات بالكامل. بالنسبة إلى العقود أو المحتوى القانوني أو المالي أو الطبي أو أي محتوى مهم آخر، يجب أن تراجع النتيجة بنفسك قبل استخدامها أو نشرها. وقد تصبح الخدمة مؤقتًا غير متاحة أو متأخرة أو متقطعة بسبب الصيانة أو تغييرات المنصات الأعلى أو أعطال الشبكة أو مشكلات خدمات الأطراف الثالثة."
             ]
           },
           {
             title: "8. تحديد المسؤولية",
             paragraphs: [
-              "إلى أقصى حد يسمح به القانون المعمول به، تُقدم TransLay كما هي. ولا نتحمل المسؤولية عن أي أضرار غير مباشرة أو عرضية أو خاصة أو تبعية تنتج عن استخدام الخدمة أو عدم القدرة على استخدامها، أو عن عدم دقة الترجمة، أو عن قيود منصات الأطراف الثالثة، أو عن انقطاع الخدمة، أو عن أخطاء إعادة الكتابة."
+              "إلى أقصى حد يسمح به القانون المعمول به، يُقدم TransLay على أساس \"كما هو\". لا نتحمل مسؤولية أي خسائر غير مباشرة أو عرضية أو خاصة أو تبعية تنشأ عن استخدام الخدمة أو عدم القدرة على استخدامها أو انحراف نتائج الترجمة أو قيود منصات الأطراف الثالثة أو انقطاع الخدمة أو فشل كتابة البيانات."
             ]
           },
           {
-            title: "9. التغييرات على هذه الشروط",
+            title: "9. تحديث الشروط",
             paragraphs: [
-              "قد نحدّث هذه الشروط بسبب تغييرات المنتج أو المتطلبات القانونية أو متطلبات الدفع أو الاحتياجات التشغيلية. وستُنشر النسخ المحدثة على الموقع الرسمي. وإذا واصلت استخدام TransLay بعد سريان هذه التغييرات، فإنك تقبل الشروط المحدثة."
+              "قد نحدث هذه الشروط بحسب تطور المنتج أو المتطلبات القانونية أو احتياجات الدفع والتشغيل. ستُنشر النسخ المحدثة على الصفحات ذات الصلة في الموقع الرسمي. إذا واصلت استخدام TransLay بعد سريان التحديث، فهذا يعني أنك تقبل الشروط المحدثة."
             ]
           },
           {
             title: "10. التواصل",
             paragraphs: [
-              "إذا كانت لديك أسئلة حول هذه الشروط، فراسلنا على <strong>support@example.com</strong>."
+              "إذا كانت لديك أي أسئلة حول هذه الشروط، يرجى إرسال بريد إلى <strong>support@example.com</strong>."
             ]
           }
         ]
       },
       privacy: {
-        title: "سياسة الخصوصية في TransLay",
-        last_updated: "آخر تحديث: 23 أبريل 2026",
+        title: "سياسة خصوصية TransLay",
+        last_updated: "آخر تحديث: 2026-04-23",
         intro: [
-          "قاعدتنا الأساسية بسيطة: نجمع أقل، ونحتفظ بأقل، ونكشف أقل. عند استخدامك لـ TransLay، فإننا نعالج فقط الحد الأدنى من المعلومات اللازمة للترجمة وتسجيل الدخول والاشتراك والدعم. وما لا نحتاج إلى جمعه أو الاحتفاظ به نحاول ألا نلمسه أصلًا. وتوضح هذه السياسة كيف نتعامل مع هذه المعلومات."
+          "نعد \"تقليل الجمع، وتقليل الحفظ، وتقليل التعرض\" مبدأ TransLay الأساسي. عند استخدامك TransLay، لا نعالج إلا الحد الأدنى من المعلومات اللازمة لتشغيل الترجمة وتسجيل الدخول والاشتراكات ودعم ما بعد البيع. وكل ما لا ينبغي جمعه أو لا ينبغي حفظه طويلًا نحاول ألا نلمسه. توضح سياسة الخصوصية هذه كيف يتعامل TransLay مع هذه المعلومات."
         ],
         sections: [
           {
-            title: "1. مبدأ الخصوصية لدينا",
+            title: "1. مبدأ الخصوصية الذي نلتزم به",
             paragraphs: [
-              "تعالج TransLay فقط المعلومات اللازمة لإتمام الخدمة التي تطلبها بشكل مباشر. نحن لا نجمع معلومات لا علاقة لها بالخدمة، ولا نستخدمها للإعلانات، ولا ننشئ ملفات تعريف للمستخدمين أو نجري تحليلًا للسلوك. وبشكل خاص، بالنسبة إلى نص المستند والنص المترجم وcomments وnotes، فإننا نتبع مبدأ صارمًا للتقليل: بمجرد انتهاء المهمة، لا نحتفظ بهذا المحتوى في قاعدة البيانات أو cache أو سجلات التطبيق."
+              "مبدأ TransLay الأساسي بسيط: نعالج المعلومات الضرورية فقط لإتمام الخدمة التي تبدأها أنت، ولا نجمع معلومات لا علاقة لها بالخدمة، ولا نستخدمها للإعلانات، ولا ننشئ ملفات تعريف للمستخدمين، ولا نجري تحليلًا للسلوك. وبالأخص، بالنسبة إلى النصوص الأصلية والترجمات وcomments وnotes داخل مستنداتك، نتبع مبدأ تقليل صارمًا ولا نُبقي هذه المحتويات طويلًا في قواعد البيانات أو الذاكرة المؤقتة أو سجلات التطبيق."
             ]
           },
           {
-            title: "2. ما الذي نعالجه لتقديم الخدمة",
+            title: "2. أقل قدر من المعلومات نعالجه لتقديم الخدمة",
             paragraphs: [
-              "قد نعالج معلومات أساسية عن حساب Google الخاص بك، مثل معرّف الحساب وعنوان email واسم العرض وavatar، وذلك للتعرف عليك وربط الاشتراك والحصة بشكل صحيح وإظهار الحساب المتصل وتقديم الدعم.",
-              "نعالج محتوى Google Slides™ الذي تختاره صراحةً للترجمة، ولكن فقط بعد أن تبدأ مهمة ترجمة، وفقط لإكمال تلك المهمة وكتابة النتيجة مرة أخرى.",
-              "كما نعالج الحد الأدنى من معلومات المهمة والحصة اللازمة لإظهار التقدم وحساب الاستخدام والتحقق من مشكلات الفوترة وتقديم الدعم، مثل Task ID وحالة المهمة واستخدام الصفحات والطوابع الزمنية وmetadata تقنية محدودة لاستكشاف المشكلات.",
-              "إذا اشتريت خطة أو credits، فإننا نعالج الحد الأدنى من معلومات الطلب والاشتراك اللازمة لتأكيد حقوقك، مثل حالة الدفع ورقم الطلب ووقت الشراء أو الاسترداد وحالة الاشتراك. وتعالج Paddle بيانات البطاقة الكاملة، وليس نحن.",
-              "وبالنسبة إلى sessions الخاصة بالموقع، فإننا نستخدم فقط الحد الأدنى من المعلومات اللازمة لتشغيل الموقع الرسمي وصفحات الدفع. وتخزن cookies فقط session id غير قابل للقراءة المباشرة، وليس معلومات واضحة مثل email أو الخطة أو الحصة."
+              "قد نعالج معلومات Google الأساسية للحساب، مثل معرّف حساب Google والبريد الإلكتروني واسم العرض والصورة الشخصية، لتأكيد هويتك وربط الاشتراكات والحصص بالحساب الصحيح وعرض الحساب الحالي وتقديم دعم ما بعد البيع.",
+              "لا نعالج محتوى Google Slides™ الذي تختاره صراحة للترجمة إلا بعد أن تبدأ مهمة الترجمة بنفسك، وبغرض إكمال تلك الترجمة وكتابة النتيجة فقط.",
+              "نعالج أيضًا الحد الأدنى من معلومات المهمة والحصة اللازمة لعرض تقدم المهمة وتسوية استخدام الحصة والتحقق من مشكلات الفوترة وتقديم الدعم، مثل Task ID وحالة المهمة واستخدام الصفحات والطوابع الزمنية وبيانات محدودة لاستكشاف الأخطاء.",
+              "إذا اشتريت خطة أو رصيدًا، فإننا نعالج الحد الأدنى من معلومات الطلب والاشتراك اللازمة لتأكيد استحقاقك، مثل حالة الدفع ورقم الطلب ووقت الشراء أو الاسترداد وحالة الاشتراك. تفاصيل البطاقة الكاملة تعالجها Paddle ولا نحفظها نحن.",
+              "بالنسبة إلى جلسات الموقع، نستخدم فقط الحد الأدنى من معلومات الجلسة اللازمة للحفاظ على عمل الموقع الرسمي وصفحات الاشتراك. لا تحفظ ملفات Cookie إلا session id غير شفاف، ولا تحفظ بريدك أو خطتك أو حصتك كنص واضح قابل للقراءة."
             ]
           },
           {
-            title: "3. ما الذي لا نحتفظ به ولا نجمعه",
+            title: "3. ما لا نحفظه أو نجمعه",
             paragraphs: [
-              "لا نحتفظ بنص واضح من محتوى مستنداتك أو نتائج الترجمة أو comments أو notes في قاعدة بياناتنا أو cache لدينا أو سجلاتنا. وما إن تنتهي مهمة الترجمة حتى يُحذف هذا المحتوى من قاعدة البيانات وcache ولا يُحتفظ به كنسخة احتياطية للمستند. لذلك يجب أن تحتفظ أنت بنفسك بملفاتك المترجمة.",
-              "إذا طلبت لاحقًا ترجمة المستند نفسه إلى اللغة نفسها مرة أخرى، فسنتعامل مع ذلك على أنه مهمة جديدة مستقلة. ولأننا لا نحتفظ بمحتوى المستند السابق أو بالترجمة السابقة، فإننا لا نعيد استخدام النتيجة السابقة مباشرة، ويتم احتساب المهمة الجديدة بالكامل.",
-              "نحن لا نستخدم معلوماتك للإعلانات أو نسب الإعلانات أو إنشاء ملفات تعريف للمستخدمين أو تحليل السلوك. ولا نبيع بياناتك، ولا نتابع نشاطك على مواقع أخرى أو في مستندات أخرى أو منتجات أخرى فقط لأنك تستخدم TransLay.",
-              "ولا نحتفظ بأرقام البطاقات الكاملة أو أرقام الحسابات البنكية الكاملة أو أي بيانات دفع كاملة أخرى. تتم معالجة المدفوعات عبر Paddle، ونحن لا نتلقى إلا الحد الأدنى من المعلومات اللازمة للطلبات والدعم."
+              "لا نحفظ النص الواضح لمحتوى مستنداتك أو نتائج الترجمة أو comments أو notes في قواعد بياناتنا أو الذاكرة المؤقتة أو السجلات. بعد انتهاء مهمة الترجمة، تُحذف هذه المحتويات فورًا من قاعدة بياناتنا وذاكرتنا المؤقتة، ولا تستمر كنسخة احتياطية لمستندك. لذلك يرجى الاحتفاظ بنفسك بالمستندات الهدف المترجمة.",
+              "إذا بدأت لاحقًا ترجمة المستند نفسه إلى اللغة نفسها مرة أخرى، فسنعامل ذلك كمهمة مستقلة جديدة. ولأننا لا نحتفظ بمحتوى المستند السابق أو ترجمته السابقة، فلن نعيد استخدام النتيجة السابقة مباشرة، وستُحسب المهمة بالكامل وفق قواعد المهمة الحالية.",
+              "لا نستخدم معلوماتك للإعلانات أو إسناد الإعلانات أو إنشاء ملفات تعريف للمستخدمين أو تحليل السلوك. لا نبيع بياناتك، ولا نتتبع نشاطك في مواقع أخرى أو مستندات أخرى أو منتجات أخرى لمجرد أنك تستخدم TransLay.",
+              "لا نحفظ رقم بطاقتك البنكية الكامل أو رقم حسابك البنكي الكامل أو أي بيانات اعتماد دفع كاملة أخرى. تعالج Paddle المدفوعات، ولا نتلقى نحن إلا الحد الأدنى من معلومات النتائج اللازمة للطلبات ودعم ما بعد البيع."
             ]
           },
           {
             title: "4. لماذا نحتاج إلى أذونات Google",
             paragraphs: [
-              "TransLay هو add-on لـ Google Workspace™. ولكي يعمل بشكل صحيح داخل Google Slides™، فإننا نطلب فقط الأذونات اللازمة مباشرة ضمن النطاق الحالي للمنتج.",
-              "إذن Google Slides™ ضروري لقراءة محتوى العرض الذي يجب ترجمته وكتابة الترجمة مرة أخرى في الملف الأصلي أو ملف الهدف.",
-              "وإذن Google Drive™ ضروري لتحديد العرض النشط وإنشاء نسخ يملكها المستخدم في مسار ملف جديد ووضع ملف الهدف في المكان الصحيح وإدارة الوصول المؤقت أثناء التنفيذ.",
-              "أما إذن Google Drive™ file فيساعدنا على حصر عمليات الملفات قدر الإمكان في الملفات الداخلة في سير العمل الحالي فقط.",
-              "وإذن Google Workspace™ container UI ضروري لإظهار الشريط الجانبي لـ TransLay داخل Google Slides™.",
-              "وإذن الطلبات الخارجية ضروري لكي يتمكن add-on من التواصل بشكل آمن مع backend الخاص بـ TransLay لتنفيذ مهام الترجمة وتحديث الاستحقاق وتسجيل الدخول والفوترة.",
-              "كما أن الأذونات المرتبطة بـ email وavatar لحساب Google ضرورية لهوية تسجيل الدخول وإظهار الحساب الحالي وربط الاشتراكات وتقديم الدعم."
+              "TransLay إضافة Google Workspace™. لكي تعمل بشكل صحيح داخل Google Slides™، لا نطلب إلا الأذونات المطلوبة مباشرة ضمن نطاق المنتج الحالي.",
+              "إذن Google Slides™ يُستخدم لقراءة محتوى العرض التقديمي الذي تريد ترجمته وكتابة الترجمة إلى الملف الأصلي أو الملف الهدف. من دون هذا الإذن، لا يستطيع TransLay قراءة المحتوى أو إكمال الكتابة.",
+              "إذن Google Drive™ يُستخدم لتحديد العرض التقديمي الحالي، وإنشاء نسخ يملكها المستخدم في وضع \"الإخراج إلى ملف جديد\"، ووضع الملف الهدف في المكان المناسب، وإدارة الوصول المؤقت المطلوب أثناء تنفيذ المهمة. من دون هذا الإذن، لا يمكن لبعض مسارات النسخ والكتابة أن تعمل بثبات.",
+              "إذن Google Drive™ file يساعدنا على حصر عمليات الملفات قدر الإمكان في الملفات المرتبطة بسير العمل الحالي.",
+              "إذن واجهة حاوية Google Workspace™ يُستخدم لإظهار الشريط الجانبي لـ TransLay داخل Google Slides™.",
+              "إذن الطلبات الخارجية يُستخدم للسماح للإضافة بالتواصل بأمان مع خلفية TransLay لإكمال مهام الترجمة وتحديث الاستحقاقات وتسجيل الدخول والعمليات المرتبطة بالاشتراك.",
+              "أذونات بريد حساب Google والصورة الشخصية تُستخدم للتعرف على تسجيل الدخول وعرض الحساب الحالي وربط الاشتراكات ومعالجة دعم ما بعد البيع."
             ]
           },
           {
-            title: "5. كيف تمنح هذه الأذونات",
+            title: "5. كيفية منح هذه الأذونات",
             paragraphs: [
-              "بعد تثبيت TransLay من Google Workspace Marketplace، ستطلب منك Google في أول مرة تفتحه وتشغله داخل Google Slides™ أن تكمل مسار التفويض. عمليًا، تثبت add-on، ثم تفتح عرض Google Slides™، وتذهب إلى Extensions، وتشغّل TransLay، ثم تتبع الإرشاد إلى صفحة تأكيد أذونات Google.",
-              "وفي تلك الصفحة، سجّل الدخول بحساب Google الذي تريد استخدامه مع TransLay، واختر الأذونات المطلوبة إذا عرضت Google مربع تحديد عامًا، ثم اضغط Allow أو Confirm. من دون هذه الأذونات، لا يستطيع TransLay قراءة المستندات بشكل صحيح أو تنفيذ الترجمة أو إنشاء ملفات هدف أو كتابة النتائج أو إكمال مسارات تسجيل الدخول والاشتراك."
+              "بعد تثبيت TransLay من Google Workspace Marketplace، عند فتحه وتشغيله لأول مرة داخل Google Slides™، ستطلب منك Google إكمال مسار التفويض. عادةً تثبّت الإضافة، ثم تفتح أي عرض Google Slides™، وتدخل إلى Extensions، وتشغّل TransLay، ثم تتبع التعليمات للانتقال إلى صفحة تأكيد أذونات Google.",
+              "في صفحة التأكيد، استخدم حساب Google الذي تنوي استخدامه مع TransLay لتسجيل الدخول. إذا عرضت Google مربع \"تحديد الكل\"، فحدد الأذونات المطلوبة، ثم اضغط \"السماح\" أو \"تأكيد\". إذا لم تمنح هذه الأذونات الضرورية، فلن يتمكن TransLay من قراءة المستندات أو تنفيذ الترجمة أو إنشاء الملفات الهدف أو كتابة النتائج أو إكمال مسارات تسجيل الدخول والاشتراك بشكل صحيح."
             ]
           },
           {
             title: "6. كيف نستخدم هذه المعلومات",
             paragraphs: [
-              "نستخدم هذه المعلومات فقط لتنفيذ الترجمة التي تطلبها، وإظهار حالة تسجيل الدخول، وربط الاشتراكات والحصص، ومعالجة الفوترة والاستردادات، والرد على طلبات الدعم، ومنع إساءة الاستخدام، والحفاظ على موثوقية الخدمة. نحن لا نستخدم هذه المعلومات للإعلانات أو إنشاء الملفات التعريفية أو توصيات التسويق. كما أننا لا نستخدم محتوى مستنداتك لتدريب نماذجنا الخاصة."
+              "تُستخدم هذه المعلومات فقط لإكمال الترجمة التي طلبتها، وعرض حالة تسجيل الدخول الحالية، وربط الاشتراكات والحصص، ومعالجة الفواتير والاستردادات، والرد على مشكلات دعم ما بعد البيع، ومنع إساءة الاستخدام، وضمان تشغيل الخدمة بثبات. لا نستخدم هذه المعلومات للإعلانات أو ملفات تعريف المستخدمين أو توصيات التسويق أو تحليل السلوك. كما لا نستخدم محتوى مستنداتك لتدريب نماذجنا الخاصة."
             ]
           },
           {
-            title: "7. خدمات أطراف ثالثة",
+            title: "7. خدمات الأطراف الثالثة",
             paragraphs: [
-              "لتشغيل TransLay، نعتمد عند الحاجة على عدد صغير من خدمات الأطراف الثالثة. ويشمل ذلك Google Workspace™ وGoogle Cloud للاستضافة والوصول إلى المستندات وتشغيل الخدمة، ومزودي AI وcloud لمعالجة الترجمة، وPaddle للمدفوعات والضرائب والاستردادات. وتشارك هذه الخدمات فقط بالقدر اللازم لتقديم الميزات الحالية."
+              "لتشغيل TransLay، نعتمد عند الضرورة على عدد محدود من خدمات الأطراف الثالثة، مثل Google Workspace™ وGoogle Cloud للاستضافة والوصول إلى المستندات وتشغيل الخدمة، ومزودي الذكاء الاصطناعي والخدمات السحابية لمعالجة الترجمة، وPaddle للمدفوعات والضرائب والاستردادات. تشارك هذه الخدمات فقط ضمن النطاق اللازم لتقديم الميزات الحالية."
             ]
           },
           {
             title: "8. الاحتفاظ والحذف",
             paragraphs: [
-              "هدفنا أن نحتفظ بأقل قدر ممكن من المعلومات ولأقصر مدة ممكنة. يتم حذف النص والترجمات وcomments وnotes المرتبطة بالمحتوى المترجم من قاعدة البيانات وcache مباشرة عند انتهاء المهمة. ومع ذلك، قد نحتفظ بقدر صغير من المعلومات المرتبطة بالحساب أو الاشتراك أو الطلبات أو الامتثال إذا كان ذلك ضروريًا لتأكيد حقوقك أو معالجة الاستردادات أو الرد على طلبات قانونية.",
-              "إذا أردت حذف معلومات شخصية مرتبطة بحسابك، أو فهم السجلات الدنيا التي ما تزال موجودة، فراسلنا على <strong>support@example.com</strong>. ويرجى الانتباه إلى أنك إذا طلبت حذف السجلات اللازمة لإثبات حقوق الاشتراك واستعادتها، فقد لا نتمكن من استعادة تلك الحقوق لاحقًا."
+              "هدفنا هو الاحتفاظ بأقل قدر ممكن من المعلومات ولأقصر مدة ممكنة. تُحذف النصوص الأصلية والترجمات وcomments وnotes المرتبطة بمحتوى الترجمة من قاعدة البيانات والذاكرة المؤقتة فور انتهاء المهمة. وقد نواصل الاحتفاظ بقدر صغير من المعلومات الضرورية لربط الحسابات والاشتراكات والطلبات والامتثال عند الحاجة فعلًا، لتأكيد الاستحقاقات أو معالجة الاستردادات أو الاستجابة للطلبات القانونية.",
+              "إذا أردت حذف معلومات شخصية مرتبطة بحسابك، أو معرفة ما هي السجلات الدنيا التي ما زالت محفوظة، يمكنك التواصل عبر <strong>support@example.com</strong>. يرجى ملاحظة أنك إذا طلبت حذف السجلات الضرورية لإثبات حقوق الاشتراك واستعادتها، فقد لا نتمكن لاحقًا من استعادة تلك الحقوق لك."
             ]
           },
           {
             title: "9. حقوقك وخياراتك",
             paragraphs: [
-              "يمكنك التوقف عن استخدام TransLay في أي وقت. ويمكنك أيضًا إلغاء اشتراك أو تسجيل الخروج أو الاتصال بنا بشأن طلبات متعلقة بالخصوصية. وبالقدر الذي يمنحك فيه القانون الساري حقوق الوصول أو التصحيح أو الحذف أو التقييد، فسنتعامل مع الطلبات الصحيحة وفقًا للقواعد المعمول بها."
+              "يمكنك التوقف عن استخدام TransLay في أي وقت. يمكنك أيضًا إلغاء الاشتراكات أو تسجيل الخروج أو التواصل معنا بطلبات متعلقة بالخصوصية. عندما يمنحك القانون المعمول به حقوق الوصول أو التصحيح أو الحذف أو تقييد المعالجة، فسنعالج الطلبات الصحيحة وفق القواعد المعمول بها."
             ]
           },
           {
-            title: "10. تحديثات السياسة والتواصل",
+            title: "10. تحديثات السياسة وطرق التواصل",
             paragraphs: [
-              "قد نحدّث هذه السياسة إذا تغيّر المنتج أو مسار الدفع أو الالتزامات القانونية. وستُنشر النسخ المحدثة على الموقع الرسمي. ولأي أسئلة حول الخصوصية أو معالجة البيانات أو الأمان، راسلنا على <strong>support@example.com</strong>."
+              "إذا تغير شكل المنتج أو مسار الدفع أو الالتزامات القانونية، فقد نحدث سياسة الخصوصية هذه. ستُنشر النسخ المحدثة على الصفحات ذات الصلة في الموقع الرسمي. إذا كان لديك أي سؤال عن الخصوصية أو معالجة البيانات أو الأمن، يرجى إرسال بريد إلى <strong>support@example.com</strong>."
             ]
           }
         ]
@@ -3988,332 +4071,369 @@ window.TRANSLATIONS = {
     }
   },
   he: {
+    meta: {
+      document_title: "TransLay — כלי תרגום LLM ל-Google Slides™"
+    },
     nav: {
-      home: "דף הבית",
-      features: "תכונות",
-      pricing: "תמחור",
+      home: "בית",
+      features: "יכולות",
+      pricing: "מחירים",
       faq: "שאלות נפוצות",
-      install: "התקן תוסף"
+      install: "התקנת התוסף"
     },
     hero: {
-      badge: "זמין כעת ב-Google Workspace™",
-      title1: "תרגם שקופיות.",
-      title2: "שמור על הכל.",
-      subtitle: "תרגום LLM איכותי ל-Google Slides™ — גופנים, סגנונות ופריסה נשארים בדיוק כפי שהיו.",
-      cta: "התקן תוסף",
+      badge: "זמין עכשיו ב-Google Workspace™",
+      title1: "תרגום Slides",
+      title2: "שמירה על הכול",
+      subtitle: "תרגום AI איכותי ל-Google Slides™, עם שמירה מלאה על כל גופן, סגנון ופריסה.",
+      cta: "התקנת התוסף",
       cta_sub: "חינם — 20 שקופיות במתנה",
-      secondary: "צפה בהדגמה"
+      secondary: "צפייה בהדגמה"
     },
-    trust: "Trusted by teams at",
+    trust: "בחירה של צוותים",
     features: {
-      kicker: "Features",
-      title: "Built for presentations that matter",
-      subtitle: "TransLay was designed from the ground up to respect the craft of your deck.",
-      f1_title: "AI-powered translation quality",
-      f1_body: "Context-aware translations that read at a professional human level.",
-      f2_title: "Pixel-perfect layout",
-      f2_body: "Fonts, colors, spacing, and animations stay true to the original, with little to no reflow.",
-      f3_title: "Describe the target language naturally",
-      f3_body: "Type \"Icelandic\" or \"Thai\" — TransLay understands.",
-      f4_title: "Two output modes",
-      f4_body: "Create a new deck, or append translated slides after each original.",
-      f5_title: "One click inside Slides",
-      f5_body: "No uploads or exports. Open it directly in the Google Slides™ sidebar.",
-      f6_title: "Stable for real-world decks",
-      f6_body: "Support a single Google Slides™ deck with up to 50 slides, with stable background processing."
+      kicker: "יכולות",
+      title: "נבנה למצגות שחשובות באמת",
+      subtitle: "TransLay תוכנן מהיסוד כדי לכבד את העבודה שהשקעתם בכל מצגת.",
+      f1_title: "איכות תרגום מבוססת AI",
+      f1_body: "תרגום שמבין הקשר ונקרא ברמה של מתרגם מקצועי.",
+      f2_title: "שמירת פריסה מדויקת",
+      f2_body: "גופנים, צבעים, מרווחים ואנימציות נשארים כמעט כפי שהיו, עם מעט מאוד צורך בתיקוני פריסה.",
+      f3_title: "תיאור שפת היעד בשפה טבעית",
+      f3_body: "כתבו איסלנדית או תאילנדית, ו-TransLay יבין.",
+      f4_title: "שני מצבי פלט",
+      f4_body: "צרו מסמך מתורגם חדש, או הוסיפו את התרגום אחרי כל עמוד מקור.",
+      f5_title: "פעולה בלחיצה אחת בתוך Slides",
+      f5_body: "בלי העלאות ובלי ייצוא. פותחים ישירות מסרגל הצד של Google Slides™.",
+      f6_title: "מתאים גם למצגות גדולות",
+      f6_body: "תומך במסמך Google Slides™ אחד עם עד 50 שקופיות, בעיבוד רקע יציב."
     },
     demo: {
-      kicker: "See it in action",
-      title: "Product demo",
+      kicker: "התוצאה בפועל",
+      title: "הדגמת מוצר",
       subtitle: "",
-      screenshot_labels: ["פונקציה: הוספה", "פונקציה: עמודים מותאמים", "פונקציה: יצירת קובץ חדש"]
+      screenshot_labels: ["יכולת: הוספת תרגום", "יכולת: עמודים מותאמים", "יכולת: יצירת קובץ חדש"]
     },
     pricing: {
-      kicker: "Pricing",
-      title: "Simple, transparent pricing",
-      subtitle: "Start free, upgrade anytime, no subscription required, and pay only for what you need.",
-      free_name: "Free",
+      kicker: "מחירים",
+      title: "תמחור פשוט ושקוף",
+      subtitle: "מתחילים בחינם, משדרגים בכל עת, ללא חובת מנוי, ומשלמים רק לפי הצורך.",
+      free_name: "חינם",
       free_price: "$0",
-      free_sub: "One-time, on install",
-      free_f1: "20 slides total",
-      free_f2: "All languages",
-      free_f3: "Full layout preservation",
-      free_f4: "Email support",
-      free_cta: "Install free",
-      monthly_name: "Monthly",
+      free_sub: "מתנה חד-פעמית לאחר ההתקנה",
+      free_f1: "20 שקופיות",
+      free_f2: "כל השפות",
+      free_f3: "שמירה מלאה על הפריסה",
+      free_f4: "תמיכה באימייל",
+      free_cta: "התקנה בחינם",
+      monthly_name: "חודשי",
       monthly_price: "$9.99",
-      monthly_per: "/month",
-      monthly_sub: "Cancel anytime",
-      monthly_f1: "300 slides / month",
-      monthly_f2: "All languages",
-      monthly_f3: "Priority translation speed",
-      monthly_f4: "Priority support",
-      monthly_cta: "Get Monthly",
-      cancel_cta: "Cancel subscription",
-      cancel_scheduled_cta: "Cancellation scheduled",
-      resume_monthly_cta: "Resume Monthly",
-      resume_yearly_cta: "Resume Annual commitment",
-      upgrade_yearly_cta: "Upgrade to Annual commitment",
-      yearly_badge: "Best value",
-      yearly_name: "Annual commitment",
+      monthly_per: "/חודש",
+      monthly_sub: "ביטול בכל עת",
+      monthly_f1: "300 שקופיות / חודש",
+      monthly_f2: "כל השפות",
+      monthly_f3: "מהירות תרגום בעדיפות",
+      monthly_f4: "תמיכה בעדיפות",
+      monthly_cta: "מנוי חודשי",
+      cancel_cta: "ביטול מנוי",
+      cancel_scheduled_cta: "הביטול נקבע",
+      resume_monthly_cta: "חידוש המנוי החודשי",
+      resume_yearly_cta: "חידוש ההתחייבות השנתית",
+      upgrade_yearly_cta: "שדרוג להתחייבות שנתית",
+      yearly_badge: "המשתלם ביותר",
+      yearly_name: "התחייבות שנתית",
       yearly_price: "$119.99",
-      yearly_per: "/year",
-      yearly_sub: "Save 40% vs monthly",
-      yearly_f1: "500 slides / month",
-      yearly_f2: "All languages",
-      yearly_f3: "Priority translation speed",
-      yearly_f4: "Priority support",
-      yearly_cta: "Get Annual commitment",
-      subscription_success_title: "Thanks for subscribing!",
-      subscription_success_body_monthly: "You have successfully subscribed to TransLay on the monthly plan. Please sign in to Google Slides™. If TransLay is already open in the sidebar, close it, then reopen TransLay from Extensions. Your subscription status will update automatically.",
-      subscription_success_body_yearly: "You have successfully subscribed to TransLay on the annual commitment plan. Please sign in to Google Slides™. If TransLay is already open in the sidebar, close it, then reopen TransLay from Extensions. Your subscription status will update automatically.",
-      subscription_success_confirm: "OK",
-      cancel_dialog_title: "Cancel subscription?",
-      cancel_dialog_body_monthly: "After cancellation, you can keep using the current subscription until the end of the current billing period. Unused time is non-refundable. The cancellation takes effect at the start of the next billing period.",
-      cancel_dialog_body_yearly: "After cancellation, you can keep using the current annual commitment subscription until the end of the current annual term. Unused time is non-refundable. Annual commitment plans are generally non-refundable. First-time annual commitment customers may request a one-time refund within 14 days of purchase only if no pages have been used since that payment. The cancellation takes effect in the next subscription term.",
-      cancel_dialog_confirm: "Confirm cancellation",
-      cancel_dialog_dismiss: "Keep subscription",
-      opening_checkout_notice: "Opening secure checkout...",
-      purchase_received_notice: "Purchase received. Confirming your subscription state...",
-      subscription_confirmation_delayed_notice: "Purchase received. Subscription confirmation may take a few seconds.",
-      sign_in_required_notice: "Sign in with Google before starting checkout.",
-      payment_failed_notice: "Payment was not completed. Please try again or use another payment method.",
-      checkout_unavailable_notice: "Unable to complete this billing action right now.",
-      subscription_change_pending_notice: "Updating your subscription...",
-      cancellation_redirect_notice: "Opening Paddle's secure cancellation page...",
-      cancellation_scheduled_notice: "Your subscription has been canceled. You can keep using TransLay until {date}.",
-      cancellation_failed_notice: "Unable to schedule cancellation right now.",
-      subscription_resumed_notice: "Your subscription has been resumed.",
-      upgrade_success_notice: "Your annual commitment upgrade is complete. The one-time upgrade charge was {amount}.",
-      upgrade_notice_title: "Friendly reminder",
-      upgrade_notice_body: "Upgrading to annual commitment will credit your current monthly payment and charge only the upgrade difference of {amount}.",
-      upgrade_notice_confirm: "Agree",
-      upgrade_notice_cancel: "Cancel",
-      upgrade_processing_title: "Processing payment...",
-      upgrade_processing_body: "Please keep this page open while Paddle confirms your upgrade.",
-      upgrade_completed_title: "Upgrade complete",
-      upgrade_completed_body: "You have upgraded to the annual commitment subscription. Valid until {date}.",
-      upgrade_completed_confirm: "OK",
-      upgrade_failed_title: "Upgrade not completed",
-      upgrade_failed_confirm: "OK",
-      payg_name: "Pay as you go",
+      yearly_per: "/שנה",
+      yearly_sub: "חיסכון של 40% לעומת חודשי",
+      yearly_f1: "500 שקופיות / חודש",
+      yearly_f2: "כל השפות",
+      yearly_f3: "מהירות תרגום בעדיפות",
+      yearly_f4: "תמיכה בעדיפות",
+      yearly_cta: "מנוי בהתחייבות שנתית",
+      subscription_success_title: "תודה שנרשמתם!",
+      subscription_success_body_monthly: "נרשמתם בהצלחה ל-TransLay במסלול החודשי. התחברו ל-Google Slides™. אם TransLay כבר פתוח בסרגל הצד, סגרו אותו ופתחו אותו מחדש מתוך Extensions. סטטוס המנוי יתעדכן אוטומטית.",
+      subscription_success_body_yearly: "נרשמתם בהצלחה ל-TransLay במסלול ההתחייבות השנתית. התחברו ל-Google Slides™. אם TransLay כבר פתוח בסרגל הצד, סגרו אותו ופתחו אותו מחדש מתוך Extensions. סטטוס המנוי יתעדכן אוטומטית.",
+      subscription_success_confirm: "אישור",
+      cancel_dialog_title: "לאשר ביטול מנוי?",
+      cancel_dialog_body_monthly: "לאחר הביטול תוכלו להמשיך להשתמש במנוי הנוכחי עד סוף מחזור המנוי הנוכחי. הזמן שלא נוצל אינו ניתן להחזר. הביטול ייכנס לתוקף במחזור החיוב הבא.",
+      cancel_dialog_body_yearly: "לאחר הביטול תוכלו להמשיך להשתמש במנוי ההתחייבות השנתית הנוכחי עד סוף תקופת ההתחייבות השנתית הנוכחית. הזמן שלא נוצל אינו ניתן להחזר. תוכניות התחייבות שנתית אינן ניתנות להחזר כברירת מחדל; עם זאת, משתמשים שרוכשים התחייבות שנתית בפעם הראשונה יכולים לבקש החזר חד-פעמי בתוך 14 יום מהרכישה, אם מאז אותה תשלום נוצלו 0 עמודים. הביטול ייכנס לתוקף במחזור המנוי הבא.",
+      cancel_dialog_confirm: "אישור: להתחיל ביטול מנוי",
+      cancel_dialog_dismiss: "ביטול: להשאיר את המנוי",
+      opening_checkout_notice: "פותחים תשלום מאובטח...",
+      purchase_received_notice: "תוצאת הרכישה התקבלה, מאמתים את סטטוס המנוי שלכם...",
+      credits_purchase_received_notice: "תוצאת רכישת הקרדיט התקבלה, מאמתים את היתרה שלכם...",
+      credits_balance_label: "יתרת קרדיט לפי שימוש",
+      credits_refundable_label: "קרדיט ניתן להחזר",
+      credits_quantity_label: "מספר עמודים לרכישה",
+      credits_minimum_quantity_notice: "מינימום הגבייה של ערוץ התשלום הוא {amount}; מינימום הרכישה הנוכחי הוא {min} עמודים.",
+      credits_refund_quantity_label: "מספר עמודים להחזר",
+      credits_refund_in_progress_label: "החזר בטיפול",
+      credits_purchase_cta: "רכישה",
+      credits_refund_cta: "החזר",
+      credits_cancel_cta: "ביטול",
+      credits_refund_pending_notice: "שולחים בקשת החזר...",
+      credits_refund_submitted_notice: "בקשת ההחזר נשלחה.",
+      credits_refund_provider_pending_notice: "ההחזר נשלח, ופלטפורמת התשלום מטפלת בו.",
+      credits_refund_processing_banner: "שלחנו את בקשת ההחזר שלכם לפלטפורמת התשלום לעיבוד. התהליך עשוי להימשך עד 30 דקות. בהמשך תקבלו הודעת אימייל מפלטפורמת התשלום, לכן בדקו את תיבת הדואר. לכל שאלה, כתבו אל support@example.com. קרדיט בהחזר כעת: {units}. סכום החזר משוער: {amount}.",
+      subscription_confirmation_delayed_notice: "תוצאת הרכישה התקבלה, ואימות סטטוס המנוי עשוי להימשך עוד כמה שניות.",
+      sign_in_required_notice: "יש להתחבר עם Google לפני התחלת המנוי.",
+      payment_failed_notice: "התשלום לא הושלם. נסו שוב או השתמשו באמצעי תשלום אחר.",
+      checkout_unavailable_notice: "לא ניתן להשלים את פעולת המנוי הזו כרגע. נסו שוב מאוחר יותר.",
+      subscription_change_pending_notice: "מעדכנים את המנוי שלכם...",
+      cancellation_redirect_notice: "פותחים את דף ביטול המנוי המאובטח של Paddle...",
+      cancellation_scheduled_notice: "המנוי שלכם בוטל בהצלחה. תוכלו להמשיך להשתמש בו עד {date}.",
+      cancellation_failed_notice: "לא ניתן לקבוע ביטול מנוי כרגע. נסו שוב מאוחר יותר.",
+      subscription_resumed_notice: "המנוי שלכם חודש.",
+      upgrade_success_notice: "השדרוג להתחייבות שנתית הושלם. עלות השדרוג החד-פעמית היא {amount}.",
+      upgrade_notice_title: "תזכורת ידידותית",
+      upgrade_notice_body: "בעת שדרוג להתחייבות שנתית, המערכת תקזז את עלות המנוי החודשי הנוכחי, ותשלמו רק את הפרש השדרוג {amount}.",
+      upgrade_notice_confirm: "מסכים",
+      upgrade_notice_cancel: "ביטול",
+      upgrade_processing_title: "מעבדים תשלום...",
+      upgrade_processing_body: "Paddle מאמתת את השדרוג. אל תסגרו את הדף הנוכחי.",
+      upgrade_completed_title: "השדרוג הושלם",
+      upgrade_completed_body: "שודרגתם למנוי התחייבות שנתית. בתוקף עד: {date}.",
+      upgrade_completed_confirm: "אישור",
+      upgrade_failed_title: "השדרוג לא הושלם",
+      upgrade_failed_confirm: "אישור",
+      payg_name: "תשלום לפי שימוש",
       payg_price: "$0.04",
-      payg_per: "/slide",
-      payg_sub: "No commitment, no monthly cap",
-      payg_f1: "Unlimited volume",
-      payg_f2: "All languages",
-      payg_f3: "Rollover credits",
-      payg_f4: "Standard support",
-      payg_cta: "Buy credits"
+      payg_per: "/עמוד",
+      payg_sub: "ללא התחייבות וללא מגבלה חודשית",
+      payg_f1: "שימוש ללא הגבלה",
+      payg_f2: "קרדיט שלא נוצל ניתן להחזר בכל עת",
+      payg_f3: "ניתן לצבור קרדיט",
+      payg_f4: "שימו לב: עקב מגבלות פלטפורמת התשלום, מינימום הרכישה בכל הזמנה הוא 18 עמודים",
+      payg_cta: "רכישת קרדיט",
+      payg_available_credits_label: "קרדיט שנותר",
+      payg_buy_entry_cta: "רכישת קרדיט לפי שימוש",
+      payg_refund_entry_cta: "החזר קרדיט שלא נוצל"
     },
     faq: {
-      kicker: "FAQ",
-      title: "Questions, answered.",
-      q1: "How do I install TransLay?",
-      a1: "Search \"TransLay\" in the Google Workspace Marketplace and click Install. Grant access to Google Slides™, and the add-on will appear under Extensions → TransLay inside any presentation.",
-      q2: "How do I use it after installing?",
-      a2: "Open a Google Slides™ deck, go to Extensions → TransLay → Start. Pick your target language (preset or type any language in natural language), choose whether to create a new deck or append translated slides, and hit Translate.",
-      q3: "What's your refund policy?",
-      a3: "Monthly subscriptions are non-refundable. Annual commitment plans are also non-refundable, except that first-time annual commitment customers may request a one-time refund within 14 days of purchase if no pages have been used since that payment. Unused pay-as-you-go credits may be refunded in full; used credits are non-refundable. Refunds may also be issued for billing errors, unauthorized payments, major service failures, or where required by law.",
-      q4: "How do I get technical support?",
-      a4: "Every translation job has a Task ID you can copy from the sidebar. Email it to support@example.com and we typically respond within 24 hours. Priority plans get a 4-hour SLA.",
-      q5: "What is the maximum document size supported?",
-      a5: "TransLay currently supports a single Google Slides™ deck with up to 50 slides, which covers the vast majority of everyday usage scenarios.",
-      q6: "Does TransLay reproduce the original layout and styling 100% exactly?",
-      a6: "Not always. Different languages can require very different text lengths for the same meaning. TransLay uses AI and layout-preservation techniques to restore the original styling and structure as closely as possible, but 100% fidelity cannot be guaranteed. You can use the free 20-slide quota with your own real deck to evaluate the result before purchasing.",
-      q7: "How do I contact technical support?",
-      a7: "If you need support or feedback, please contact us: support@example.com"
+      kicker: "שאלות נפוצות",
+      title: "כל מה שרציתם לשאול.",
+      q1: "איך מתקינים את TransLay?",
+      a1: "חפשו TransLay ב-Google Workspace Marketplace ולחצו על התקנה. לאחר מתן הרשאה ל-Google Slides™, פתחו כל מצגת ותוכלו להשתמש בתוסף דרך Extensions → TransLay.",
+      q2: "איך משתמשים אחרי ההתקנה?",
+      a2: "פתחו מסמך Google Slides™, בחרו Extensions → TransLay → Start. בחרו שפת יעד, מתוך הרשימה או בהקלדה חופשית בשפה טבעית, בחרו מצב פלט: מסמך חדש או הוספה למסמך המקורי, ואז לחצו Translate.",
+      q3: "מהי מדיניות ההחזרים?",
+      a3: "מנויים חודשיים אינם ניתנים להחזר כברירת מחדל. תוכניות התחייבות שנתית אינן ניתנות להחזר כברירת מחדל; עם זאת, משתמשים שרוכשים התחייבות שנתית בפעם הראשונה יכולים לבקש החזר חד-פעמי בתוך 14 יום מהרכישה, אם מאז אותה תשלום נוצלו 0 עמודים. עבור קרדיט שנרכש לפי שימוש, החלק שלא נוצל ניתן להחזר מלא, והחלק שנוצל אינו ניתן להחזר. במקרה של טעות חיוב, תשלום לא מורשה, תקלה משמעותית בשירות או דרישה חוקית, נטפל בהחזר לפי הכללים החלים.",
+      q4: "איך מקבלים תמיכה טכנית?",
+      a4: "לכל משימת תרגום יש Task ID שניתן להעתיק מסרגל הצד. שלחו אותו ל-support@example.com, ובדרך כלל נשיב בתוך 24 שעות. תוכניות בעדיפות מקבלות מענה בתוך 4 שעות.",
+      q5: "מה גודל המסמך המרבי שנתמך?",
+      a5: "TransLay תומך כרגע במסמך Google Slides™ יחיד עם עד 50 שקופיות, מספיק לרוב תרחישי השימוש היומיומיים.",
+      q6: "האם TransLay משחזר 100% מהפריסה והסגנון של המסמך המקורי?",
+      a6: "לא תמיד. שפות שונות יכולות להשתמש במספר תווים שונה מאוד כדי להביע את אותה משמעות. TransLay משתמש ב-AI ובטכניקות לשמירת פריסה כדי לשחזר את הסגנון והפריסה המקוריים ככל האפשר, אך אין אפשרות להבטיח התאמה של 100%. תוכלו להשתמש במכסת 20 העמודים החינמית עם מסמך אמיתי שלכם כדי לבדוק את התוצאה לפני רכישה.",
+      q7: "איך יוצרים קשר עם התמיכה הטכנית?",
+      a7: "אם אתם צריכים תמיכה או רוצים לשלוח משוב, צרו איתנו קשר: support@example.com"
     },
     cta: {
-      title: "תרגם את 20 השקופיות הראשונות שלך בחינם.",
-      subtitle: "התקנה ב-30 שניות. ללא כרטיס אשראי.",
-      button: "התקן תוסף"
+      title: "תרגמו את 20 השקופיות הראשונות בחינם",
+      subtitle: "התקנה בלחיצה אחת מ-Google Workspace Marketplace, ושימוש מיידי במכסה החינמית שלכם.",
+      button: "התקנת התוסף"
     },
     footer: {
-      tagline: "תרגום LLM ל-Google Slides™.",
+      tagline: "כלי תרגום LLM שנבנה עבור Google Slides™.",
       terms: "תנאי שירות",
       privacy: "מדיניות פרטיות",
+      support: "תמיכה",
+      support_subject: "בקשת תמיכה טכנית של TransLay",
       copyright: "© 2026 example.com כל הזכויות שמורות."
     },
     legal: {
-      back_home: "Back to home"
+      back_home: "חזרה לבית"
+    },
+    successPage: {
+      document_title: "הרכישה הושלמה — TransLay",
+      kicker: "סטטוס תשלום",
+      title: "הרכישה הושלמה",
+      body: "קיבלנו את התשלום שלכם. אם התחלתם את התהליך מהתוסף, תוכלו לחזור ל-Google Slides™ ולרענן שם את סטטוס הזכאות שלכם.",
+      back_pricing: "חזרה למחירים",
+      go_home: "חזרה לבית"
     },
     settings: {
       title: "הגדרות",
       theme: "ערכת נושא",
       light: "בהיר",
       dark: "כהה",
-      system: "מערכת",
+      system: "לפי המערכת",
       language: "שפה"
     },
     auth: {
-      loading: "Checking session...",
-      consuming_ticket: "Signing you in...",
-      signing_in: "Completing sign-in...",
-      sign_out: "Sign out",
-      signed_in_as: "Signed in as",
-      plan_free: "Free",
-      plan_paid: "Paid",
-      google_client_missing: "Google sign-in is not configured yet."
+      loading: "בודקים את ההפעלה...",
+      consuming_ticket: "מחברים אתכם...",
+      signing_in: "משלימים התחברות...",
+      sign_out: "התנתקות",
+      signed_in_as: "החשבון הנוכחי",
+      plan_free: "תוכנית חינמית",
+      plan_paid: "תוכנית בתשלום",
+      google_client_missing: "התחברות Google עדיין לא הוגדרה."
     },
     hero2: {
-      badge: "For Google Slides™",
-      title: "Your deck.",
-      title_accent: "In any language.",
-      title_end: "Untouched.",
-      subtitle: "TransLay translates Google Slides™ with the quality of an LLM and the fidelity of the original — every font, every box, exactly as you designed it."
+      badge: "נבנה עבור Google Slides™",
+      title: "המצגת שלכם.",
+      title_accent: "בכל שפה.",
+      title_end: "כפי שעוצבה.",
+      subtitle: "TransLay מתרגם Google Slides™ באיכות LLM ובנאמנות פריסה ברמת פיקסל — כל גופן וכל תיבת טקסט נשארים תואמים למקור."
     },
     legalPages: {
       terms: {
-        title: "תנאי השימוש של TransLay",
-        last_updated: "עודכן לאחרונה: 23 באפריל 2026",
+        title: "תנאי השירות של TransLay",
+        last_updated: "עודכן לאחרונה: 2026-04-23",
         intro: [
-          "ברוכים הבאים ל-TransLay. TransLay הוא שירות תרגום ל-Google Workspace™, ו-Google Slides™ הוא ה-host הרשמי הזמין כעת. בהתקנה, בגישה או בשימוש ב-TransLay, אתם מסכימים לתנאים אלה. אם אינכם מסכימים, אל תשתמשו ב-TransLay."
+          "ברוכים הבאים ל-TransLay. TransLay הוא שירות תרגום עבור Google Workspace™, והמארח הרשמי הזמין כעת הוא Google Slides™. התקנה, גישה או שימוש ב-TransLay מהווים הסכמה לתנאי שירות אלה. אם אינכם מסכימים, אנא אל תשתמשו ב-TransLay."
         ],
         sections: [
           {
-            title: "1. השירות",
+            title: "1. תיאור השירות",
             paragraphs: [
-              "TransLay מתמקדת כעת בתרגום מצגות Google Slides™ ומנסה לשמור ככל האפשר על גופנים, סגנון, פריסה ומבנה עמודים מקוריים. לפי מסלול העבודה שתבחרו, התוצאה נכתבת למצגת חדשה או לקובץ המקורי. גם speaker notes נכללים בתחום התמיכה הנוכחי. הפונקציות של Google Docs™ ו-Google Sheets™ עדיין בפיתוח ועדיין אינן זמינות באופן רשמי."
+              "TransLay מיועד כיום בעיקר לתרגום תוכן של מצגות Google Slides™, תוך מאמץ לשמור על הגופנים, הסגנונות, הפריסה ומבנה העמודים המקוריים. בהתאם לבחירה שלכם בתוסף, ניתן להוציא את התרגום למצגת חדשה או להוסיף אותו למסמך המקורי. עבור עמודים הכוללים speaker notes, TransLay מטפל גם בהם במסגרת התמיכה הנוכחית. יכולות Google Docs™ ו-Google Sheets™ עדיין בפיתוח ואינן זמינות רשמית."
             ]
           },
           {
-            title: "2. חשבון וזכות שימוש",
+            title: "2. חשבון וזכאות שימוש",
             paragraphs: [
-              "אתם צריכים חשבון Google תקף כדי להתקין ולהשתמש ב-TransLay. עליכם גם לוודא שיש לכם זכות גישה לקבצים שנשלחו, לתרגם אותם ולאפשר את עיבודם. אם אתם משתמשים ב-TransLay בשם צוות, חברה או ארגון אחר, עליכם גם להיות מוסמכים להסכים לתנאים אלה בשמם."
+              "נדרש חשבון Google תקף כדי להתקין ולהשתמש ב-TransLay. עליכם לוודא שיש לכם זכות לגשת לתוכן המסמכים שאתם שולחים, לתרגם אותו ולעבד אותו. אם אתם משתמשים ב-TransLay בשם צוות, חברה או ארגון אחר, עליכם גם לוודא שיש לכם סמכות לקבל תנאים אלה ולהשתמש בקבצים הרלוונטיים בשם אותו גוף."
             ]
           },
           {
-            title: "3. מינויים וחיוב",
+            title: "3. מנויים וחיוב",
             paragraphs: [
-              "TransLay מציעה מכסה חינמית חד-פעמית של 20 slides בעת ההתקנה, מינויים חודשיים, תוכניות שנתיות ו-credits לפי שימוש. דמי המינוי נגבים מראש בתחילת כל תקופה. ניתן לבטל בכל עת דרך Manage Subscription; הביטול ייכנס לתוקף בסוף תקופת החיוב הנוכחית או התקופה השנתית. בתרגומי Google Slides™, החיוב מבוסס על התוצאה שנמסרה בפועל: <strong>1 slide</strong> כאשר תוכן העמוד תורגם ונכתב חזרה בהצלחה, <strong>0.5 slide</strong> כאשר רק חלק מהתוצאה הצפויה הושלם, וללא חיוב על תוכן העמוד כאשר התרגום או הכתיבה החוזרת נכשלו. אם תבטלו לפני כל תוצאה שימושית, לא תיצרך מכסה. לשאלות על חיוב, שלחו את Task ID אל <strong>support@example.com</strong>."
+              "לאחר ההתקנה TransLay מספק מכסה חינמית חד-פעמית של 20 שקופיות, וכן מנויים חודשיים, תוכניות התחייבות שנתית וקרדיט לפי שימוש. דמי מנוי נגבים מראש לפי מחזור. ניתן לבטל בכל עת בלוח Manage Subscription; הביטול ייכנס לתוקף בסוף מחזור החיוב הנוכחי או מחזור ההתחייבות השנתית הנוכחי.",
+              "עבור משימות תרגום של Google Slides™, חיוב המכסה מבוסס על תוצאת המסירה בפועל. רק כאשר תוכן העמוד של שקופית מסוימת תורגם במלואו ונכתב בחזרה בהצלחה, אותו עמוד נחשב <strong>1 slide</strong>. אם העמוד כולל speaker notes, כאשר תוכן העמוד וה-notes תורגמו ונכתבו בחזרה בהצלחה, יחד הם עדיין נחשבים <strong>1 slide</strong>; אם רק צד אחד הצליח, העמוד נחשב <strong>0.5 slide</strong>. אם רכיב כלשהו בעמוד נכשל בתרגום או בכתיבה חזרה, תוכן העמוד אינו מחויב.",
+              "TransLay משתמש גם בחיוב זמני במהלך ביצוע משימה. ברגע שעמוד מסוים תורגם בהצלחה, אותו עמוד מוצלח עשוי להיספר תחילה ולאחר מכן להיסגר בחישוב הסופי אם תבטלו את המשימה ידנית. לכן ודאו את הגדרות המשימה לפני ההתחלה. אם תבטלו לפני שעמוד כלשהו תורגם בהצלחה, לא תנוכה מכסת שקופיות. לשאלות חיוב, צרפו את Task ID במייל אל <strong>support@example.com</strong> כדי שנוכל לבדוק מהר יותר.",
+              "קרדיט לפי שימוש הוא קרדיט שימוש ששולם מראש עבור תרגום Google Slides™, והוא נפרד מהמכסה הכלולה בתוכנית מנוי. בין אם אתם בתוכנית החינמית ובין אם יש לכם מנוי בתשלום פעיל, ניתן לרכוש קרדיט נוסף לפי שימוש. כאשר קיימים גם מכסת מנוי וגם קרדיט לפי שימוש, TransLay משתמש תחילה במכסת המנוי של המחזור הנוכחי, ולאחר מכן בקרדיט לפי שימוש ששולם מראש עבור שימוש נוסף.",
+              "עקב מגבלות פלטפורמת התשלום Paddle, סכום הגבייה בכל עסקה חייב להיות גבוה מ-USD 0.70. מכיוון שמחיר הקרדיט לפי שימוש של TransLay הוא כעת USD 0.04 לעמוד, מינימום הרכישה בכל פעם הוא 18 עמודים, כלומר USD 0.72. המקסימום הנוכחי להזמנה אחת הוא 100 עמודים. אם אתם צריכים בפועל פחות מ-18 עמודים, ניתן לרכוש תחילה 18 עמודים ואז לבקש החזר על הקרדיט העודף שלא נוצל."
             ]
           },
           {
             title: "4. החזרים",
             paragraphs: [
-              "מינויים חודשיים אינם ניתנים להחזר. גם תוכניות שנתיות אינן ניתנות להחזר בדרך כלל, למעט ברכישה שנתית ראשונה: במקרה כזה ניתן לבקש החזר חד-פעמי בתוך 14 יום מהרכישה, בתנאי שלא נעשה שימוש באף עמוד מאז התשלום. חריג זה זמין פעם אחת בלבד לכל חשבון. ייתכן שניתן גם החזרים במקרים של טעות בחיוב, תשלום לא מורשה, תקלה חמורה בשירות או כאשר הדין החל מחייב זאת. credits שנצרכו אינם ניתנים להחזר. ניתן לקבל החזר מלא על החלק שלא נוצל מ-credits לפי שימוש, כולל credits שנרכשו בזמן שמינוי פעיל; credits שנוצלו אינם ניתנים להחזר."
+              "מנויים חודשיים אינם ניתנים להחזר כברירת מחדל. גם תוכניות התחייבות שנתית אינן ניתנות להחזר כברירת מחדל; עם זאת, לקוחות שרוכשים תוכנית התחייבות שנתית בפעם הראשונה יכולים לבקש החזר חד-פעמי בתוך 14 יום מהרכישה, אם מאז אותה תשלום לא נעשה שימוש באף עמוד. ניתן להשתמש בחריג זה פעם אחת בלבד לכל חשבון. עבור קרדיט שנרכש לפי שימוש, כולל קרדיט נוסף שנרכש במהלך תקופת מנוי, החלק שלא נוצל ניתן להחזר מלא; החלק שנוצל אינו ניתן להחזר. ייתכן שניתן החזר גם במקרה של טעות חיוב, תשלום לא מורשה, תקלה משמעותית בשירות או כאשר החוק החל דורש זאת.",
+              "יחידת המינימום לבקשת החזר קרדיט לפי שימוש היא עמוד אחד. ההחזר מחושב רק לפי קרדיט לפי שימוש שלא נוצל; קרדיט שכבר נצרך על ידי משימות תרגום שנמסרו בהצלחה אינו ניתן להחזר.",
+              "Paddle מטפלת בהחזרים על בסיס עסקת הרכישה המקורית. אם בקשת החזר אחת מכסה קרדיט מכמה רכישות לפי שימוש, TransLay עשוי לפצל את הבקשה לכמה החזרי Paddle לפי העסקאות המקוריות. סכום ההחזר הכולל שלכם לא ישתנה, אך ייתכן שתקבלו כמה הודעות אימייל נפרדות על החזר מ-Paddle.",
+              "אם הגדרתם מנוי חודשי לביטול בסוף המחזור, אך לפני סוף המחזור החודשי הנוכחי בחרתם לשדרג לתוכנית התחייבות שנתית, TransLay יחדש תחילה את המנוי החודשי ואז ישדרג אותו להתחייבות שנתית. הסכום USD 9.99 שכבר שילמתם עבור החודש הנוכחי יקוזז מהסכום לתשלום עבור ההתחייבות השנתית, וזכאות המנוי הנוכחית שלכם תעודכן למכסת התחייבות שנתית של 500 עמודי Google Slides™ בחודש."
             ]
           },
           {
-            title: "5. שימוש מותר",
+            title: "5. שימוש מקובל",
             paragraphs: [
-              "אתם מסכימים שלא להשתמש ב-TransLay לתוכן בלתי חוקי, מפר זכויות, בלתי מורשה באופן ברור או בלתי הולם בכל דרך אחרת. בנוסף, אסור לעקוף מכסות או אמצעי אבטחה או לפגוע ביציבות השירות. אתם אחראים לתוכן שאתם שולחים ולתוצאותיו."
+              "אתם מסכימים שלא להשתמש ב-TransLay לעיבוד תוכן בלתי חוקי, מפר זכויות, כזה שמפר בבירור זכויות של אחרים או חורג מהיקף ההרשאה שלכם. כמו כן אסור לעשות שימוש לרעה ב-TransLay באמצעות עקיפת מכסות, עקיפת מגבלות בטיחות, פגיעה מכוונת ביציבות השירות או שימוש בלתי ראוי אחר. אתם אחראים לתוכן שאתם שולחים לתרגום ולהשלכות השימוש בו."
             ]
           },
           {
-            title: "6. התוכן שלכם וההרשאה שלכם",
+            title: "6. התוכן וההרשאה שלכם",
             paragraphs: [
-              "אתם שומרים על כל הזכויות במסמכים שלכם, במצגות שלכם ובתוכן שלהן. כדי להשלים בקשת תרגום שהתחלתם, אתם מרשים ל-TransLay לגשת לקובץ שנבחר, לקרוא את הטקסט לתרגום, ליצור את התרגום ולכתוב את התוצאה חזרה לקובץ המקורי או לקובץ יעד חדש בהתאם להוראותיכם. הרשאה זו קיימת רק כדי לספק את השירות ואינה מעבירה אלינו בעלות על התוכן שלכם.",
-              "טקסט מקורי, תרגומים, comments ו-notes מעובדים לזמן קצר בלבד בזמן שהמשימה רצה. כאשר המשימה מסתיימת, התוכן הזה נמחק מיד ממסד הנתונים ומה-cache שלנו ואינו נשמר כגיבוי. לכן שמרו בעצמכם את הקבצים המתורגמים. אם תרצו מאוחר יותר לתרגם שוב את אותו מסמך לאותה שפה, נתייחס לכך כאל משימה חדשה ונפרדת והיא תחויב במלואה."
+              "אתם שומרים על הזכויות המקוריות במסמכים, במצגות ובתוכן שלכם. כדי להשלים בקשת תרגום שאתם יוזמים, אתם מאשרים ל-TransLay, בהיקף הנדרש להפעלת השירות, לגשת לקובץ שבחרתם, לקרוא את התוכן לתרגום, ליצור תרגום, ולכתוב אותו בחזרה למסמך המקורי או ליצור מסמך יעד חדש לפי הוראותיכם. הרשאה זו נועדה רק להשלמת השירות עצמו ואינה מעבירה אלינו בעלות בתוכן שלכם.",
+              "טקסט מקור, תרגומים, comments ו-notes הקשורים למשימת תרגום מעובדים רק לזמן קצר במהלך ביצוע המשימה. לאחר סיום המשימה, תוכן זה נמחק מיד ממסד הנתונים ומהמטמון שלנו, ואינו נשמר כגיבוי ענן עבורכם. לכן שמרו בעצמכם את מסמכי היעד המתורגמים. אם תיזמו בהמשך תרגום של אותו מסמך לאותה שפה שוב, נתייחס לכך כמשימה עצמאית חדשה, נעבד אותה מחדש ונחייב אותה במלואה לפי כללי אותה משימה."
             ]
           },
           {
-            title: "7. תוצאות תרגום וזמינות",
+            title: "7. תוצאות תרגום וזמינות השירות",
             paragraphs: [
-              "TransLay משתמשת בטכנולוגיית תרגום מבוססת AI. אנו שואפים לאיכות תרגום גבוהה ולנאמנות גבוהה לפריסה, אך עדיין ייתכנו הבדלים במשמעות, באורך, בשבירת שורות או בעיצוב מקומי. עבור תוכן משפטי, פיננסי, רפואי, חוזי או חשוב אחר, עליכם לבדוק את התוצאה בעצמכם לפני השימוש בה. השירות עשוי גם להתעכב זמנית, להיות מופרע או להיות לא זמין עקב תחזוקה, שינויים בפלטפורמות חיצוניות, בעיות רשת או שירותי צד שלישי."
+              "TransLay מספק את השירות באמצעות יכולות תרגום AI. אנו משתדלים לשפר את איכות התרגום ולשמור על הפריסה המקורית, אך תוצאות התרגום עדיין עשויות לכלול סטייה סמנטית, שינויי אורך, שינויי שבירת שורות, הבדלי פריסה מקומיים או תוצאות אחרות שאינן תואמות במלואן את הציפיות. עבור חוזים, תוכן משפטי, פיננסי, רפואי או כל תוכן חשוב אחר, עליכם לבדוק בעצמכם את התוצאה לפני שימוש או פרסום. השירות עשוי גם להיות זמנית לא זמין, להתעכב או להיקטע עקב תחזוקה, שינויים בפלטפורמות upstream, תקלות רשת או בעיות בשירותי צד שלישי."
             ]
           },
           {
             title: "8. הגבלת אחריות",
             paragraphs: [
-              "במידה המרבית המותרת על פי הדין החל, TransLay ניתנת כפי שהיא. איננו אחראים לנזק עקיף, מקרי, מיוחד או תוצאתי הנובע משימוש או מאי-יכולת להשתמש בשירות, מאי-דיוק בתרגום, ממגבלות של פלטפורמות צד שלישי, מהפסקת שירות או מכשל בכתיבה חזרה."
+              "במידה המרבית המותרת לפי הדין החל, TransLay מסופק על בסיס ״כמות שהוא״. איננו אחראים לנזקים עקיפים, נלווים, מיוחדים או תוצאתיים הנובעים משימוש בשירות, מחוסר יכולת להשתמש בו, מסטייה בתוצאות התרגום, ממגבלות פלטפורמות צד שלישי, מהפסקת שירות או מכשל בכתיבת נתונים בחזרה."
             ]
           },
           {
-            title: "9. שינויים בתנאים אלה",
+            title: "9. עדכון התנאים",
             paragraphs: [
-              "אנו עשויים לעדכן תנאים אלה בשל שינויים במוצר, דרישות חוק, דרישות תשלום או צורך תפעולי. נוסחים מעודכנים יפורסמו באתר הרשמי. אם תמשיכו להשתמש ב-TransLay לאחר שהשינויים ייכנסו לתוקף, הדבר ייחשב כהסכמה לתנאים המעודכנים."
+              "אנו עשויים לעדכן תנאים אלה בהתאם להתפתחות המוצר, דרישות משפטיות או צרכי תשלום ותפעול. גרסאות מעודכנות יפורסמו בעמודים הרלוונטיים באתר הרשמי. אם תמשיכו להשתמש ב-TransLay לאחר כניסת העדכון לתוקף, פירוש הדבר שאתם מקבלים את התנאים המעודכנים."
             ]
           },
           {
-            title: "10. קשר",
+            title: "10. יצירת קשר",
             paragraphs: [
-              "אם יש לכם שאלות על תנאים אלה, כתבו אל <strong>support@example.com</strong>."
+              "אם יש לכם שאלות לגבי תנאים אלה, שלחו אימייל אל <strong>support@example.com</strong>."
             ]
           }
         ]
       },
       privacy: {
         title: "מדיניות הפרטיות של TransLay",
-        last_updated: "עודכן לאחרונה: 23 באפריל 2026",
+        last_updated: "עודכן לאחרונה: 2026-04-23",
         intro: [
-          "הכלל הבסיסי שלנו פשוט: לאסוף פחות, לשמור פחות ולחשוף פחות. כשאתם משתמשים ב-TransLay, אנו מעבדים רק את המידע המינימלי הנדרש לתרגום, להתחברות, למינוי ולתמיכה. מה שלא צריך להיאסף או להישמר, אנו משתדלים שלא לגעת בו כלל. מדיניות זו מסבירה כיצד אנו מטפלים במידע הזה."
+          "אנו רואים ב״לאסוף פחות, לשמור פחות, לחשוף פחות״ עיקרון בסיסי של TransLay. כאשר אתם משתמשים ב-TransLay, אנו מעבדים רק את המידע המינימלי הדרוש כדי שתרגום, התחברות, מנויים ותמיכה לאחר רכישה יפעלו כראוי. כל מה שלא צריך להיאסף או להישמר לטווח ארוך, אנו משתדלים לא לגעת בו. מדיניות פרטיות זו מסבירה כיצד TransLay מטפל במידע זה."
         ],
         sections: [
           {
-            title: "1. עקרון הפרטיות שלנו",
+            title: "1. עקרון הפרטיות שאנו מקפידים עליו",
             paragraphs: [
-              "TransLay מעבדת רק את המידע הנדרש כדי להשלים את השירות שאתם מבקשים באופן פעיל. איננו אוספים מידע שאינו קשור לשירות, איננו משתמשים בו לפרסום, ואיננו מבצעים פרופיילינג של משתמשים או ניתוח התנהגות. במיוחד לגבי טקסט מסמך, טקסט מתורגם, comments ו-notes, אנו פועלים לפי עקרון צמצום מחמיר: כאשר המשימה מסתיימת, איננו שומרים תוכן זה במסד נתונים, ב-cache או בלוגים של האפליקציה."
+              "העיקרון המרכזי של TransLay פשוט: אנו מעבדים מידע נחוץ רק כדי להשלים את השירות שאתם יוזמים, לא אוספים מידע שאינו קשור לשירות, לא משתמשים בו לפרסום, לא יוצרים פרופילי משתמשים ולא מבצעים ניתוח התנהגות. במיוחד לגבי טקסטים מקוריים, תרגומים, comments ו-notes במסמכים שלכם, אנו פועלים לפי עקרון צמצום מחמיר ולא שומרים תוכן זה לטווח ארוך במסדי נתונים, במטמון או ביומני האפליקציה."
             ]
           },
           {
-            title: "2. איזה מידע אנו מעבדים כדי לספק את השירות",
+            title: "2. איזה מידע מינימלי אנו מעבדים כדי לספק את השירות",
             paragraphs: [
-              "אנו עשויים לעבד מידע בסיסי על חשבון ה-Google שלכם, כגון מזהה חשבון, כתובת email, שם תצוגה ו-avatar, כדי לזהות אתכם, לקשר נכון מינוי ומכסה, להציג את החשבון המחובר ולתת תמיכה.",
-              "אנו מעבדים את תוכן Google Slides™ שאתם בוחרים במפורש לתרגום, אך רק לאחר שהתחלתם משימת תרגום, ורק כדי להשלים אותה ולכתוב את התוצאה חזרה.",
-              "אנו מעבדים גם את המידע המינימלי על משימה ומכסה הנדרש כדי להציג התקדמות, לחשב שימוש, לבדוק בעיות חיוב ולתת תמיכה, כגון Task ID, מצב המשימה, שימוש בעמודים, חותמות זמן ומטא-דאטה טכני מוגבל לבירור תקלות.",
-              "אם אתם קונים תוכנית או credits, אנו מעבדים את המידע המינימלי על הזמנה ומינוי הנדרש כדי לאשר את זכויותיכם, כגון מצב תשלום, מספר הזמנה, זמן קנייה או החזר ומצב המינוי. פרטי כרטיס מלאים מעובדים על ידי Paddle, לא על ידינו.",
-              "לגבי sessions של האתר, אנו משתמשים רק במידע session מינימלי הנדרש כדי להפעיל את האתר הרשמי ואת עמודי החיוב. cookies שומרים רק session id אטום ולא מידע קריא ישיר כמו email, תוכנית או מכסה."
+              "אנו עשויים לעבד מידע בסיסי של חשבון Google, כגון מזהה חשבון Google, אימייל, שם תצוגה ותמונת פרופיל, כדי לאמת את זהותכם, לקשור מנויים ומכסות לחשבון הנכון, להציג את החשבון המחובר הנוכחי ולספק תמיכה לאחר רכישה.",
+              "אנו מעבדים את תוכן Google Slides™ שבחרתם במפורש לתרגום רק לאחר שאתם מתחילים משימת תרגום, ורק לצורך השלמת התרגום וכתיבת התוצאה בחזרה.",
+              "אנו מעבדים גם את המינימום הנדרש של מידע משימה ומכסה כדי להציג התקדמות משימה, להסדיר שימוש במכסה, לבדוק בעיות חיוב ולספק תמיכה, כגון Task ID, סטטוס משימה, שימוש בעמודים, חותמות זמן ומטא-נתונים מוגבלים לפתרון תקלות.",
+              "אם רכשתם תוכנית או קרדיט, אנו מעבדים את המינימום הנדרש של מידע הזמנה ומנוי כדי לאמת את הזכאות שלכם, כגון סטטוס תשלום, מספר הזמנה, זמן רכישה או החזר וסטטוס מנוי. פרטי כרטיס מלאים מעובדים על ידי Paddle ואינם נשמרים אצלנו.",
+              "עבור הפעלות באתר, אנו משתמשים רק במידע ההפעלה המינימלי הדרוש להפעלת האתר הרשמי ועמודי המנוי. Cookies שומרים רק session id אטום, ואינם שומרים ישירות את האימייל, התוכנית או המכסה שלכם כטקסט קריא."
             ]
           },
           {
-            title: "3. מה אנו לא שומרים ולא אוספים",
+            title: "3. מה איננו שומרים או אוספים",
             paragraphs: [
-              "איננו שומרים טקסט פשוט של תוכן המסמך שלכם, של תוצאות התרגום, comments או notes במסד הנתונים שלנו, ב-cache שלנו או בלוגים שלנו. ברגע שמשימת תרגום מסתיימת, התוכן הזה נמחק ממסד הנתונים ומה-cache ואינו נשמר כגיבוי מסמך. לכן שמרו בעצמכם את הקבצים המתורגמים.",
-              "אם מאוחר יותר תבקשו לתרגם שוב את אותו מסמך לאותה שפה, נתייחס לכך כאל משימה חדשה ונפרדת. מכיוון שאיננו שומרים תוכן קודם של המסמך או תרגום קודם, איננו משתמשים ישירות בתוצאה הקודמת, והמשימה החדשה תחויב במלואה.",
-              "איננו משתמשים במידע שלכם לפרסום, לייחוס פרסומי, לפרופיילינג משתמשים או לניתוח התנהגות. איננו מוכרים את הנתונים שלכם ואיננו עוקבים אחר הפעילות שלכם באתרים אחרים, במסמכים אחרים או במוצרים אחרים רק משום שאתם משתמשים ב-TransLay.",
-              "איננו שומרים מספרי כרטיס מלאים, מספרי חשבון בנק מלאים או פרטי תשלום מלאים אחרים. התשלומים מעובדים על ידי Paddle; אנו מקבלים רק את המידע המינימלי הדרוש להזמנות ולתמיכה."
+              "איננו שומרים את הטקסט הגלוי של גוף המסמך, תוצאות התרגום, comments או notes שלכם במסדי הנתונים, במטמון או ביומנים שלנו. לאחר סיום משימת התרגום, תוכן זה נמחק מיד ממסד הנתונים ומהמטמון שלנו, ואינו ממשיך להישמר כגיבוי למסמך שלכם. לכן שמרו בעצמכם את מסמכי היעד המתורגמים.",
+              "אם בהמשך תיזמו שוב תרגום של אותו מסמך לאותה שפה, נתייחס לכך כמשימה עצמאית חדשה. מכיוון שאיננו שומרים את תוכן המסמך הקודם או את התרגום הקודם, לא נשתמש ישירות בתוצאה הקודמת, והמשימה תחויב במלואה לפי כללי המשימה הנוכחית.",
+              "איננו משתמשים במידע שלכם לפרסום, שיוך פרסומי, פרופיל משתמשים או ניתוח התנהגות. איננו מוכרים את הנתונים שלכם, ואיננו עוקבים אחר הפעילות שלכם באתרים אחרים, במסמכים אחרים או במוצרים אחרים רק משום שאתם משתמשים ב-TransLay.",
+              "איננו שומרים מספר כרטיס בנק מלא, מספר חשבון בנק מלא או אישורי תשלום מלאים אחרים. התשלומים מטופלים על ידי Paddle, ואנו מקבלים רק את המינימום של מידע תוצאה הדרוש להזמנות ולתמיכה לאחר רכישה."
             ]
           },
           {
-            title: "4. למה אנחנו צריכים הרשאות Google",
+            title: "4. מדוע אנו צריכים הרשאות Google",
             paragraphs: [
-              "TransLay הוא add-on של Google Workspace™. כדי לפעול כראוי בתוך Google Slides™, אנו מבקשים רק את ההרשאות הנדרשות ישירות להיקף המוצר הנוכחי.",
-              "הרשאת Google Slides™ נחוצה כדי לקרוא את תוכן המצגת שיש לתרגם ולכתוב את התרגום בחזרה לקובץ המקורי או לקובץ היעד.",
-              "הרשאת Google Drive™ נחוצה כדי לזהות את המצגת הפעילה, ליצור עותקים בבעלות המשתמש במסלול קובץ חדש, למקם את קובץ היעד במקום הנכון ולנהל גישה זמנית בזמן הביצוע.",
-              "הרשאת Google Drive™ file עוזרת לנו להגביל ככל האפשר פעולות קבצים רק לקבצים המעורבים בתהליך הפעיל.",
-              "הרשאת Google Workspace™ container UI נחוצה כדי להציג את הסרגל הצדדי של TransLay בתוך Google Slides™.",
-              "הרשאת הבקשות החיצוניות נחוצה כדי שה-add-on יוכל לתקשר בצורה מאובטחת עם ה-backend של TransLay עבור משימות תרגום, עדכון זכאויות, התחברות וחיוב.",
-              "ההרשאות הקשורות ל-email ול-avatar של חשבון Google נחוצות לזהות ההתחברות, להצגת החשבון הנוכחי, לקישור מינויים ולתמיכה."
+              "TransLay הוא תוסף Google Workspace™. כדי לפעול כראוי בתוך Google Slides™, אנו מבקשים רק הרשאות הנדרשות ישירות לטווח המוצר הנוכחי.",
+              "הרשאת Google Slides™ משמשת לקריאת תוכן המצגת שברצונכם לתרגם ולכתיבת התרגום בחזרה לקובץ המקורי או לקובץ יעד. ללא הרשאה זו, TransLay לא יוכל לקרוא את התוכן או להשלים כתיבה בחזרה.",
+              "הרשאת Google Drive™ משמשת לאיתור המצגת הנוכחית, ליצירת עותקים בבעלות המשתמש במצב ״פלט לקובץ חדש״, להצבת קובץ היעד במיקום המתאים ולניהול גישה זמנית הנדרשת במהלך ביצוע המשימה. ללא הרשאה זו, חלק מתהליכי ההעתקה והכתיבה בחזרה לא יפעלו באופן יציב.",
+              "הרשאת Google Drive™ file מסייעת לנו להגביל ככל האפשר את פעולות הקבצים לקבצים המעורבים בתהליך העבודה הנוכחי.",
+              "הרשאת ממשק המיכל של Google Workspace™ משמשת להצגת סרגל הצד של TransLay בתוך Google Slides™.",
+              "הרשאת בקשות חיצוניות משמשת כדי לאפשר לתוסף לתקשר בבטחה עם ה-backend של TransLay לצורך משימות תרגום, רענון זכאות, התחברות ותהליכים הקשורים למנוי.",
+              "הרשאות אימייל ותמונת פרופיל של חשבון Google משמשות לזיהוי התחברות, הצגת החשבון הנוכחי, קישור מנויים וטיפול בתמיכה לאחר רכישה."
             ]
           },
           {
-            title: "5. כיצד אתם מעניקים הרשאות אלה",
+            title: "5. כיצד מעניקים הרשאות אלה",
             paragraphs: [
-              "לאחר התקנת TransLay מ-Google Workspace Marketplace, בפעם הראשונה שתפתחו ותפעילו אותה בתוך Google Slides™, Google תבקש מכם להשלים את תהליך ההרשאה. בפועל, מתקינים את ה-add-on, פותחים מצגת Google Slides™, נכנסים ל-Extensions, מפעילים את TransLay ואז ממשיכים לעמוד אישור ההרשאות של Google.",
-              "באותו עמוד, התחברו עם חשבון Google שבו תרצו להשתמש עם TransLay, בחרו את ההרשאות הנדרשות אם Google מציגה תיבת סימון כללית, ואז לחצו Allow או Confirm. בלי ההרשאות הללו, TransLay לא תוכל לקרוא מסמכים כראוי, לבצע את התרגום, ליצור קבצי יעד, לכתוב את התוצאות בחזרה או להשלים את תהליכי ההתחברות והמינוי."
+              "לאחר התקנת TransLay מ-Google Workspace Marketplace, בפעם הראשונה שתפתחו ותפעילו אותו בתוך Google Slides™, Google תבקש מכם להשלים את תהליך ההרשאה. בדרך כלל מתקינים את התוסף, פותחים כל מצגת Google Slides™, נכנסים ל-Extensions, מפעילים את TransLay, ואז פועלים לפי ההנחיה לעמוד אישור ההרשאות של Google.",
+              "בעמוד האישור, התחברו עם חשבון Google שבו אתם מתכוונים להשתמש עם TransLay. אם Google מציגה תיבת סימון ״בחר הכל״, סמנו את ההרשאות הנדרשות ואז לחצו ״Allow״ או ״Confirm״. אם לא תעניקו את ההרשאות הדרושות, TransLay לא יוכל לקרוא מסמכים, לבצע תרגום, ליצור קבצי יעד, לכתוב תוצאות בחזרה או להשלים תהליכי התחברות ומנוי כראוי."
             ]
           },
           {
-            title: "6. כיצד אנו משתמשים במידע הזה",
+            title: "6. כיצד אנו משתמשים במידע זה",
             paragraphs: [
-              "אנו משתמשים במידע הזה רק כדי לבצע את התרגום שביקשתם, להציג את מצב ההתחברות שלכם, לקשר מינויים ומכסות, לטפל בחיוב ובהחזרים, לענות על פניות תמיכה, למנוע שימוש לרעה ולשמור על אמינות השירות. איננו משתמשים בו לפרסום, לפרופיילינג או להמלצות שיווק. כמו כן איננו משתמשים בתוכן המסמכים שלכם כדי לאמן את המודלים שלנו."
+              "מידע זה משמש רק להשלמת התרגום שביקשתם, להצגת מצב ההתחברות הנוכחי, לקישור מנויים ומכסות, לטיפול בחיוב ובהחזרים, למענה על בעיות תמיכה לאחר רכישה, למניעת שימוש לרעה ולהבטחת פעולה יציבה של השירות. איננו משתמשים במידע זה לפרסום, פרופילי משתמשים, המלצות שיווקיות או ניתוח התנהגות. כמו כן איננו משתמשים בתוכן המסמכים שלכם כדי לאמן מודלים משלנו."
             ]
           },
           {
             title: "7. שירותי צד שלישי",
             paragraphs: [
-              "כדי להפעיל את TransLay, אנו מסתמכים בעת הצורך על מספר קטן של שירותי צד שלישי. אלה כוללים את Google Workspace™ ו-Google Cloud לאירוח, גישה למסמכים ותפעול השירות, ספקי AI ו-cloud לעיבוד התרגום, ו-Paddle לתשלומים, מיסוי והחזרים. שירותים אלה משתתפים רק במידה הנדרשת כדי לספק את היכולות הנוכחיות."
+              "כדי להפעיל את TransLay, אנו מסתמכים בעת הצורך על מספר קטן של שירותי צד שלישי, כגון Google Workspace™ ו-Google Cloud לאירוח, גישה למסמכים ותפעול השירות, ספקי AI ושירותי ענן לעיבוד תרגום, ו-Paddle לתשלומים, מסים והחזרים. שירותים אלה משתתפים בעיבוד רק במידה הנדרשת כדי לספק את היכולות הנוכחיות."
             ]
           },
           {
             title: "8. שמירה ומחיקה",
             paragraphs: [
-              "המטרה שלנו היא לשמור כמה שפחות מידע ולזמן הקצר ביותר האפשרי. טקסט, תרגומים, comments ו-notes הקשורים לתוכן מתורגם נמחקים ממסד הנתונים ומה-cache מיד עם סיום המשימה. עם זאת, כמות קטנה של מידע הקשור לחשבון, למינוי, להזמנות או לעמידה בדרישות עשויה להישמר כאשר הדבר נחוץ כדי לאשר את זכויותיכם, לעבד החזרים או להשיב לבקשות חוקיות.",
-              "אם תרצו למחוק מידע אישי הקשור לחשבונכם, או להבין אילו רשומות מינימליות עדיין קיימות, צרו קשר ב-<strong>support@example.com</strong>. שימו לב שאם תבקשו למחוק רשומות הנדרשות להוכחת זכויות מינוי ולשחזורן, ייתכן שלא נוכל לשחזר זכויות אלה בעתיד."
+              "המטרה שלנו היא לשמור כמה שפחות מידע ולמשך הזמן הקצר ביותר. טקסטים מקוריים, תרגומים, comments ו-notes הקשורים לתוכן תרגום נמחקים ממסד הנתונים ומהמטמון מיד לאחר סיום המשימה. כמות קטנה של מידע הדרוש לקישור חשבון, מנוי, הזמנה ועמידה בדרישות חוקיות עשויה להישמר כאשר הדבר הכרחי באמת, כדי לאמת זכאות, לטפל בהחזרים או להגיב לבקשות חוקיות.",
+              "אם ברצונכם למחוק מידע אישי הקשור לחשבון, או להבין אילו רשומות מינימליות עדיין נשמרות, ניתן לפנות אל <strong>support@example.com</strong>. שימו לב שאם תבקשו למחוק רשומות הדרושות להוכחה ולשחזור זכאות מנוי, ייתכן שלא נוכל לשחזר עבורכם את הזכאות הזו בהמשך."
             ]
           },
           {
             title: "9. הזכויות והבחירות שלכם",
             paragraphs: [
-              "אתם יכולים להפסיק להשתמש ב-TransLay בכל עת. תוכלו גם לבטל מינוי, להתנתק או לפנות אלינו בנושאי פרטיות. ככל שהדין החל מעניק לכם זכויות של גישה, תיקון, מחיקה או הגבלה, נטפל בבקשות תקפות בהתאם לכללים החלים."
+              "ניתן להפסיק להשתמש ב-TransLay בכל עת. ניתן גם לבטל מנויים, להתנתק או לפנות אלינו בבקשות הקשורות לפרטיות. כאשר הדין החל מעניק לכם זכויות גישה, תיקון, מחיקה או הגבלת עיבוד, נטפל בבקשות תקפות בהתאם לכללים החלים."
             ]
           },
           {
             title: "10. עדכוני מדיניות ויצירת קשר",
             paragraphs: [
-              "אנו עשויים לעדכן מדיניות זו אם המוצר, תהליך התשלום או ההתחייבויות המשפטיות ישתנו. גרסאות מעודכנות יפורסמו באתר הרשמי. לשאלות על פרטיות, עיבוד נתונים או אבטחה, כתבו אל <strong>support@example.com</strong>."
+              "אם צורת המוצר, תהליך התשלום או החובות המשפטיות ישתנו, אנו עשויים לעדכן מדיניות פרטיות זו. גרסאות מעודכנות יפורסמו בעמודים הרלוונטיים באתר הרשמי. אם יש לכם שאלות על פרטיות, עיבוד נתונים או אבטחה, שלחו אימייל אל <strong>support@example.com</strong>."
             ]
           }
         ]
@@ -4486,6 +4606,7 @@ window.TRANSLATIONS = {
       tagline: "为 Google Slides™ 而生的 LLM 翻译工具。",
       terms: "服务条款",
       privacy: "隐私政策",
+      support: "支持",
       support_subject: "TransLay 技术支持请求",
       copyright: "© 2026 example.com 版权所有。"
     },
@@ -4704,94 +4825,108 @@ window.TRANSLATIONS = {
       badge: "現已登陸 Google Workspace™",
       title1: "翻譯 Slides",
       title2: "保留一切",
-      subtitle: "面向 Google Slides™ 的高品質 AI 翻譯，完整保留每一處字體、樣式與排版。",
+      subtitle: "面向 Google Slides™ 的高品質 AI 翻譯，完整保留每一處字體、樣式和排版。",
       cta: "安裝外掛",
       cta_sub: "免費 — 贈送 20 張投影片",
       secondary: "觀看示範"
     },
-    trust: "Trusted by teams at",
+    trust: "深受團隊信賴",
     features: {
-      kicker: "Features",
+      kicker: "功能",
       title: "為重要的簡報而生",
       subtitle: "TransLay 從底層設計，尊重您每一份作品的用心。",
       f1_title: "AI 驅動的翻譯品質",
       f1_body: "結合上下文的翻譯，達到專業人類翻譯員的水準。",
       f2_title: "像素級保留排版",
-      f2_body: "字體、顏色、間距、動畫全部保持原樣，幾乎不需要重新排版與修補。",
+      f2_body: "字體、顏色、間距、動畫全部保持原樣，幾乎不需要重排和修補。",
       f3_title: "使用自然語言描述翻譯語種",
       f3_body: "輸入冰島語或泰語，TransLay 都能理解。",
-      f4_title: "Two output modes",
-      f4_body: "建立新的翻譯簡報，或在每頁原稿後追加譯文。",
-      f5_title: "One click inside Slides",
-      f5_body: "無需上傳或匯出，直接在 Google Slides™ 側邊欄開啟。",
+      f4_title: "兩種輸出模式",
+      f4_body: "新建翻譯文件，或在每頁原稿後追加譯文。",
+      f5_title: "Slides 內一鍵操作",
+      f5_body: "無需上傳匯出，直接在 Google Slides™ 側邊欄打開。",
       f6_title: "大型簡報無壓力",
-      f6_body: "同一份文件最多支援 50 張投影片，背景處理穩定可靠。"
+      f6_body: "同一文件最多支援 50 張投影片，後台穩定處理。"
     },
     demo: {
-      kicker: "See it in action",
+      kicker: "實際效果",
       title: "產品示範",
       subtitle: "",
-      screenshot_labels: ["功能：附加譯文", "功能：自訂頁面", "功能：建立新檔案"]
+      screenshot_labels: ["功能：追加譯文", "功能：自訂頁", "功能：建立新檔案"]
     },
     pricing: {
-      kicker: "Pricing",
+      kicker: "定價",
       title: "簡潔透明的定價",
       subtitle: "免費開始，隨時升級，無需訂閱，按需使用。",
-      free_name: "Free",
+      free_name: "免費",
       free_price: "$0",
-      free_sub: "One-time, on install",
-      free_f1: "20 slides total",
-      free_f2: "All languages",
-      free_f3: "Full layout preservation",
-      free_f4: "Email support",
-      free_cta: "Install free",
-      monthly_name: "Monthly",
+      free_sub: "安裝後一次性贈送",
+      free_f1: "20 張投影片",
+      free_f2: "全部語言",
+      free_f3: "完整排版保留",
+      free_f4: "郵件支援",
+      free_cta: "免費安裝",
+      monthly_name: "月付",
       monthly_price: "$9.99",
-      monthly_per: "/month",
-      monthly_sub: "Cancel anytime",
-      monthly_f1: "300 slides / month",
-      monthly_f2: "All languages",
-      monthly_f3: "Priority translation speed",
-      monthly_f4: "Priority support",
-      monthly_cta: "Get Monthly",
+      monthly_per: "/月",
+      monthly_sub: "隨時取消",
+      monthly_f1: "300 張投影片 / 月",
+      monthly_f2: "全部語言",
+      monthly_f3: "優先翻譯速度",
+      monthly_f4: "優先客服",
+      monthly_cta: "訂閱月付",
       cancel_cta: "取消訂閱",
       cancel_scheduled_cta: "已安排取消",
       resume_monthly_cta: "恢復月付訂閱",
       resume_yearly_cta: "恢復年度承諾",
       upgrade_yearly_cta: "升級為年度承諾",
-      yearly_badge: "Best value",
+      yearly_badge: "最超值",
       yearly_name: "年度承諾",
       yearly_price: "$119.99",
-      yearly_per: "/year",
+      yearly_per: "/年",
       yearly_sub: "相比月付省 40%",
-      yearly_f1: "500 slides / month",
-      yearly_f2: "All languages",
-      yearly_f3: "Priority translation speed",
-      yearly_f4: "Priority support",
-      yearly_cta: "Get Annual commitment",
+      yearly_f1: "500 張投影片 / 月",
+      yearly_f2: "全部語言",
+      yearly_f3: "優先翻譯速度",
+      yearly_f4: "優先客服",
+      yearly_cta: "訂閱年度承諾",
       subscription_success_title: "感謝訂閱！",
-      subscription_success_body_monthly: "您已成功以月付方式訂閱 TransLay，請登入您的 Google Slides™，如果您的「TransLay」已經在側邊欄打開，請先關閉，再到「擴充功能」中重新打開「TransLay」，您的訂閱狀態將會自動更新。",
-      subscription_success_body_yearly: "您已成功以年度承諾方式訂閱 TransLay，請登入您的 Google Slides™，如果您的「TransLay」已經在側邊欄打開，請先關閉，再到「擴充功能」中重新打開「TransLay」，您的訂閱狀態將會自動更新。",
+      subscription_success_body_monthly: "您已成功以月付方式訂閱 TransLay，請登入您的 Google Slides™，如果您的「TransLay」已經在側邊欄打開，請關閉，在「擴充功能」中重新打開「TransLay」，您的訂閱狀態將會自動更新。",
+      subscription_success_body_yearly: "您已成功以年度承諾方式訂閱 TransLay，請登入您的 Google Slides™，如果您的「TransLay」已經在側邊欄打開，請關閉，在「擴充功能」中重新打開「TransLay」，您的訂閱狀態將會自動更新。",
       subscription_success_confirm: "確定",
       cancel_dialog_title: "確認取消訂閱？",
-      cancel_dialog_body_monthly: "取消後，您在目前訂閱週期內仍可正常使用，未使用部分不退款。取消訂閱將於下一個計費週期生效。",
-      cancel_dialog_body_yearly: "取消後，您在目前年度承諾週期內仍可正常使用，未使用部分不退款。年度承諾方案原則上不退款；但首次購買年度承諾的用戶，如在購買後 14 天內提出申請，且自該筆付款起 0 頁已用，可享有一次性退款。取消訂閱將於下一個訂閱週期生效。",
+      cancel_dialog_body_monthly: "取消後，您在目前訂閱週期內仍可正常使用，未使用部分不退款。取消訂閱將在下一個計費週期生效。",
+      cancel_dialog_body_yearly: "取消後，您在目前年度承諾週期內仍可正常使用，未使用部分不退款。年度承諾計劃預設不退款；但首次購買年度承諾的用戶，如在購買後 14 天內提出申請，且自該筆付款起 0 頁已用，可享受一次性退款。取消訂閱將在下一個訂閱週期生效。",
       cancel_dialog_confirm: "確認：發起取消訂閱",
       cancel_dialog_dismiss: "取消：放棄取消訂閱",
-      opening_checkout_notice: "正在開啟安全結帳...",
+      opening_checkout_notice: "正在打開安全結帳...",
       purchase_received_notice: "已收到購買結果，正在確認您的訂閱狀態...",
+      credits_purchase_received_notice: "已收到額度購買結果，正在確認您的餘額...",
+      credits_balance_label: "按需額度餘額",
+      credits_refundable_label: "可退額度",
+      credits_quantity_label: "購買頁數",
+      credits_minimum_quantity_notice: "支付通道最低收款 {amount}，目前最少購買 {min} 頁。",
+      credits_refund_quantity_label: "退款頁數",
+      credits_refund_in_progress_label: "退款中",
+      credits_purchase_cta: "購買",
+      credits_refund_cta: "退款",
+      credits_cancel_cta: "取消",
+      credits_refund_pending_notice: "正在提交退款申請...",
+      credits_refund_submitted_notice: "退款申請已提交。",
+      credits_refund_provider_pending_notice: "退款已提交，支付平台正在處理。",
+      credits_refund_processing_banner: "我們已將您的退款申請發送到支付平台处理中，最長可能30分鐘，稍後您將收到支付平台的通知郵件，請注意查收。如果有任何問題，請發送郵件至：support@example.com。目前處理中退款額度：{units}，預計退款：{amount}。",
       subscription_confirmation_delayed_notice: "已收到購買結果，訂閱狀態確認可能還需要幾秒鐘。",
       sign_in_required_notice: "請先使用 Google 登入後再開始訂閱。",
       payment_failed_notice: "付款未完成，請重試或更換付款方式。",
       checkout_unavailable_notice: "目前無法完成此訂閱操作，請稍後再試。",
       subscription_change_pending_notice: "正在更新您的訂閱...",
-      cancellation_redirect_notice: "正在開啟 Paddle 安全取消訂閱頁面...",
+      cancellation_redirect_notice: "正在打開 Paddle 安全取消訂閱頁面...",
       cancellation_scheduled_notice: "放心，您的訂閱取消成功！在 {date} 前仍可正常使用。",
       cancellation_failed_notice: "目前無法為您安排取消訂閱，請稍後再試。",
       subscription_resumed_notice: "您的訂閱已恢復。",
       upgrade_success_notice: "年度承諾升級完成。本次一次性升級費用為 {amount}。",
       upgrade_notice_title: "溫馨提示",
-      upgrade_notice_body: "您目前處於月付訂閱取消後的訂閱有效期內，升級為年度承諾時，您的月付訂閱將恢復，並抵扣目前月付訂閱費用，您只需支付升級差額 {amount}。",
+      upgrade_notice_body: "升級為年度承諾時，系統會抵扣目前月付訂閱費用，您只需支付升級差額 {amount}。",
       upgrade_notice_confirm: "同意",
       upgrade_notice_cancel: "取消",
       upgrade_processing_title: "正在處理付款...",
@@ -4801,56 +4936,60 @@ window.TRANSLATIONS = {
       upgrade_completed_confirm: "確認",
       upgrade_failed_title: "升級未完成",
       upgrade_failed_confirm: "確認",
-      payg_name: "Pay as you go",
+      payg_name: "按量計費",
       payg_price: "$0.04",
       payg_per: "/页",
-      payg_sub: "No commitment, no monthly cap",
-      payg_f1: "Unlimited volume",
-      payg_f2: "All languages",
-      payg_f3: "Rollover credits",
-      payg_f4: "Standard support",
-      payg_cta: "Buy credits"
+      payg_sub: "無承諾，無每月上限",
+      payg_f1: "無限用量",
+      payg_f2: "未使用額度隨時可退",
+      payg_f3: "額度可累加",
+      payg_f4: "請注意：受支付平台限制，單次最小購買額度為18頁",
+      payg_cta: "購買額度",
+      payg_available_credits_label: "剩餘額度",
+      payg_buy_entry_cta: "購買按需額度",
+      payg_refund_entry_cta: "未使用額度退款"
     },
     faq: {
-      kicker: "FAQ",
+      kicker: "常見問題",
       title: "您想問的，都在這裡。",
-      q1: "How do I install TransLay?",
-      a1: "Search \"TransLay\" in the Google Workspace Marketplace and click Install. Grant access to Google Slides™, and the add-on will appear under Extensions → TransLay inside any presentation.",
-      q2: "How do I use it after installing?",
-      a2: "Open a Google Slides™ deck, go to Extensions → TransLay → Start. Pick your target language (preset or type any language in natural language), choose whether to create a new deck or append translated slides, and hit Translate.",
+      q1: "怎麼安裝 TransLay？",
+      a1: "在 Google Workspace Marketplace 搜尋「TransLay」，點擊安裝。授權 Google Slides™ 後，打開任意簡報，在擴充功能 → TransLay 中即可使用。",
+      q2: "安裝後怎麼使用？",
+      a2: "打開 Google Slides™ 文件，依次點擊 擴充功能 → TransLay → 啟動。選擇目標語言（預設或自然語言輸入任意語種），選擇輸出模式（新建文件或原文件追加），點擊翻譯即可。",
       q3: "退款政策是什麼？",
-      a3: "月付訂閱預設不退款。年度承諾方案預設不退款；但首次購買年度承諾的使用者，如於購買後 14 天內提出申請，且自該筆付款起 0 頁已用，可享有一次性退款。按量購買的額度，未使用部分可申請全額退款，已使用部分不可退款。若發生計費錯誤、未經授權付款、重大服務故障，或法律另有要求時，我們也會依適用規則處理退款。",
-      q4: "如何取得技術支援？",
-      a4: "每次翻譯任務都有 Task ID，可在側邊欄複製。寄信至 support@example.com，通常會在 24 小時內回覆。優先方案享有 4 小時 SLA。",
+      a3: "月付訂閱預設不退款。年度承諾計劃預設不退款；但首次購買年度承諾的用戶，如在購買後 14 天內提出申請，且自該筆付款起 0 頁已用，可享受一次性退款。按量購買的額度，未使用部分可申請全額退款，已使用部分不可退款。若發生計費錯誤、未經授權付款、重大服務故障，或法律另有要求時，我們也會按適用規則處理退款。",
+      q4: "怎麼獲得技術支援？",
+      a4: "每次翻譯任務都有 Task ID，可在側邊欄複製。發送郵件至 support@example.com，通常 24 小時內回覆。優先級套餐享 4 小時響應。",
       q5: "最大支援什麼規模的文件？",
-      a5: "最大支援 50 張投影片的單個 Google Slides™ 文件，足以滿足絕大多數日常使用情境。",
-      q6: "是否能 100% 還原原始文件的排版與樣式？",
-      a6: "由於不同語言表達相同語意時的字數差異很大，TransLay 會透過 AI 與技術手段最大限度還原原始文件的樣式與排版，但仍無法保證 100% 完全還原。您可以先使用 20 頁免費額度，以您的真實文件驗證還原效果，再決定是否購買。",
+      a5: "最大支援 50 張投影片的單個 Google Slides™ 文件，滿足絕大多數日常使用場景。",
+      q6: "是否 100% 復刻原始文件排版和樣式？",
+      a6: "由於每種語言表達相同語義的字符數完全不同，TransLay 使用 AI 和技術手段最大限度地還原原始文件的樣式和排版，但仍然無法保證 100% 還原。您可以利用 20 頁的免費額度，使用您的真實文件來驗證樣式和排版還原效果，再決定是否購買使用。",
       q7: "如何聯繫技術支援？",
-      a7: "如果您需要支援或回饋，請聯繫我們：support@example.com"
+      a7: "如果您需要支援或反饋，請聯繫我們：support@example.com"
     },
     cta: {
       title: "免費翻譯您的前 20 張投影片",
-      subtitle: "Google Workspace Marketplace 一鍵安裝，即可立即使用您的免費額度。",
+      subtitle: "Google Workspace Marketplace 中一鍵安裝，即可立即使用您的免費額度。",
       button: "安裝外掛"
     },
     footer: {
       tagline: "為 Google Slides™ 而生的 LLM 翻譯工具。",
       terms: "服務條款",
       privacy: "隱私政策",
+      support: "支援",
       support_subject: "TransLay 技術支援請求",
       copyright: "© 2026 example.com 版權所有。"
     },
     legal: {
-      back_home: "返回首頁"
+      back_home: "返回主頁"
     },
     successPage: {
       document_title: "購買完成 — TransLay",
-      kicker: "付款狀態",
+      kicker: "支付狀態",
       title: "購買完成",
-      body: "我們已收到您的付款。如果您是從外掛中開始此流程，可以返回 Google Slides™，並在那裡重新整理您的權益狀態。",
+      body: "我們已收到您的付款。如果您是從外掛中開始此流程，可以返回 Google Slides™，並在那裡刷新您的權益狀態。",
       back_pricing: "返回價格頁",
-      go_home: "返回首頁"
+      go_home: "返回主頁"
     },
     settings: {
       title: "設定",
@@ -4861,59 +5000,59 @@ window.TRANSLATIONS = {
       language: "語言"
     },
     auth: {
-      loading: "Checking session...",
+      loading: "正在檢查會話...",
       consuming_ticket: "正在為您登入...",
-      signing_in: "Completing sign-in...",
-      sign_out: "Sign out",
-      signed_in_as: "Signed in as",
-      plan_free: "Free",
-      plan_paid: "Paid",
-      google_client_missing: "Google sign-in is not configured yet."
+      signing_in: "正在完成登入...",
+      sign_out: "退出登入",
+      signed_in_as: "目前登入賬號",
+      plan_free: "免費版",
+      plan_paid: "付費版",
+      google_client_missing: "Google 登入尚未配置。"
     },
     hero2: {
-      badge: "For Google Slides™",
+      badge: "為 Google Slides™ 而生",
       title: "您的簡報",
       title_accent: "任意語言",
       title_end: "原樣呈現",
-      subtitle: "TransLay translates Google Slides™ with the quality of an LLM and the fidelity of the original — every font, every box, exactly as you designed it."
+      subtitle: "TransLay 以 LLM 級別的翻譯品質和像素級的排版保真度，翻譯 Google Slides™ —— 每一種字體、每一個文本框，都與原稿一致。"
     },
     legalPages: {
       terms: {
         title: "TransLay 服務條款",
         last_updated: "最後更新：2026-04-23",
         intro: [
-          "歡迎使用 TransLay。TransLay 是一項面向 Google Workspace™ 的翻譯服務，目前正式開放的宿主為 Google Slides™。您在安裝、存取或使用 TransLay 時，即表示您同意受本服務條款約束；如果您不同意，請不要使用 TransLay。"
+          "歡迎使用 TransLay。TransLay 是一個面向 Google Workspace™ 的翻譯服務，目前正式開放的宿主為 Google Slides™。您在安裝、訪問或使用 TransLay 時，即表示您同意受本服務條款約束；如果您不同意，請不要使用 TransLay。"
         ],
         sections: [
           {
             title: "1. 服務說明",
             paragraphs: [
-              "TransLay 目前主要用於翻譯 Google Slides™ 簡報內容，並盡力保留原有字體、樣式、排版與頁面結構。依您在外掛中的選擇，翻譯結果可輸出到新的簡報，也可追加到原文件中。對於包含 speaker notes 的頁面，TransLay 也會在目前支援範圍內一併處理。Google Docs™ 與 Google Sheets™ 相關功能目前仍在開發中，尚未正式開放。"
+              "TransLay 目前主要用於翻譯 Google Slides™ 簡報內容，並盡力保留原有的字體、樣式、排版和頁面結構。根據您在外掛中的選擇，翻譯結果可以輸出到新的簡報，也可以追加到原文件中。對於包含 speaker notes 的頁面，TransLay 也會在支援範圍內一併處理。Google Docs™ 和 Google Sheets™ 相關功能目前仍處於開發中，尚未正式開放。"
             ]
           },
           {
-            title: "2. 帳戶與使用資格",
+            title: "2. 賬戶與使用資格",
             paragraphs: [
-              "您需要有效的 Google 帳戶才能安裝與使用 TransLay。您應確保自己有權存取、翻譯與處理所提交的文件內容；若您代表團隊、公司或其他組織使用 TransLay，您也應確保自己有權代表該主體接受這些條款並使用相關文件。"
+              "您需要擁有有效的 Google 賬戶，才能安裝和使用 TransLay。您應確保自己有權訪問、翻譯並處理所提交的文件內容；如果您代表團隊、公司或其他組織使用 TransLay，您還應確保自己有權代表該主體接受這些條款並使用相關文件。"
             ]
           },
           {
             title: "3. 訂閱與計費",
             paragraphs: [
-              "TransLay 在安裝後提供一次性的 20 張投影片免費額度，同時提供月度訂閱、年度承諾方案與按量額度。訂閱費用按週期預先收取。您可以隨時在 Manage Subscription 面板中取消；取消將於目前計費週期或年度承諾週期結束時生效。",
-              "按量購買額度屬於獨立的 usage credit。無論您是否處於訂閱期內，都可以額外購買按量額度；當訂閱週期內額度不足時，也可以用按量額度覆蓋額外用量。符合條件的任務會優先消耗訂閱額度，訂閱額度用完後再消耗按量購買額度。",
-              "由於 Paddle 對單筆交易設有最低付款金額限制，按量額度的單次訂單最小購買額度為 18 頁，按目前 $0.04/頁計算為 $0.72；單次訂單最多購買 100 頁。如果您不需要 18 頁，可以先購買 18 頁，然後對未使用的多餘額度申請退款。",
-              "對於 Google Slides™ 翻譯任務，額度計費以實際交付結果為準。只有在某一張投影片的頁面內容已完整翻譯並成功寫回後，該頁才計為 <strong>1 slide</strong>。若該頁包含 speaker notes，則頁面內容與 notes 都翻譯並成功寫回時，合計仍計為 <strong>1 slide</strong>；若僅其中一側成功，則該頁計為 <strong>0.5 slide</strong>。若該頁任一元素翻譯失敗或寫回失敗，則該頁頁面內容不計費。",
-              "TransLay 在任務執行過程中也會採用臨時預扣的計費方式。一旦某一頁已成功翻譯，該成功頁面可能會先被計入，之後在您手動取消任務後完成結算。因此，請您在開始前確認任務設定。如果您在任何頁面成功翻譯之前取消，則不會扣減任何投影片額度。如對計費有疑問，請在郵件中附上 Task ID 並寄送至 <strong>support@example.com</strong>，以便我們更快核查。"
+              "TransLay 在安裝後提供一次性的 20 張投影片免費額度，同時提供月度訂閱、年度承諾計劃和按量額度。訂閱費用按週期預先收取。您可以隨時在 Manage Subscription 面板中取消；取消將在目前計費週期或年度承諾週期結束時生效。",
+              "對於 Google Slides™ 翻譯任務，額度計費以實際交付結果為準。僅當某一張投影片的頁面內容已完整翻譯並成功寫回時，該頁才計為 <strong>1 slide</strong>。如果該頁包含 speaker notes，則頁面內容和 notes 都翻譯並成功寫回時，合計仍計為 <strong>1 slide</strong>；若僅其中一側成功，則該頁計為 <strong>0.5 slide</strong>。如果該頁任一元素翻譯失敗或寫回失敗，則該頁頁面內容不計費。",
+              "TransLay 在任務執行過程中也會採用臨時預扣的計費方式。一旦某一頁已經成功翻譯，該成功頁面可能會先被計入，隨後在您手動取消任務後完成結算。因此，請您在開始前確認任務設定。如果您在任何頁面成功翻譯之前取消，則不會扣減任何投影片額度。如對計費有疑問，請在郵件中附上 Task ID 並發送至 <strong>support@example.com</strong>，以便我們更快核查。",
+              "按量額度是用於 Google Slides™ 翻譯的預付使用額度，獨立於訂閱套餐內額度。無論您處於免費計劃，還是處於有效付費訂閱期內，都可以額外購買按量額度；當訂閱額度和按量額度同時存在時，TransLay 會優先使用目前週期內的訂閱額度，超出部分再使用預付按量額度。",
+              "受 Paddle 支付平台限制，單筆交易的可收款金額必須大於 USD 0.70。由於 TransLay 目前按量額度價格為每頁 USD 0.04，因此單次最少購買數量為 18 頁，即 USD 0.72。目前單次最多可購買 100 頁。如果您實際需要少於 18 頁，也可以先購買 18 頁，再對未使用的多餘額度申請退款。"
             ]
           },
           {
             title: "4. 退款",
             paragraphs: [
-              "月付訂閱預設不退款。年度承諾方案預設也不退款；但首次購買年度承諾方案的客戶，若在購買後 14 天內提出申請，且自該筆付款起尚未使用任何頁面，可申請一次性退款。每個帳戶僅可使用一次該例外。按量購買的額度，包括訂閱期內額外購買的按量額度，未使用部分可申請全額退款；已使用部分不可退款。若發生計費錯誤、未經授權的付款、重大服務故障，或適用法律另有要求時，我們也可能提供退款。",
-              "按量購買額度的退款最小單位為 1 頁。退款會按授予額度的原始 Paddle 交易處理；如果一次退款申請涉及多筆購買交易，Paddle 可能會拆分為多筆獨立退款並分別發送通知，但您最終收到的總退款金額不變。",
-              "訂閱期內額外購買的按量額度仍屬於獨立的 usage credit，適用同樣的未使用部分退款規則，不繼承訂閱週期內不退款的規則。",
-              "如果您取消月度訂閱後，在目前月度週期結束前決定升級為年度承諾方案，我們可能會先恢復月度訂閱，並將第一個月已支付的 $9.99 抵扣年度訂閱費用；同時，第一個月的額度會按年度承諾方案升級為每月 500 頁。"
+              "月付訂閱預設不退款。年度承諾計劃預設也不退款；但首次購買年度承諾計劃的客戶，如在購買後 14 天內提出申請，且自該筆付款起尚未使用任何頁面，可申請一次性退款。每個賬戶僅可使用一次該例外。按量購買的額度，包括訂閱期內額外購買的按量額度，未使用部分可申請全額退款；已使用部分不可退款。若發生計費錯誤、未經授權的付款、重大服務故障，或適用法律另有要求時，我們也可能提供退款。",
+              "按量額度退款的最小申請單位為 1 頁。退款只根據未使用的按量額度計算；已經被成功翻譯任務消耗的額度不可退款。",
+              "Paddle 會基於原始購買交易處理退款。如果一次退款申請覆蓋了多筆按量購買交易中的額度，TransLay 可能會按原始交易拆分為多筆 Paddle 退款處理。您的總退款金額不會因此改變，但可能會分別收到多封 Paddle 退款通知郵件。",
+              "如果您已將月度訂閱設定為週期結束時取消，但在目前月度週期結束前選擇升級為年度承諾計劃，TransLay 會先恢復該月度訂閱，再將其升級為年度承諾。您本月已支付的 USD 9.99 會抵扣年度承諾的應付金額，並且目前訂閱權益會更新為年度承諾對應的每月 500 頁 Google Slides™ 額度。"
             ]
           },
           {
@@ -4925,14 +5064,14 @@ window.TRANSLATIONS = {
           {
             title: "6. 您的內容與授權",
             paragraphs: [
-              "您對自己的文件、簡報及其中內容保留原有權利。為了完成您主動發起的翻譯請求，您授權 TransLay 在服務運行所必需的範圍內存取您選定的檔案、讀取待翻譯內容、生成譯文，並依您的指令寫回原文件或建立新的目標文件。該授權僅用於完成服務本身，不代表我們取得您內容的所有權。",
-              "與翻譯任務相關的正文、譯文、comments 與 notes 只會在任務執行期間被短暫處理。任務結束後，這些內容會立即從我們的資料庫與快取中刪除，不會作為您的雲端備份繼續保存，因此請您自行保管好翻譯後的目標文件。若您之後對同一份文件再次發起相同語言的翻譯，我們會將其視為新的獨立任務重新處理，並依照該次任務規則完整計費。"
+              "您對自己的文件、簡報及其中內容保留原有權利。為了完成您主動發起的翻譯請求，您授權 TransLay 在服務運行所必需的範圍內訪問您選定的檔案、讀取待翻譯內容、生成譯文，並按您的指令寫回原文件或新建目標文件。該授權僅用於完成服務本身，不意味著我們取得您內容的所有權。",
+              "與翻譯任務相關的正文、譯文、comments 和 notes 只會在任務執行期間被短暫處理。任務結束後，這些內容會立即從我們的資料庫和快取中刪除，不會作為您的雲端備份繼續保存，因此請您自行保管好翻譯後的目標文件。如果您之後對同一份文件再次發起相同語言的翻譯，我們會將其視為新的獨立任務重新處理，並按照當次任務規則完整計費。"
             ]
           },
           {
             title: "7. 翻譯結果與服務可用性",
             paragraphs: [
-              "TransLay 使用 AI 翻譯能力提供服務。我們會盡力提升譯文品質並保留原始排版，但翻譯結果仍可能出現語義偏差、長度變化、換行變化、局部排版差異或其他不完全符合預期的情況。對於合約、法律、財務、醫療或其他重要內容，您應在使用或發布前自行複核。我們也可能因維護、上游平台變化、網路故障或第三方服務問題，導致服務暫時不可用、延遲或中斷。"
+              "TransLay 使用 AI 翻譯能力提供服務。我們會盡力提升譯文品質並保留原始排版，但翻譯結果仍可能出現語義偏差、長度變化、換行變化、局部排版差異或其他不完全符合預期的情況。對於合同、法律、財務、醫療或其他重要內容，您應在使用或發布前自行複核。我們也可能因維護、上游平台變化、網絡故障或第三方服務問題，導致服務暫時不可用、延遲或中斷。"
             ]
           },
           {
@@ -4944,13 +5083,13 @@ window.TRANSLATIONS = {
           {
             title: "9. 條款更新",
             paragraphs: [
-              "我們可能會根據產品演進、法律要求或支付與營運需要更新這些條款。更新後的版本將發布在官方網站相關頁面。若您在更新生效後繼續使用 TransLay，即表示您接受更新後的條款。"
+              "我們可能會根據產品演進、法律要求或支付與運營需要更新這些條款。更新後的版本將發布在官方站點相關頁面。若您在更新生效後繼續使用 TransLay，即表示您接受更新後的條款。"
             ]
           },
           {
-            title: "10. 聯絡方式",
+            title: "10. 聯繫方式",
             paragraphs: [
-              "如果您對這些條款有任何問題，請寄送郵件至 <strong>support@example.com</strong>。"
+              "如果您對這些條款有任何問題，請發送郵件至 <strong>support@example.com</strong>。"
             ]
           }
         ]
@@ -4959,82 +5098,82 @@ window.TRANSLATIONS = {
         title: "TransLay 隱私政策",
         last_updated: "最後更新：2026-04-23",
         intro: [
-          "我們將「少收集、少保存、少暴露」視為 TransLay 的基本原則。當您使用 TransLay 時，我們只處理翻譯、登入、訂閱與售後所必需的最少資訊；凡是不該收集或不該長期保存的內容，我們都盡量不碰。本隱私政策說明 TransLay 如何處理這些資訊。"
+          "我們把「少收集、少保存、少暴露」當作 TransLay 的基本原則。您使用 TransLay 時，我們只處理讓翻譯、登入、訂閱和售後能夠正常運轉所必需的最少資訊；凡是不該收集的，不該長期保存的，我們都盡量不碰。本隱私政策說明 TransLay 如何處理這些資訊。"
         ],
         sections: [
           {
-            title: "1. 我們的隱私原則",
+            title: "1. 我們堅持的隱私原則",
             paragraphs: [
-              "TransLay 只會處理完成您主動請求之服務所需的必要資訊。我們不收集與服務無關的資訊，不將資訊用於廣告，也不建立使用者畫像或行為分析。尤其是，對於文件正文、譯文、comments 與 notes，我們採取嚴格的最小化原則，不會在任務結束後將這些內容保留在資料庫、快取或應用日誌中。"
+              "TransLay 的核心原則很簡單：只為了完成您主動發起的服務而處理必要資訊，不做與服務無關的收集，不做廣告用途，不做用戶畫像，也不做行為分析。尤其是，對您文件中的正文、譯文、comments 和 notes，我們遵循嚴格的最小化原則，不會把這些內容長期留存在資料庫、快取或應用日誌裡。"
             ]
           },
           {
-            title: "2. 為了提供服務，我們會處理哪些資訊",
+            title: "2. 為了提供服務，我們會處理哪些最少資訊",
             paragraphs: [
-              "我們可能會處理 Google 帳戶基礎資訊，例如 Google 帳戶識別碼、電子郵件、顯示名稱與頭像，以便識別您、將訂閱與額度綁定到正確帳戶、顯示目前登入的帳戶，並提供支援。",
-              "我們只會在您主動開始翻譯任務後，處理您明確選擇翻譯的 Google Slides™ 內容，並僅用於完成該次翻譯與寫回。",
-              "我們也會處理顯示任務進度、結算使用量、調查帳單問題與提供支援所需的最少任務與額度資訊，例如 Task ID、任務狀態、頁數使用情況、時間戳與有限的故障排查中繼資料。",
-              "若您購買方案或額度，我們會處理確認權益所需的最少訂單與訂閱資訊，例如付款狀態、訂單號、購買或退款時間以及訂閱狀態。完整卡片資訊由 Paddle 處理，不由我們保存。",
-              "對於網站工作階段，我們只使用維持官方網站與訂閱頁面正常運作所需的最少工作階段資訊。Cookie 只保存不透明的 session id，不會直接保存您的電子郵件、方案或額度等可讀明文資訊。"
+              "我們可能會處理 Google 賬戶基礎資訊，例如 Google 賬戶標識、郵箱、顯示名稱和頭像，用於確認您的身份、把訂閱和額度綁定到正確賬戶、顯示目前登入賬戶，並提供售後支援。",
+              "我們只會在您主動開始翻譯任務後，處理您明確選擇翻譯的 Google Slides™ 內容，用於完成該次翻譯和寫回。",
+              "我們還會處理顯示任務進度、結算額度、核查賬單問題和提供支援所必需的最少任務與額度資訊，例如 Task ID、任務狀態、頁數使用情況、時間戳以及有限的故障排查元資料。",
+              "如果您購買套餐或額度，我們會處理確認權益所必需的最少訂單與訂閱資訊，例如支付狀態、訂單號、購買或退款時間以及訂閱狀態。完整銀行卡資訊由 Paddle 處理，不由我們保存。",
+              "對於網站會話，我們只使用維持官網和訂閱頁面正常工作所必需的最少會話資訊。Cookie 僅保存一個不透明的 session id，不會直接保存您的郵箱、套餐或配額等可讀明文資訊。"
             ]
           },
           {
-            title: "3. 我們不保留或收集什麼",
+            title: "3. 我們不會保存或收集什麼",
             paragraphs: [
-              "我們不會將您的文件正文、翻譯結果、comments 或 notes 的明文保留在資料庫、快取或日誌中。翻譯任務結束後，這些內容會立即從資料庫與快取中刪除，不會繼續作為您的文件備份保留，因此請您自行保管翻譯後的目標文件。",
-              "若您之後對同一份文件再次發起相同語言的翻譯，我們會將其視為新的獨立任務。由於我們不保留先前的文件內容或譯文，因此不會直接重用上一次結果，並會依該次任務規則完整計費。",
-              "我們不會將您的資訊用於廣告、廣告歸因、使用者畫像或行為分析。我們不會出售您的資料，也不會因為您使用了 TransLay，就追蹤您在其他網站、其他文件或其他產品中的行為。",
-              "我們不會保存您的完整銀行卡號、銀行帳戶號或其他完整付款憑證。付款由 Paddle 處理，我們只接收訂單與售後所需的最少結果資訊。"
+              "我們不會把您的文件正文、翻譯結果、comments 或 notes 的明文保存在資料庫、快取或日誌中。翻譯任務結束後，這些內容會立即從我們的資料庫和快取中刪除，不會繼續作為您的文件備份保留，因此請您自行保管好翻譯後的目標文件。",
+              "如果您之後對同一份文件再次發起相同語言的翻譯，我們會將其視為一個新的獨立任務。由於我們不會保留此前的文件內容或譯文，這類任務不會直接複用上一次結果，也會按當次任務規則完整計費。",
+              "我們不會把您的資訊用於廣告、廣告歸因、用戶畫像或行為分析。我們不會出售您的資料，也不會因為您使用了 TransLay，就去追蹤您在其他網站、其他文件或其他產品中的行為。",
+              "我們不會保存您的完整銀行卡號、銀行賬戶號或其他完整支付憑證。付款由 Paddle 處理，我們只接收訂單和售後所需的最少結果資訊。"
             ]
           },
           {
             title: "4. 為什麼需要 Google 權限",
             paragraphs: [
-              "TransLay 是一個 Google Workspace™ 外掛。為了在 Google Slides™ 中正常運作，我們只申請目前產品範圍直接需要的權限。",
-              "Google Slides™ 權限用於讀取您要翻譯的簡報內容，並將譯文寫回原文件或目標文件。沒有這項權限，TransLay 就無法讀取內容或完成寫回。",
-              "Google Drive™ 權限用於定位目前簡報、在「輸出到新文件」模式下建立使用者自己的副本、將目標文件放到正確位置，並管理任務執行期間所需的暫時存取。沒有這項權限，某些複製與寫回流程將無法穩定運作。",
-              "Google Drive™ file 權限用於幫助我們盡量將檔案操作限制在目前工作流程涉及的文件上。",
-              "Google Workspace™ 容器介面權限用於讓 TransLay 側邊欄顯示在 Google Slides™ 中。",
-              "外部請求權限用於讓外掛安全地與 TransLay 後端通訊，完成翻譯任務、權益刷新、登入與訂閱相關流程。",
-              "Google 帳戶電子郵件與頭像權限用於登入識別、顯示目前帳戶、綁定訂閱以及處理售後支援。"
+              "TransLay 是一個 Google Workspace™ 外掛。要在 Google Slides™ 中正常工作，我們只申請目前產品範圍直接需要的權限。",
+              "Google Slides™ 權限用於讀取您要翻譯的簡報內容，並把譯文寫回原檔案或目標檔案。沒有這項權限，TransLay 就無法讀取內容或完成寫回。",
+              "Google Drive™ 權限用於定位目前簡報、在「輸出到新檔案」模式下建立用戶自己的副本、把目標檔案放到合適位置，並管理任務執行期間所需的臨時訪問。沒有這項權限，某些複製和寫回流程就無法穩定運行。",
+              "Google Drive™ file 權限用於幫助我們盡量把檔案操作限制在目前工作流涉及的檔案上。",
+              "Google Workspace™ 容器界面權限用於讓 TransLay 側邊欄顯示在 Google Slides™ 中。",
+              "外部請求權限用於讓外掛安全地與 TransLay 後端通信，完成翻譯任務、權益刷新、登入和訂閱相關流程。",
+              "Google 賬戶郵箱與頭像權限用於登入識別、顯示目前賬戶、綁定訂閱以及處理售後支援。"
             ]
           },
           {
             title: "5. 如何授予這些權限",
             paragraphs: [
-              "當您透過 Google Workspace Marketplace 安裝 TransLay 後，首次在 Google Slides™ 中開啟並啟動它時，Google 會提示您完成授權流程。通常情況下，您安裝外掛後，開啟任意 Google Slides™ 簡報，進入「擴充功能」，啟動 TransLay，然後依照提示跳轉到 Google 權限確認頁面。",
-              "在確認頁面，請使用您打算與 TransLay 搭配使用的 Google 帳戶登入；若 Google 提供「全選」核取方塊，請勾選所需權限，然後點擊「允許」或「確認」。如果不授予這些必要權限，TransLay 將無法正常讀取文件、執行翻譯、建立目標文件、寫回結果，或完成登入與訂閱相關流程。"
+              "當您通過 Google Workspace Marketplace 安裝 TransLay 後，首次在 Google Slides™ 中打開並啟動它時，Google 會提示您完成授權流程。通常情況下，您安裝外掛後，打開任意 Google Slides™ 簡報，進入「擴充功能」，啟動 TransLay，然後按照提示跳轉到 Google 權限確認頁面。",
+              "在確認頁面，請使用您準備與 TransLay 配套使用的 Google 賬戶登入，如果 Google 提供「全選」複選框，請勾選所需權限，然後點擊「允許」或「確認」。如果不授予這些必要權限，TransLay 將無法正常讀取文件、執行翻譯、建立目標檔案、寫回結果，或完成登入與訂閱相關流程。"
             ]
           },
           {
             title: "6. 我們如何使用這些資訊",
             paragraphs: [
-              "這些資訊只會被用於完成您請求的翻譯、顯示目前登入狀態、綁定訂閱與額度、處理帳單與退款、回覆售後問題、防止濫用，以及保障服務穩定運作。我們不會將這些資訊用於廣告、使用者畫像、行銷推薦或行為分析。我們也不會使用您的文件內容來訓練我們自己的模型。"
+              "這些資訊只會被用於完成您請求的翻譯、顯示目前登入狀態、綁定訂閱與額度、處理賬單與退款、回覆售後問題、防止濫用，以及保障服務穩定運行。我們不會將這些資訊用於廣告、用戶畫像、營銷推薦或行為分析。我們也不會使用您的文件內容來訓練我們自己的模型。"
             ]
           },
           {
             title: "7. 第三方服務",
             paragraphs: [
-              "為了營運 TransLay，我們會在必要時依賴少量第三方服務，例如 Google Workspace™ 與 Google Cloud 用於託管、文件存取與服務運作，AI 與雲端服務提供商用於翻譯處理，Paddle 用於付款、稅務與退款流程。這些服務僅在提供目前功能所必需的範圍內參與處理。"
+              "為了運行 TransLay，我們會在必要時依賴少量第三方服務，例如 Google Workspace™ 與 Google Cloud 用於託管、文件訪問和服務運行，AI 與雲服務提供商用於翻譯處理，Paddle 用於支付、稅務和退款流程。這些服務僅在提供目前功能所必需的範圍內參與處理。"
             ]
           },
           {
             title: "8. 保留與刪除",
             paragraphs: [
-              "我們的目標是在最短時間內保留盡量少的資訊。與翻譯內容相關的正文、譯文、comments 與 notes 會在任務結束後立即從資料庫與快取中刪除。帳戶綁定、訂閱、訂單與合規所必需的少量資訊，則可能在確有必要時繼續保留，以便確認權益、處理退款或回應合法請求。",
-              "若您希望刪除與帳戶相關的個人資訊，或希望了解仍然保留了哪些最少記錄，可以聯繫 <strong>support@example.com</strong>。請注意，若您要求刪除用於證明與恢復訂閱權益所必需的記錄，我們之後可能無法再為您恢復相應權益。"
+              "我們的目標是在最短時間內保留盡量少的資訊。與翻譯內容相關的正文、譯文、comments 和 notes 會在任務結束後立即從資料庫和快取中刪除。賬戶綁定、訂閱、訂單和合規所必需的少量資訊，可能會在確有必要時繼續保留，以便確認權益、處理退款或響應合法請求。",
+              "如果您希望刪除與賬戶相關的個人資訊，或希望了解仍然保留了哪些最少記錄，可以聯繫 <strong>support@example.com</strong>。請注意，如果您要求刪除用於證明和恢復訂閱權益所必需的記錄，我們之後可能無法再為您恢復相應權益。"
             ]
           },
           {
             title: "9. 您的權利與選擇",
             paragraphs: [
-              "您可以隨時停止使用 TransLay，也可以取消訂閱、登出，或聯繫我們提出隱私相關請求。在適用法律賦予您存取、更正、刪除或限制處理等權利的情況下，我們會依適用規則處理有效請求。"
+              "您可以隨時停止使用 TransLay，也可以取消訂閱、退出登入，或聯繫我們提出隱私相關請求。在適用法律賦予您訪問、更正、刪除或限制處理等權利的情況下，我們會按適用規則處理有效請求。"
             ]
           },
           {
-            title: "10. 政策更新與聯絡方式",
+            title: "10. 政策更新與聯繫方式",
             paragraphs: [
-              "若產品形態、付款流程或法律義務發生變化，我們可能更新本隱私政策。更新後的版本會發布於官方網站相關頁面。若您對隱私、資料處理或安全有任何疑問，請寄送郵件至 <strong>support@example.com</strong>。"
+              "如果產品形態、支付流程或法律義務發生變化，我們可能更新本隱私政策。更新後的版本會發布在官網相關頁面。若您對隱私、資料處理或安全問題有任何疑問，請發送郵件至 <strong>support@example.com</strong>。"
             ]
           }
         ]
@@ -5042,6 +5181,9 @@ window.TRANSLATIONS = {
     }
   },
   ja: {
+    meta: {
+      document_title: "TransLay — Google Slides™ 向け LLM 翻訳ツール"
+    },
     nav: {
       home: "ホーム",
       features: "機能",
@@ -5051,146 +5193,173 @@ window.TRANSLATIONS = {
     },
     hero: {
       badge: "Google Workspace™ で提供中",
-      title1: "スライドを翻訳。",
-      title2: "すべてを保持。",
-      subtitle: "Google Slides™ 向けの高品質 LLM 翻訳。フォント・スタイル・レイアウトをそのまま維持します。",
+      title1: "Slides を翻訳",
+      title2: "すべてを保持",
+      subtitle: "Google Slides™ 向けの高品質 AI 翻訳。フォント、スタイル、レイアウトを細部まで保持します。",
       cta: "アドオンをインストール",
-      cta_sub: "無料 — 20 枚プレゼント",
+      cta_sub: "無料 — 20 枚分を付与",
       secondary: "デモを見る"
     },
-    trust: "Trusted by teams at",
+    trust: "チームに信頼されています",
     features: {
-      kicker: "Features",
-      title: "Built for presentations that matter",
-      subtitle: "TransLay was designed from the ground up to respect the craft of your deck.",
-      f1_title: "AI-powered translation quality",
-      f1_body: "Context-aware translations that read at a professional human level.",
-      f2_title: "Pixel-perfect layout",
-      f2_body: "Fonts, colors, spacing, and animations stay true to the original, with little to no reflow.",
-      f3_title: "Describe the target language naturally",
-      f3_body: "Type \"Icelandic\" or \"Thai\" — TransLay understands.",
-      f4_title: "Two output modes",
-      f4_body: "Create a new deck, or append translated slides after each original.",
-      f5_title: "One click inside Slides",
-      f5_body: "No uploads or exports. Open it directly in the Google Slides™ sidebar.",
-      f6_title: "Stable for real-world decks",
-      f6_body: "Support a single Google Slides™ deck with up to 50 slides, with stable background processing."
+      kicker: "機能",
+      title: "大切なプレゼンのために設計",
+      subtitle: "TransLay は、資料づくりの細部を尊重するために一から設計されています。",
+      f1_title: "AI による高品質翻訳",
+      f1_body: "文脈を踏まえた、プロ品質に近い自然な翻訳。",
+      f2_title: "レイアウトを高精度に保持",
+      f2_body: "フォント、色、間隔、アニメーションをほぼそのまま保ち、再調整を最小限にします。",
+      f3_title: "自然な言葉で翻訳先を指定",
+      f3_body: "アイスランド語やタイ語と入力するだけで、TransLay が理解します。",
+      f4_title: "2 つの出力モード",
+      f4_body: "新しい翻訳ファイルを作成するか、各原稿ページの後ろに訳文を追加できます。",
+      f5_title: "Slides 内でワンクリック",
+      f5_body: "アップロードもエクスポートも不要。Google Slides™ のサイドバーから直接開けます。",
+      f6_title: "大きなプレゼンにも対応",
+      f6_body: "1 つの Google Slides™ ファイルで最大 50 枚まで対応し、バックグラウンドで安定処理します。"
     },
     demo: {
-      kicker: "See it in action",
-      title: "Product demo",
+      kicker: "実際の仕上がり",
+      title: "製品デモ",
       subtitle: "",
-      screenshot_labels: ["機能：追加", "機能：カスタムページ", "機能：新規ファイル作成"]
+      screenshot_labels: ["機能：訳文を追加", "機能：ページ指定", "機能：新規ファイル作成"]
     },
     pricing: {
-      kicker: "Pricing",
-      title: "Simple, transparent pricing",
-      subtitle: "Start free, upgrade anytime, no subscription required, and pay only for what you need.",
-      free_name: "Free",
+      kicker: "料金",
+      title: "シンプルで透明な料金",
+      subtitle: "無料で始めて、いつでもアップグレード。サブスクリプション必須ではなく、必要な分だけ使えます。",
+      free_name: "無料",
       free_price: "$0",
-      free_sub: "One-time, on install",
-      free_f1: "20 slides total",
-      free_f2: "All languages",
-      free_f3: "Full layout preservation",
-      free_f4: "Email support",
-      free_cta: "Install free",
-      monthly_name: "Monthly",
+      free_sub: "インストール後に一度だけ付与",
+      free_f1: "20 枚のスライド",
+      free_f2: "すべての言語",
+      free_f3: "レイアウトを完全保持",
+      free_f4: "メールサポート",
+      free_cta: "無料でインストール",
+      monthly_name: "月額",
       monthly_price: "$9.99",
-      monthly_per: "/month",
-      monthly_sub: "Cancel anytime",
-      monthly_f1: "300 slides / month",
-      monthly_f2: "All languages",
-      monthly_f3: "Priority translation speed",
-      monthly_f4: "Priority support",
-      monthly_cta: "Get Monthly",
-      cancel_cta: "Cancel subscription",
-      cancel_scheduled_cta: "Cancellation scheduled",
-      resume_monthly_cta: "Resume Monthly",
-      resume_yearly_cta: "Resume Annual commitment",
-      upgrade_yearly_cta: "Upgrade to Annual commitment",
-      yearly_badge: "Best value",
-      yearly_name: "Annual commitment",
+      monthly_per: "/月",
+      monthly_sub: "いつでも解約可能",
+      monthly_f1: "300 枚 / 月",
+      monthly_f2: "すべての言語",
+      monthly_f3: "優先翻訳速度",
+      monthly_f4: "優先サポート",
+      monthly_cta: "月額で購読",
+      cancel_cta: "サブスクリプションを解約",
+      cancel_scheduled_cta: "解約予定済み",
+      resume_monthly_cta: "月額購読を再開",
+      resume_yearly_cta: "年間コミットを再開",
+      upgrade_yearly_cta: "年間コミットへアップグレード",
+      yearly_badge: "最もお得",
+      yearly_name: "年間コミット",
       yearly_price: "$119.99",
-      yearly_per: "/year",
-      yearly_sub: "Save 40% vs monthly",
-      yearly_f1: "500 slides / month",
-      yearly_f2: "All languages",
-      yearly_f3: "Priority translation speed",
-      yearly_f4: "Priority support",
-      yearly_cta: "Get Annual commitment",
-      subscription_success_title: "Thanks for subscribing!",
-      subscription_success_body_monthly: "You have successfully subscribed to TransLay on the monthly plan. Please sign in to Google Slides™. If TransLay is already open in the sidebar, close it, then reopen TransLay from Extensions. Your subscription status will update automatically.",
-      subscription_success_body_yearly: "You have successfully subscribed to TransLay on the annual commitment plan. Please sign in to Google Slides™. If TransLay is already open in the sidebar, close it, then reopen TransLay from Extensions. Your subscription status will update automatically.",
+      yearly_per: "/年",
+      yearly_sub: "月額比で 40% お得",
+      yearly_f1: "500 枚 / 月",
+      yearly_f2: "すべての言語",
+      yearly_f3: "優先翻訳速度",
+      yearly_f4: "優先サポート",
+      yearly_cta: "年間コミットを購読",
+      subscription_success_title: "ご購読ありがとうございます！",
+      subscription_success_body_monthly: "TransLay の月額プランへの登録が完了しました。Google Slides™ にログインしてください。すでにサイドバーで TransLay を開いている場合は一度閉じ、拡張機能から TransLay を開き直してください。購読状態は自動で更新されます。",
+      subscription_success_body_yearly: "TransLay の年間コミットプランへの登録が完了しました。Google Slides™ にログインしてください。すでにサイドバーで TransLay を開いている場合は一度閉じ、拡張機能から TransLay を開き直してください。購読状態は自動で更新されます。",
       subscription_success_confirm: "OK",
-      cancel_dialog_title: "Cancel subscription?",
-      cancel_dialog_body_monthly: "After cancellation, you can keep using the current subscription until the end of the current billing period. Unused time is non-refundable. The cancellation takes effect at the start of the next billing period.",
-      cancel_dialog_body_yearly: "After cancellation, you can keep using the current annual commitment subscription until the end of the current annual term. Unused time is non-refundable. Annual commitment plans are generally non-refundable. First-time annual commitment customers may request a one-time refund within 14 days of purchase only if no pages have been used since that payment. The cancellation takes effect in the next subscription term.",
-      cancel_dialog_confirm: "Confirm cancellation",
-      cancel_dialog_dismiss: "Keep subscription",
-      opening_checkout_notice: "Opening secure checkout...",
-      purchase_received_notice: "Purchase received. Confirming your subscription state...",
-      subscription_confirmation_delayed_notice: "Purchase received. Subscription confirmation may take a few seconds.",
-      sign_in_required_notice: "Sign in with Google before starting checkout.",
-      payment_failed_notice: "Payment was not completed. Please try again or use another payment method.",
-      checkout_unavailable_notice: "Unable to complete this billing action right now.",
-      subscription_change_pending_notice: "Updating your subscription...",
-      cancellation_redirect_notice: "Opening Paddle's secure cancellation page...",
-      cancellation_scheduled_notice: "Your subscription has been canceled. You can keep using TransLay until {date}.",
-      cancellation_failed_notice: "Unable to schedule cancellation right now.",
-      subscription_resumed_notice: "Your subscription has been resumed.",
-      upgrade_success_notice: "Your annual commitment upgrade is complete. The one-time upgrade charge was {amount}.",
-      upgrade_notice_title: "Friendly reminder",
-      upgrade_notice_body: "Upgrading to annual commitment will credit your current monthly payment and charge only the upgrade difference of {amount}.",
-      upgrade_notice_confirm: "Agree",
-      upgrade_notice_cancel: "Cancel",
-      upgrade_processing_title: "Processing payment...",
-      upgrade_processing_body: "Please keep this page open while Paddle confirms your upgrade.",
-      upgrade_completed_title: "Upgrade complete",
-      upgrade_completed_body: "You have upgraded to the annual commitment subscription. Valid until {date}.",
-      upgrade_completed_confirm: "OK",
-      upgrade_failed_title: "Upgrade not completed",
-      upgrade_failed_confirm: "OK",
-      payg_name: "Pay as you go",
+      cancel_dialog_title: "サブスクリプションを解約しますか？",
+      cancel_dialog_body_monthly: "解約後も、現在の購読期間が終了するまでは通常どおり利用できます。未使用期間は返金されません。解約は次の請求期間から有効になります。",
+      cancel_dialog_body_yearly: "解約後も、現在の年間コミット期間が終了するまでは通常どおり利用できます。未使用期間は返金されません。年間コミットプランは原則返金不可です。ただし、初めて年間コミットを購入したユーザーは、購入後 14 日以内で、その支払い以降の使用ページ数が 0 ページの場合に限り、1 回限りの返金を申請できます。解約は次の購読期間から有効になります。",
+      cancel_dialog_confirm: "確認：解約を開始",
+      cancel_dialog_dismiss: "キャンセル：購読を維持",
+      opening_checkout_notice: "安全な決済画面を開いています...",
+      purchase_received_notice: "購入結果を受け取りました。購読状態を確認しています...",
+      credits_purchase_received_notice: "クレジット購入結果を受け取りました。残高を確認しています...",
+      credits_balance_label: "従量クレジット残高",
+      credits_refundable_label: "返金可能クレジット",
+      credits_quantity_label: "購入ページ数",
+      credits_minimum_quantity_notice: "決済チャネルの最低決済額は {amount} です。現在の最小購入数は {min} ページです。",
+      credits_refund_quantity_label: "返金ページ数",
+      credits_refund_in_progress_label: "返金処理中",
+      credits_purchase_cta: "購入",
+      credits_refund_cta: "返金",
+      credits_cancel_cta: "キャンセル",
+      credits_refund_pending_notice: "返金申請を送信しています...",
+      credits_refund_submitted_notice: "返金申請を送信しました。",
+      credits_refund_provider_pending_notice: "返金を送信しました。決済プラットフォームで処理中です。",
+      credits_refund_processing_banner: "返金申請を決済プラットフォームへ送信しました。処理には最大 30 分かかる場合があります。後ほど決済プラットフォームから通知メールが届きますので、受信箱をご確認ください。ご不明点は support@example.com までご連絡ください。処理中の返金クレジット：{units}。見込み返金額：{amount}。",
+      subscription_confirmation_delayed_notice: "購入結果を受け取りました。購読状態の確認に数秒かかる場合があります。",
+      sign_in_required_notice: "購読を開始する前に Google でログインしてください。",
+      payment_failed_notice: "支払いが完了しませんでした。もう一度お試しいただくか、別の支払い方法をご利用ください。",
+      checkout_unavailable_notice: "現在、この購読操作を完了できません。しばらくしてからお試しください。",
+      subscription_change_pending_notice: "購読を更新しています...",
+      cancellation_redirect_notice: "Paddle の安全な解約ページを開いています...",
+      cancellation_scheduled_notice: "サブスクリプションは正常に解約されました。{date} までは引き続き利用できます。",
+      cancellation_failed_notice: "現在、解約を設定できません。しばらくしてからお試しください。",
+      subscription_resumed_notice: "サブスクリプションを再開しました。",
+      upgrade_success_notice: "年間コミットへのアップグレードが完了しました。今回の一回限りのアップグレード料金は {amount} です。",
+      upgrade_notice_title: "ご案内",
+      upgrade_notice_body: "年間コミットへアップグレードする際、現在の月額購読料金が差し引かれ、アップグレード差額 {amount} のみをお支払いいただきます。",
+      upgrade_notice_confirm: "同意",
+      upgrade_notice_cancel: "キャンセル",
+      upgrade_processing_title: "支払いを処理しています...",
+      upgrade_processing_body: "Paddle がアップグレードを確認しています。このページを閉じないでください。",
+      upgrade_completed_title: "アップグレード完了",
+      upgrade_completed_body: "年間コミット購読へアップグレードしました。有効期限：{date}。",
+      upgrade_completed_confirm: "確認",
+      upgrade_failed_title: "アップグレード未完了",
+      upgrade_failed_confirm: "確認",
+      payg_name: "従量課金",
       payg_price: "$0.04",
       payg_per: "/slide",
-      payg_sub: "No commitment, no monthly cap",
-      payg_f1: "Unlimited volume",
-      payg_f2: "All languages",
-      payg_f3: "Rollover credits",
-      payg_f4: "Standard support",
-      payg_cta: "Buy credits"
+      payg_sub: "契約不要、月間上限なし",
+      payg_f1: "利用量は無制限",
+      payg_f2: "未使用クレジットはいつでも返金可能",
+      payg_f3: "クレジットは蓄積可能",
+      payg_f4: "注意：決済プラットフォームの制限により、1 回の最小購入数は 18 ページです",
+      payg_cta: "クレジットを購入",
+      payg_available_credits_label: "残りクレジット",
+      payg_buy_entry_cta: "従量クレジットを購入",
+      payg_refund_entry_cta: "未使用クレジットを返金"
     },
     faq: {
-      kicker: "FAQ",
-      title: "Questions, answered.",
-      q1: "How do I install TransLay?",
-      a1: "Search \"TransLay\" in the Google Workspace Marketplace and click Install. Grant access to Google Slides™, and the add-on will appear under Extensions → TransLay inside any presentation.",
-      q2: "How do I use it after installing?",
-      a2: "Open a Google Slides™ deck, go to Extensions → TransLay → Start. Pick your target language (preset or type any language in natural language), choose whether to create a new deck or append translated slides, and hit Translate.",
-      q3: "What's your refund policy?",
-      a3: "Monthly subscriptions are non-refundable. Annual commitment plans are also non-refundable, except that first-time annual commitment customers may request a one-time refund within 14 days of purchase if no pages have been used since that payment. Unused pay-as-you-go credits may be refunded in full; used credits are non-refundable. Refunds may also be issued for billing errors, unauthorized payments, major service failures, or where required by law.",
-      q4: "How do I get technical support?",
-      a4: "Every translation job has a Task ID you can copy from the sidebar. Email it to support@example.com and we typically respond within 24 hours. Priority plans get a 4-hour SLA.",
-      q5: "What is the maximum document size supported?",
-      a5: "TransLay currently supports a single Google Slides™ deck with up to 50 slides, which covers the vast majority of everyday usage scenarios.",
-      q6: "Does TransLay reproduce the original layout and styling 100% exactly?",
-      a6: "Not always. Different languages can require very different text lengths for the same meaning. TransLay uses AI and layout-preservation techniques to restore the original styling and structure as closely as possible, but 100% fidelity cannot be guaranteed. You can use the free 20-slide quota with your own real deck to evaluate the result before purchasing.",
-      q7: "How do I contact technical support?",
-      a7: "If you need support or feedback, please contact us: support@example.com"
+      kicker: "よくある質問",
+      title: "知りたいことをまとめました。",
+      q1: "TransLay はどうやってインストールしますか？",
+      a1: "Google Workspace Marketplace で「TransLay」を検索し、インストールをクリックします。Google Slides™ の権限を許可すると、任意のプレゼンテーション内の 拡張機能 → TransLay から利用できます。",
+      q2: "インストール後はどう使いますか？",
+      a2: "Google Slides™ ファイルを開き、拡張機能 → TransLay → 起動 の順にクリックします。対象言語を選びます。プリセットから選ぶことも、自然言語で任意の言語を入力することもできます。出力モード（新規ファイル作成または元ファイルへ追加）を選び、翻訳をクリックします。",
+      q3: "返金ポリシーは？",
+      a3: "月額購読は原則返金不可です。年間コミットプランも原則返金不可ですが、初めて年間コミットを購入したユーザーは、購入後 14 日以内で、その支払い以降の使用ページ数が 0 ページの場合に限り、1 回限りの返金を申請できます。従量購入クレジットは、未使用分について全額返金を申請できます。使用済み分は返金できません。請求ミス、不正な支払い、重大なサービス障害、または法律上必要な場合にも、適用ルールに従って返金を処理します。",
+      q4: "技術サポートはどう受けられますか？",
+      a4: "各翻訳タスクには、サイドバーからコピーできる Task ID があります。support@example.com まで送信してください。通常 24 時間以内に返信します。優先プランは 4 時間以内の対応です。",
+      q5: "対応する最大ファイルサイズは？",
+      a5: "現在、最大 50 枚のスライドを含む単一の Google Slides™ ファイルに対応しており、日常的な利用シーンの大半をカバーできます。",
+      q6: "元のレイアウトとスタイルを 100% 再現できますか？",
+      a6: "常に 100% とは限りません。同じ意味でも、言語によって文字数は大きく変わります。TransLay は AI とレイアウト保持技術で元のスタイルとレイアウトを最大限再現しますが、完全な再現は保証できません。購入前に、20 ページ分の無料枠を使って実際のファイルで仕上がりを確認できます。",
+      q7: "技術サポートへの連絡方法は？",
+      a7: "サポートやフィードバックが必要な場合は、support@example.com までご連絡ください。"
     },
     cta: {
-      title: "最初の 20 枚を無料で翻訳。",
-      subtitle: "30 秒でインストール。クレジットカード不要。",
+      title: "最初の 20 枚を無料で翻訳",
+      subtitle: "Google Workspace Marketplace からワンクリックでインストールし、すぐに無料枠を使えます。",
       button: "アドオンをインストール"
     },
     footer: {
       tagline: "Google Slides™ のための LLM 翻訳ツール。",
       terms: "利用規約",
       privacy: "プライバシーポリシー",
-      copyright: "© 2026 example.com All rights reserved."
+      support: "サポート",
+      support_subject: "TransLay 技術サポート依頼",
+      copyright: "© 2026 example.com 無断転載を禁じます。"
     },
     legal: {
-      back_home: "Back to home"
+      back_home: "ホームに戻る"
+    },
+    successPage: {
+      document_title: "購入完了 — TransLay",
+      kicker: "支払い状態",
+      title: "購入完了",
+      body: "お支払いを受け取りました。アドオンからこの手続きを開始した場合は、Google Slides™ に戻って権利状態を更新してください。",
+      back_pricing: "料金ページに戻る",
+      go_home: "ホームに戻る"
     },
     settings: {
       title: "設定",
@@ -5201,175 +5370,180 @@ window.TRANSLATIONS = {
       language: "言語"
     },
     auth: {
-      loading: "Checking session...",
-      consuming_ticket: "Signing you in...",
-      signing_in: "Completing sign-in...",
-      sign_out: "Sign out",
-      signed_in_as: "Signed in as",
-      plan_free: "Free",
-      plan_paid: "Paid",
-      google_client_missing: "Google sign-in is not configured yet."
+      loading: "セッションを確認しています...",
+      consuming_ticket: "ログインしています...",
+      signing_in: "ログインを完了しています...",
+      sign_out: "ログアウト",
+      signed_in_as: "現在のアカウント",
+      plan_free: "無料プラン",
+      plan_paid: "有料プラン",
+      google_client_missing: "Google ログインはまだ設定されていません。"
     },
     hero2: {
-      badge: "For Google Slides™",
-      title: "Your deck.",
-      title_accent: "In any language.",
-      title_end: "Untouched.",
-      subtitle: "TransLay translates Google Slides™ with the quality of an LLM and the fidelity of the original — every font, every box, exactly as you designed it."
+      badge: "Google Slides™ のために",
+      title: "あなたのプレゼンを。",
+      title_accent: "どの言語にも。",
+      title_end: "設計どおりに。",
+      subtitle: "TransLay は LLM レベルの翻訳品質とピクセル単位のレイアウト忠実度で Google Slides™ を翻訳します。すべてのフォント、すべてのテキストボックスを原稿に合わせて保ちます。"
     },
     legalPages: {
       terms: {
         title: "TransLay 利用規約",
-        last_updated: "最終更新日: 2026-04-23",
+        last_updated: "最終更新日：2026-04-23",
         intro: [
-          "TransLay へようこそ。TransLay は Google Workspace™ 向けの翻訳サービスであり、現在正式に利用できるホストは Google Slides™ です。TransLay をインストール、利用、またはアクセスすることにより、あなたは本利用規約に同意したものとみなされます。同意しない場合は、TransLay を利用しないでください。"
+          "TransLay へようこそ。TransLay は Google Workspace™ 向けの翻訳サービスであり、現在正式に提供されているホストは Google Slides™ です。TransLay をインストール、アクセス、または使用することにより、本利用規約に拘束されることに同意したものとみなされます。同意しない場合は、TransLay を使用しないでください。"
         ],
         sections: [
           {
             title: "1. サービス内容",
             paragraphs: [
-              "TransLay は現在、Google Slides™ のプレゼンテーション翻訳に重点を置いており、元のフォント、スタイル、レイアウト、ページ構成をできる限り保持するよう努めます。選択したワークフローに応じて、翻訳結果は新しいプレゼンテーションに出力されるか、元のファイルに追記されます。speaker notes も現在のサポート範囲に含まれます。Google Docs™ と Google Sheets™ の機能は現在も開発中であり、まだ正式公開されていません。"
+              "TransLay は現在、主に Google Slides™ プレゼンテーションの翻訳に使用され、元のフォント、スタイル、レイアウト、ページ構造をできる限り保持します。アドオン内での選択に応じて、翻訳結果は新しいプレゼンテーションへ出力することも、元のファイルに追加することもできます。speaker notes を含むページについても、サポート範囲内であわせて処理します。Google Docs™ と Google Sheets™ 関連機能は現在も開発中であり、まだ正式には提供されていません。"
             ]
           },
           {
             title: "2. アカウントと利用資格",
             paragraphs: [
-              "TransLay をインストールして利用するには、有効な Google アカウントが必要です。また、送信するファイルにアクセスし、翻訳し、処理する権限が自分にあることを保証する必要があります。チーム、会社、その他の組織を代表して利用する場合は、その組織のために本規約に同意する権限も必要です。"
+              "TransLay をインストールして使用するには、有効な Google アカウントが必要です。送信する文書内容にアクセスし、翻訳し、処理する権限が自分にあることを確認してください。チーム、会社、その他の組織を代表して TransLay を使用する場合は、その主体を代表して本規約を受け入れ、関連ファイルを使用する権限があることも確認してください。"
             ]
           },
           {
             title: "3. サブスクリプションと課金",
             paragraphs: [
-              "TransLay では、インストール時に一度だけ利用できる 20 スライドの無料枠、月額プラン、年間コミットプラン、従量課金クレジットを提供します。サブスクリプション料金は各期間の開始時に前払いで請求されます。Manage Subscription パネルからいつでも解約できますが、解約は現在の請求期間または年間期間の終了時に有効になります。",
-              "Google Slides™ の翻訳タスクでは、実際に配信された結果に基づいて課金されます。スライド内容が完全に翻訳され、正常に書き戻された場合にのみ <strong>1 slide</strong> として課金されます。speaker notes がある場合、本文と notes の両方が正常に翻訳・書き戻されたときでも合計は <strong>1 slide</strong> のままです。どちらか片方だけ成功した場合は <strong>0.5 slide</strong> として課金されます。ページ上のいずれかの要素で翻訳または書き戻しに失敗した場合、そのページ本文は課金されません。",
-              "実行中のタスクでは仮課金が使われる場合もあります。すでに正常に翻訳されたスライドがある場合、そのスライドは先に計上され、あなたが後から手動キャンセルしても最終的に課金対象となることがあります。開始前に設定をご確認ください。どのスライドも成功する前にキャンセルした場合は課金されません。課金に関するお問い合わせは、Task ID を添えて <strong>support@example.com</strong> までお送りください。"
+              "TransLay はインストール後に一度限りの 20 枚分の無料スライド枠を提供し、あわせて月額購読、年間コミットプラン、従量クレジットを提供します。購読料金は周期ごとに前払いで請求されます。Manage Subscription パネルからいつでも解約できます。解約は現在の請求期間または年間コミット期間の終了時に有効になります。",
+              "Google Slides™ の翻訳タスクでは、クォータ課金は実際の納品結果に基づきます。あるスライドのページ内容が完全に翻訳され、正常に書き戻された場合にのみ、そのページは <strong>1 slide</strong> として計上されます。そのページに speaker notes が含まれる場合、ページ内容と notes の両方が翻訳され正常に書き戻されても、合計は引き続き <strong>1 slide</strong> です。片方だけ成功した場合、そのページは <strong>0.5 slide</strong> として計上されます。ページ上のいずれかの要素で翻訳または書き戻しに失敗した場合、そのページ内容は課金されません。",
+              "TransLay はタスク実行中に一時的な仮差し引き方式も使用します。あるページがすでに正常に翻訳された場合、その成功ページは先に計上され、その後に手動でタスクをキャンセルした場合でも精算されることがあります。そのため、開始前にタスク設定を確認してください。どのページも正常に翻訳される前にキャンセルした場合、スライド枠は差し引かれません。課金について質問がある場合は、Task ID をメールに記載して <strong>support@example.com</strong> まで送信してください。より早く確認できます。",
+              "従量クレジットは Google Slides™ 翻訳用の前払い利用クレジットであり、サブスクリプションプランに含まれるクォータとは独立しています。無料プランでも、有効な有料購読中でも、追加の従量クレジットを購入できます。購読クォータと従量クレジットが同時に存在する場合、TransLay はまず現在周期内の購読クォータを使用し、超過分に前払いの従量クレジットを使用します。",
+              "Paddle 決済プラットフォームの制限により、1 回の取引で決済可能な金額は USD 0.70 を超える必要があります。TransLay の現在の従量クレジット価格は 1 ページあたり USD 0.04 のため、1 回の最小購入数は 18 ページ、つまり USD 0.72 です。現在、1 回の注文で購入できる最大数は 100 ページです。実際に必要なページ数が 18 ページ未満の場合も、まず 18 ページを購入し、未使用の余剰クレジットについて返金を申請できます。"
             ]
           },
           {
             title: "4. 返金",
             paragraphs: [
-              "月額プランは返金不可です。年間コミットプランも原則として返金不可ですが、初回の年間コミット購入者に限り、購入後 14 日以内で、かつその支払い以降にページ利用がない場合に、一度だけ返金を申請できます。この例外はアカウントごとに 1 回のみです。請求ミス、不正な支払い、重大なサービス障害、または適用法で要求される場合には返金が行われることがあります。従量課金分は消費後の返金はできません。 従量課金クレジットは、サブスクリプション有効中に追加購入したものを含め、未使用分について全額返金を申請できます。使用済みクレジットは返金できません。"
+              "月額購読は原則返金されません。年間コミットプランも原則返金されません。ただし、初めて年間コミットプランを購入したお客様は、購入後 14 日以内で、その支払い以降にページを一切使用していない場合、1 回限りの返金を申請できます。この例外は各アカウントにつき 1 回のみ利用できます。従量購入クレジットは、購読期間中に追加購入した従量クレジットを含め、未使用部分について全額返金を申請できます。使用済み部分は返金されません。請求ミス、未承認の支払い、重大なサービス障害、または適用法により必要な場合にも、返金を行うことがあります。",
+              "従量クレジット返金の最小申請単位は 1 ページです。返金は未使用の従量クレジットに対してのみ計算されます。正常に納品された翻訳タスクで消費済みのクレジットは返金されません。",
+              "Paddle は元の購入取引に基づいて返金を処理します。1 回の返金申請が複数の従量購入取引に含まれるクレジットを対象とする場合、TransLay は元の取引に基づいて複数の Paddle 返金へ分割して処理することがあります。返金総額は変わりませんが、Paddle から複数の返金通知メールを受け取る場合があります。",
+              "月額購読を期間終了時に解約するよう設定していて、現在の月額期間が終了する前に年間コミットプランへアップグレードする場合、TransLay はまずその月額購読を再開し、その後年間コミットへアップグレードします。今月すでに支払った USD 9.99 は年間コミットの支払額に充当され、現在の購読権利は年間コミットに対応する月 500 ページの Google Slides™ クォータへ更新されます。"
             ]
           },
           {
             title: "5. 適正利用",
             paragraphs: [
-              "違法、権利侵害、明らかに権限のない内容、またはその他不適切な内容に TransLay を使用しないことに同意するものとします。また、割当の回避、安全制限の回避、サービス安定性の妨害などの不正利用も禁止されます。送信する内容とその結果についてはあなたが責任を負います。"
+              "TransLay を違法、権利侵害、他者の権利を明らかに侵害する内容、またはあなたの権限範囲を超える内容の処理に使用しないことに同意します。また、クォータの回避、安全制限の回避、サービス安定性への悪意ある妨害、その他不適切な方法で TransLay を利用してはなりません。翻訳に提出する内容およびその利用によって生じる結果について、あなたが責任を負います。"
             ]
           },
           {
-            title: "6. あなたのコンテンツと許諾",
+            title: "6. あなたのコンテンツと許可",
             paragraphs: [
-              "あなたは自分の文書、プレゼンテーション、およびその内容に対する権利を保持します。あなたが自ら開始した翻訳依頼を完了するために、TransLay が選択されたファイルにアクセスし、翻訳対象テキストを読み取り、訳文を生成し、あなたの指示に従って元ファイルまたは新しい対象ファイルへ書き戻すことを許可するものとします。この許可はサービス提供のためだけに存在し、あなたのコンテンツの所有権が当社に移転することを意味しません。",
-              "本文、訳文、comments、notes はタスク実行中にのみ短時間処理されます。タスク終了後、これらの内容は当社のデータベースとキャッシュから直ちに削除され、クラウドバックアップとして保持されません。翻訳済みファイルはご自身で保管してください。同じ文書を後でもう一度同じ言語に翻訳する場合、それは新しい独立タスクとして扱われ、その時点のルールに従って全額課金されます。"
+              "あなたは、自分の文書、プレゼンテーションおよびその内容に対する従来の権利を保持します。あなたが自ら開始した翻訳リクエストを完了するために、サービス運営に必要な範囲で、選択したファイルへアクセスし、翻訳対象内容を読み取り、訳文を生成し、あなたの指示に従って元文書へ書き戻す、または新しい対象文書を作成することを TransLay に許可します。この許可はサービスそのものを完了するためだけのものであり、あなたのコンテンツの所有権を当社が取得することを意味しません。",
+              "翻訳タスクに関連する本文、訳文、comments、notes は、タスク実行中にのみ短時間処理されます。タスク終了後、これらの内容は当社のデータベースとキャッシュから直ちに削除され、あなたのクラウドバックアップとして保存され続けることはありません。そのため、翻訳後の対象文書はご自身で保管してください。後で同じ文書を同じ言語に再度翻訳する場合、当社はそれを新しい独立タスクとして処理し、そのタスクのルールに従って全額課金します。"
             ]
           },
           {
-            title: "7. 翻訳結果と可用性",
+            title: "7. 翻訳結果とサービス可用性",
             paragraphs: [
-              "TransLay は AI 翻訳技術を使用しています。高い翻訳品質と元の書式保持に努めますが、意味のずれ、文字数の変化、改行の変化、局所的なレイアウト差、その他期待どおりでない結果が生じる場合があります。契約、法律、財務、医療、その他重要な内容については、利用前にご自身で確認してください。また、保守、上流プラットフォームの変更、ネットワーク障害、第三者サービスの問題により、一時的に遅延・停止・中断が発生する場合があります。"
+              "TransLay は AI 翻訳機能を使用してサービスを提供します。当社は訳文品質の向上と元のレイアウト保持に努めますが、翻訳結果には意味のずれ、長さの変化、改行の変化、部分的なレイアウト差異、または期待に完全には合わないその他の結果が生じる可能性があります。契約、法律、財務、医療、その他重要な内容については、使用または公開前にご自身で確認してください。また、保守、上流プラットフォームの変更、ネットワーク障害、第三者サービスの問題により、サービスが一時的に利用できない、遅延する、または中断する場合があります。"
             ]
           },
           {
-            title: "8. 責任の制限",
+            title: "8. 責任制限",
             paragraphs: [
-              "適用法で認められる最大限の範囲で、TransLay は「現状有姿」で提供されます。サービスの利用、利用不能、翻訳の不正確さ、第三者プラットフォームの制限、サービス中断、書き戻し失敗などに起因する間接的、付随的、特別、結果的損害について、当社は責任を負いません。"
+              "適用法で認められる最大限の範囲で、TransLay は「現状有姿」で提供されます。利用、利用不能、翻訳結果のずれ、第三者プラットフォームの制限、サービス中断、データ書き戻し失敗などに起因する間接的、付随的、特別または結果的損害について、当社は責任を負いません。"
             ]
           },
           {
-            title: "9. 規約の変更",
+            title: "9. 規約更新",
             paragraphs: [
-              "製品変更、法的要件、決済要件、運用上の必要に応じて本規約を更新することがあります。更新版は公式サイトに掲載されます。変更後も利用を継続する場合、更新後の規約に同意したものとみなされます。"
+              "当社は、製品の進化、法的要件、支払いおよび運用上の必要に応じて、本規約を更新することがあります。更新後の版は公式サイトの関連ページに掲載されます。更新の効力発生後も TransLay の利用を継続した場合、更新後の規約に同意したものとみなされます。"
             ]
           },
           {
             title: "10. 連絡先",
             paragraphs: [
-              "本規約についてご質問がある場合は、<strong>support@example.com</strong> までご連絡ください。"
+              "本規約についてご質問がある場合は、<strong>support@example.com</strong> までメールでお問い合わせください。"
             ]
           }
         ]
       },
       privacy: {
         title: "TransLay プライバシーポリシー",
-        last_updated: "最終更新日: 2026-04-23",
+        last_updated: "最終更新日：2026-04-23",
         intro: [
-          "私たちの基本方針は単純です。収集を最小に、保存を最小に、露出を最小にすることです。TransLay の利用時には、翻訳、サインイン、購読、サポートを動かすために必要な最小限の情報のみを処理します。収集や保存が不要なものにはできるだけ触れません。本ポリシーは、その情報をどのように扱うかを説明します。"
+          "当社は「少なく収集し、少なく保存し、少なく露出する」ことを TransLay の基本原則としています。TransLay を利用する際、当社は翻訳、ログイン、購読、アフターサポートを正常に動かすために必要な最小限の情報だけを処理します。収集すべきでないもの、長期保存すべきでないものには、できるだけ触れません。本プライバシーポリシーは、TransLay がこれらの情報をどのように扱うかを説明します。"
         ],
         sections: [
           {
-            title: "1. プライバシー原則",
+            title: "1. 当社が守るプライバシー原則",
             paragraphs: [
-              "TransLay は、あなたが能動的に求めたサービスを完了するために必要な情報だけを処理します。無関係な情報は収集せず、広告にも使わず、ユーザープロファイルや行動分析も行いません。特に、文書本文、訳文、comments、notes については厳格な最小化方針を採用し、タスク終了後にデータベース、キャッシュ、アプリケーションログへ保持しません。"
+              "TransLay の中核原則はシンプルです。あなたが能動的に開始したサービスを完了するために必要な情報だけを処理し、サービスに関係しない収集、広告目的の利用、ユーザープロファイリング、行動分析は行いません。特に、文書内の本文、訳文、comments、notes については厳格な最小化原則に従い、これらの内容をデータベース、キャッシュ、アプリケーションログに長期保存しません。"
             ]
           },
           {
-            title: "2. サービス提供のために処理する情報",
+            title: "2. サービス提供のために処理する最小限の情報",
             paragraphs: [
-              "Google アカウント識別子、メールアドレス、表示名、アバターなどの基本情報を処理する場合があります。これは本人確認、サブスクリプションや割当の正しいアカウントへの紐付け、現在のログインアカウント表示、サポート対応のためです。",
-              "翻訳対象としてあなたが明示的に選択した Google Slides™ の内容は、翻訳タスク開始後に限って、そのタスクの完了と書き戻しのためだけに処理されます。",
-              "進行表示、利用量精算、課金調査、サポートに必要な最小限のタスク情報も処理します。たとえば Task ID、タスク状態、ページ利用数、タイムスタンプ、限定的な障害調査メタデータです。",
-              "プランやクレジットを購入した場合、支払い状態、注文番号、購入または返金時刻、サブスクリプション状態など、権利確認に必要な最小限の注文・購読情報を処理します。完全なカード情報は Paddle が扱い、当社は保存しません。",
-              "ウェブサイトのセッションには、公式サイトと課金ページを動かすために必要な最小限の情報だけを使います。Cookie には不透明な session id のみが保存され、メールアドレス、プラン、割当などの可読情報は直接保存されません。"
+              "当社は、Google アカウント識別子、メールアドレス、表示名、アバターなどの Google アカウント基本情報を処理する場合があります。これは、本人確認、購読とクォータの正しいアカウントへの紐付け、現在ログイン中のアカウント表示、アフターサポート提供のためです。",
+              "あなたが翻訳対象として明示的に選択した Google Slides™ の内容は、翻訳タスクをあなたが開始した後に限り、その翻訳と書き戻しを完了する目的でのみ処理します。",
+              "当社は、タスク進捗の表示、クォータ精算、請求問題の確認、サポート提供に必要な最小限のタスクおよびクォータ情報も処理します。たとえば Task ID、タスク状態、ページ使用状況、タイムスタンプ、限定的なトラブルシューティング用メタデータです。",
+              "プランまたはクレジットを購入した場合、当社は権利確認に必要な最小限の注文および購読情報を処理します。たとえば支払い状態、注文番号、購入または返金時刻、購読状態です。完全なカード情報は Paddle が処理し、当社は保存しません。",
+              "ウェブサイトのセッションについては、公式サイトと購読ページを正常に動かすために必要な最小限のセッション情報だけを使用します。Cookie は不透明な session id のみを保存し、あなたのメールアドレス、プラン、クォータなどの可読な平文情報を直接保存しません。"
             ]
           },
           {
-            title: "3. 保存しない・収集しないもの",
+            title: "3. 当社が保存または収集しないもの",
             paragraphs: [
-              "文書本文、翻訳結果、comments、notes の平文はデータベース、キャッシュ、ログに保持しません。翻訳タスクが終了すると、これらは直ちにデータベースとキャッシュから削除され、文書バックアップとして保持されません。翻訳後のファイルはご自身で保管してください。",
-              "同じ文書を後でもう一度同じ言語に翻訳する場合、それは新しい独立タスクとして扱われます。以前の文書内容や訳文を保持していないため、前回結果を直接再利用することはなく、その時点のルールに従って全額課金されます。",
-              "当社はあなたの情報を広告、広告計測、ユーザープロファイリング、行動分析に使いません。データを販売せず、TransLay を利用しているという理由だけで、他サイトや他文書、他製品での活動を追跡しません。",
-              "完全なカード番号、銀行口座番号、その他完全な支払認証情報を保存しません。支払いは Paddle が処理し、当社は注文とサポートに必要な最小限の結果情報だけを受け取ります。"
+              "当社は、あなたの文書本文、翻訳結果、comments、notes の平文をデータベース、キャッシュ、ログに保存しません。翻訳タスク終了後、これらの内容は当社のデータベースとキャッシュから直ちに削除され、あなたの文書バックアップとして保持されません。翻訳後の対象文書はご自身で保管してください。",
+              "後で同じ文書を同じ言語へ再度翻訳する場合、当社はそれを新しい独立タスクとして扱います。以前の文書内容や訳文を保存していないため、この種のタスクでは前回結果を直接再利用せず、そのタスクのルールに従って全額課金されます。",
+              "当社はあなたの情報を広告、広告アトリビューション、ユーザープロファイリング、行動分析に使用しません。データを販売せず、TransLay を使用したという理由だけで、他のウェブサイト、他の文書、他の製品での行動を追跡しません。",
+              "当社は、完全な銀行カード番号、銀行口座番号、その他完全な支払い認証情報を保存しません。支払いは Paddle が処理し、当社は注文とアフターサポートに必要な最小限の結果情報だけを受け取ります。"
             ]
           },
           {
             title: "4. Google 権限が必要な理由",
             paragraphs: [
-              "TransLay は Google Workspace™ add-on です。Google Slides™ 内で正しく動作するために、現在の製品範囲に直接必要な権限のみを求めます。",
-              "Google Slides™ 権限は、翻訳したいプレゼンテーション内容の読み取りと、元ファイルまたは対象ファイルへの書き戻しに必要です。",
-              "Google Drive™ 権限は、現在のプレゼンテーションの特定、「新しいファイルへ出力」ワークフローでのユーザー所有コピーの作成、対象ファイルの適切な配置、タスク実行中の一時的アクセス管理に必要です。",
-              "Google Drive™ file 権限は、現在のワークフローに関係するファイルに操作をできるだけ限定するために役立ちます。",
-              "Google Workspace™ コンテナ UI 権限は、TransLay サイドバーを Google Slides™ 内に表示するために必要です。",
-              "外部リクエスト権限は、翻訳タスク、権利更新、サインイン、課金関連フローのために add-on が安全にバックエンドと通信するために必要です。",
-              "Google アカウントのメールとアバター権限は、本人確認、現在のアカウント表示、購読の紐付け、サポート対応に必要です。"
+              "TransLay は Google Workspace™ アドオンです。Google Slides™ 内で正常に動作するために、現在の製品範囲で直接必要な権限のみを申請します。",
+              "Google Slides™ 権限は、翻訳したいプレゼンテーション内容を読み取り、訳文を元ファイルまたは対象ファイルへ書き戻すために使用されます。この権限がないと、TransLay は内容を読み取ることも書き戻しを完了することもできません。",
+              "Google Drive™ 権限は、現在のプレゼンテーションの特定、「新しいファイルへ出力」モードでユーザー自身のコピーを作成すること、対象ファイルを適切な場所へ配置すること、タスク実行中に必要な一時的アクセスを管理することに使用されます。この権限がないと、一部のコピーおよび書き戻しフローは安定して動作しません。",
+              "Google Drive™ file 権限は、ファイル操作を現在のワークフローに関係するファイルへできるだけ限定するために役立ちます。",
+              "Google Workspace™ コンテナ UI 権限は、TransLay サイドバーを Google Slides™ 内に表示するために使用されます。",
+              "外部リクエスト権限は、アドオンが TransLay バックエンドと安全に通信し、翻訳タスク、権利更新、ログイン、購読関連フローを完了するために使用されます。",
+              "Google アカウントのメールアドレスとアバター権限は、ログイン識別、現在アカウントの表示、購読の紐付け、アフターサポート処理に使用されます。"
             ]
           },
           {
-            title: "5. 権限の付与方法",
+            title: "5. これらの権限を付与する方法",
             paragraphs: [
-              "Google Workspace Marketplace から TransLay をインストールした後、最初に Google Slides™ 内で起動すると、Google が権限付与フローを表示します。通常は add-on をインストールし、任意の Google Slides™ を開き、Extensions から TransLay を起動し、その後表示される Google の権限確認ページへ進みます。",
-              "そのページで、TransLay と一緒に使いたい Google アカウントでログインし、必要権限を選択して、Allow または Confirm をクリックしてください。これらの権限がないと、文書の読み取り、翻訳実行、対象ファイルの作成、書き戻し、サインインや購読フローの完了ができません。"
+              "Google Workspace Marketplace から TransLay をインストールした後、初めて Google Slides™ 内で開いて起動すると、Google が承認フローの完了を求めます。通常は、アドオンをインストールし、任意の Google Slides™ プレゼンテーションを開き、「拡張機能」に入り、TransLay を起動し、表示される案内に従って Google 権限確認ページへ移動します。",
+              "確認ページでは、TransLay と一緒に使用する予定の Google アカウントでログインしてください。Google が「すべて選択」チェックボックスを表示する場合は必要な権限を選択し、「許可」または「確認」をクリックします。これらの必要権限を付与しない場合、TransLay は文書の読み取り、翻訳の実行、対象ファイルの作成、結果の書き戻し、ログインおよび購読関連フローを正常に完了できません。"
             ]
           },
           {
-            title: "6. 情報の利用目的",
+            title: "6. 当社がこれらの情報をどう利用するか",
             paragraphs: [
-              "これらの情報は、要求された翻訳の実行、サインイン状態の表示、購読と割当の紐付け、課金と返金の処理、サポート対応、不正利用防止、安定運用のためだけに使われます。広告、ユーザープロファイル、マーケティング推薦、行動分析には使いません。また、文書内容を当社独自モデルの学習に利用することもありません。"
+              "これらの情報は、あなたが依頼した翻訳の完了、現在のログイン状態の表示、購読とクォータの紐付け、請求と返金の処理、アフターサポートへの回答、不正利用の防止、サービスの安定運用のためにのみ使用されます。当社はこれらの情報を広告、ユーザープロファイリング、マーケティング推薦、行動分析には使用しません。また、あなたの文書内容を当社独自モデルの学習に使用することもありません。"
             ]
           },
           {
             title: "7. 第三者サービス",
             paragraphs: [
-              "TransLay の運用には、必要最小限の第三者サービスを利用します。たとえば、ホスティング、文書アクセス、サービス運用のための Google Workspace™ と Google Cloud、翻訳処理のための AI・クラウド提供者、決済・税務・返金のための Paddle です。これらは現在の機能を提供するために必要な範囲でのみ関与します。"
+              "TransLay を運用するため、必要に応じて少数の第三者サービスに依存します。たとえば、ホスティング、文書アクセス、サービス運用のための Google Workspace™ と Google Cloud、翻訳処理のための AI およびクラウドサービス提供者、支払い、税務、返金フローのための Paddle です。これらのサービスは、現在の機能を提供するために必要な範囲でのみ処理に関与します。"
             ]
           },
           {
             title: "8. 保持と削除",
             paragraphs: [
-              "私たちの目標は、必要最小限の情報をできるだけ短く保持することです。翻訳コンテンツに関わる本文、訳文、comments、notes は、タスク終了後すぐにデータベースとキャッシュから削除されます。一方で、アカウント紐付け、購読、注文、法令遵守に必要な最小限の情報は、権利確認、返金処理、法的要請対応のために必要な場合に限って保持されることがあります。",
-              "アカウントに関する個人情報の削除や、残っている最小限の記録について知りたい場合は、<strong>support@example.com</strong> までご連絡ください。ただし、購読権利の証明と復元に必要な記録まで削除を希望されると、後でその権利を復元できなくなる場合があります。"
+              "当社の目標は、できるだけ少ない情報をできるだけ短い期間だけ保持することです。翻訳内容に関連する本文、訳文、comments、notes は、タスク終了後ただちにデータベースとキャッシュから削除されます。アカウント紐付け、購読、注文、コンプライアンスに必要な少量の情報は、権利確認、返金処理、合法的な要求への対応のために本当に必要な場合に限り、引き続き保持されることがあります。",
+              "アカウントに関連する個人情報を削除したい場合、またはどの最小限の記録が残っているかを知りたい場合は、<strong>support@example.com</strong> までご連絡ください。購読権利の証明と復元に必要な記録の削除を求めた場合、その後、当該権利を復元できなくなる可能性があります。"
             ]
           },
           {
             title: "9. あなたの権利と選択",
             paragraphs: [
-              "いつでも TransLay の利用をやめることができます。購読の解約、サインアウト、プライバシー関連の問い合わせも可能です。適用法によりアクセス、訂正、削除、処理制限の権利が認められる場合、有効な請求には適用ルールに従って対応します。"
+              "あなたはいつでも TransLay の使用を停止できます。また、購読の解約、ログアウト、プライバシー関連の請求について当社に連絡できます。適用法によりアクセス、訂正、削除、処理制限などの権利が認められる場合、当社は有効な請求を適用ルールに従って処理します。"
             ]
           },
           {
             title: "10. ポリシー更新と連絡先",
             paragraphs: [
-              "製品、決済フロー、法的義務に変更があれば、本ポリシーを更新することがあります。更新版は公式サイトに掲載されます。プライバシー、データ取扱い、セキュリティについて質問がある場合は、<strong>support@example.com</strong> までご連絡ください。"
+              "製品形態、支払いフロー、法的義務に変更がある場合、当社は本プライバシーポリシーを更新することがあります。更新後の版は公式サイトの関連ページに掲載されます。プライバシー、データ処理、セキュリティについてご質問がある場合は、<strong>support@example.com</strong> までメールでお問い合わせください。"
             ]
           }
         ]
@@ -5377,6 +5551,9 @@ window.TRANSLATIONS = {
     }
   },
   ko: {
+    meta: {
+      document_title: "TransLay — Google Slides™용 LLM 번역 도구"
+    },
     nav: {
       home: "홈",
       features: "기능",
@@ -5386,146 +5563,173 @@ window.TRANSLATIONS = {
     },
     hero: {
       badge: "Google Workspace™에서 사용 가능",
-      title1: "슬라이드를 번역.",
-      title2: "모든 것을 보존.",
-      subtitle: "Google Slides™를 위한 고품질 LLM 번역. 모든 글꼴, 스타일, 레이아웃을 그대로 유지합니다.",
+      title1: "Slides 번역",
+      title2: "모든 것을 보존",
+      subtitle: "Google Slides™를 위한 고품질 AI 번역. 모든 글꼴, 스타일, 레이아웃을 그대로 유지합니다.",
       cta: "부가기능 설치",
       cta_sub: "무료 — 20장 제공",
       secondary: "데모 보기"
     },
-    trust: "Trusted by teams at",
+    trust: "팀들이 신뢰합니다",
     features: {
-      kicker: "Features",
-      title: "Built for presentations that matter",
-      subtitle: "TransLay was designed from the ground up to respect the craft of your deck.",
-      f1_title: "AI-powered translation quality",
-      f1_body: "Context-aware translations that read at a professional human level.",
-      f2_title: "Pixel-perfect layout",
-      f2_body: "Fonts, colors, spacing, and animations stay true to the original, with little to no reflow.",
-      f3_title: "Describe the target language naturally",
-      f3_body: "Type \"Icelandic\" or \"Thai\" — TransLay understands.",
-      f4_title: "Two output modes",
-      f4_body: "Create a new deck, or append translated slides after each original.",
-      f5_title: "One click inside Slides",
-      f5_body: "No uploads or exports. Open it directly in the Google Slides™ sidebar.",
-      f6_title: "Stable for real-world decks",
-      f6_body: "Support a single Google Slides™ deck with up to 50 slides, with stable background processing."
+      kicker: "기능",
+      title: "중요한 프레젠테이션을 위해 설계",
+      subtitle: "TransLay는 발표 자료의 세부 완성도를 존중하도록 처음부터 설계되었습니다.",
+      f1_title: "AI 기반 고품질 번역",
+      f1_body: "맥락을 이해해 전문 번역가 수준에 가까운 자연스러운 번역을 제공합니다.",
+      f2_title: "레이아웃 고정밀 보존",
+      f2_body: "글꼴, 색상, 간격, 애니메이션을 거의 그대로 유지해 재정렬과 수정이 거의 필요 없습니다.",
+      f3_title: "자연어로 대상 언어 지정",
+      f3_body: "아이슬란드어 또는 태국어처럼 입력하면 TransLay가 이해합니다.",
+      f4_title: "두 가지 출력 모드",
+      f4_body: "새 번역 파일을 만들거나, 각 원본 페이지 뒤에 번역본을 추가할 수 있습니다.",
+      f5_title: "Slides 안에서 한 번 클릭",
+      f5_body: "업로드나 내보내기 없이 Google Slides™ 사이드바에서 바로 엽니다.",
+      f6_title: "큰 발표 자료도 안정적으로",
+      f6_body: "하나의 Google Slides™ 파일에서 최대 50장까지 지원하며 백그라운드에서 안정적으로 처리합니다."
     },
     demo: {
-      kicker: "See it in action",
-      title: "Product demo",
+      kicker: "실제 결과",
+      title: "제품 데모",
       subtitle: "",
-      screenshot_labels: ["기능: 추가", "기능: 사용자 지정 페이지", "기능: 새 파일 만들기"]
+      screenshot_labels: ["기능: 번역본 추가", "기능: 사용자 지정 페이지", "기능: 새 파일 만들기"]
     },
     pricing: {
-      kicker: "Pricing",
-      title: "Simple, transparent pricing",
-      subtitle: "Start free, upgrade anytime, no subscription required, and pay only for what you need.",
-      free_name: "Free",
+      kicker: "가격",
+      title: "간단하고 투명한 가격",
+      subtitle: "무료로 시작하고 언제든 업그레이드하세요. 구독은 필수가 아니며 필요한 만큼만 사용할 수 있습니다.",
+      free_name: "무료",
       free_price: "$0",
-      free_sub: "One-time, on install",
-      free_f1: "20 slides total",
-      free_f2: "All languages",
-      free_f3: "Full layout preservation",
-      free_f4: "Email support",
-      free_cta: "Install free",
-      monthly_name: "Monthly",
+      free_sub: "설치 후 1회 제공",
+      free_f1: "슬라이드 20장",
+      free_f2: "모든 언어",
+      free_f3: "레이아웃 완전 보존",
+      free_f4: "이메일 지원",
+      free_cta: "무료 설치",
+      monthly_name: "월간",
       monthly_price: "$9.99",
-      monthly_per: "/month",
-      monthly_sub: "Cancel anytime",
-      monthly_f1: "300 slides / month",
-      monthly_f2: "All languages",
-      monthly_f3: "Priority translation speed",
-      monthly_f4: "Priority support",
-      monthly_cta: "Get Monthly",
-      cancel_cta: "Cancel subscription",
-      cancel_scheduled_cta: "Cancellation scheduled",
-      resume_monthly_cta: "Resume Monthly",
-      resume_yearly_cta: "Resume Annual commitment",
-      upgrade_yearly_cta: "Upgrade to Annual commitment",
-      yearly_badge: "Best value",
-      yearly_name: "Annual commitment",
+      monthly_per: "/월",
+      monthly_sub: "언제든 취소 가능",
+      monthly_f1: "월 300장",
+      monthly_f2: "모든 언어",
+      monthly_f3: "우선 번역 속도",
+      monthly_f4: "우선 지원",
+      monthly_cta: "월간 구독",
+      cancel_cta: "구독 취소",
+      cancel_scheduled_cta: "취소 예약됨",
+      resume_monthly_cta: "월간 구독 재개",
+      resume_yearly_cta: "연간 약정 재개",
+      upgrade_yearly_cta: "연간 약정으로 업그레이드",
+      yearly_badge: "최고 가치",
+      yearly_name: "연간 약정",
       yearly_price: "$119.99",
-      yearly_per: "/year",
-      yearly_sub: "Save 40% vs monthly",
-      yearly_f1: "500 slides / month",
-      yearly_f2: "All languages",
-      yearly_f3: "Priority translation speed",
-      yearly_f4: "Priority support",
-      yearly_cta: "Get Annual commitment",
-      subscription_success_title: "Thanks for subscribing!",
-      subscription_success_body_monthly: "You have successfully subscribed to TransLay on the monthly plan. Please sign in to Google Slides™. If TransLay is already open in the sidebar, close it, then reopen TransLay from Extensions. Your subscription status will update automatically.",
-      subscription_success_body_yearly: "You have successfully subscribed to TransLay on the annual commitment plan. Please sign in to Google Slides™. If TransLay is already open in the sidebar, close it, then reopen TransLay from Extensions. Your subscription status will update automatically.",
-      subscription_success_confirm: "OK",
-      cancel_dialog_title: "Cancel subscription?",
-      cancel_dialog_body_monthly: "After cancellation, you can keep using the current subscription until the end of the current billing period. Unused time is non-refundable. The cancellation takes effect at the start of the next billing period.",
-      cancel_dialog_body_yearly: "After cancellation, you can keep using the current annual commitment subscription until the end of the current annual term. Unused time is non-refundable. Annual commitment plans are generally non-refundable. First-time annual commitment customers may request a one-time refund within 14 days of purchase only if no pages have been used since that payment. The cancellation takes effect in the next subscription term.",
-      cancel_dialog_confirm: "Confirm cancellation",
-      cancel_dialog_dismiss: "Keep subscription",
-      opening_checkout_notice: "Opening secure checkout...",
-      purchase_received_notice: "Purchase received. Confirming your subscription state...",
-      subscription_confirmation_delayed_notice: "Purchase received. Subscription confirmation may take a few seconds.",
-      sign_in_required_notice: "Sign in with Google before starting checkout.",
-      payment_failed_notice: "Payment was not completed. Please try again or use another payment method.",
-      checkout_unavailable_notice: "Unable to complete this billing action right now.",
-      subscription_change_pending_notice: "Updating your subscription...",
-      cancellation_redirect_notice: "Opening Paddle's secure cancellation page...",
-      cancellation_scheduled_notice: "Your subscription has been canceled. You can keep using TransLay until {date}.",
-      cancellation_failed_notice: "Unable to schedule cancellation right now.",
-      subscription_resumed_notice: "Your subscription has been resumed.",
-      upgrade_success_notice: "Your annual commitment upgrade is complete. The one-time upgrade charge was {amount}.",
-      upgrade_notice_title: "Friendly reminder",
-      upgrade_notice_body: "Upgrading to annual commitment will credit your current monthly payment and charge only the upgrade difference of {amount}.",
-      upgrade_notice_confirm: "Agree",
-      upgrade_notice_cancel: "Cancel",
-      upgrade_processing_title: "Processing payment...",
-      upgrade_processing_body: "Please keep this page open while Paddle confirms your upgrade.",
-      upgrade_completed_title: "Upgrade complete",
-      upgrade_completed_body: "You have upgraded to the annual commitment subscription. Valid until {date}.",
-      upgrade_completed_confirm: "OK",
-      upgrade_failed_title: "Upgrade not completed",
-      upgrade_failed_confirm: "OK",
-      payg_name: "Pay as you go",
+      yearly_per: "/년",
+      yearly_sub: "월간 대비 40% 절약",
+      yearly_f1: "월 500장",
+      yearly_f2: "모든 언어",
+      yearly_f3: "우선 번역 속도",
+      yearly_f4: "우선 지원",
+      yearly_cta: "연간 약정 구독",
+      subscription_success_title: "구독해 주셔서 감사합니다!",
+      subscription_success_body_monthly: "TransLay 월간 플랜 구독이 완료되었습니다. Google Slides™에 로그인해 주세요. TransLay가 이미 사이드바에 열려 있다면 닫은 뒤 Extensions에서 TransLay를 다시 여세요. 구독 상태가 자동으로 업데이트됩니다.",
+      subscription_success_body_yearly: "TransLay 연간 약정 플랜 구독이 완료되었습니다. Google Slides™에 로그인해 주세요. TransLay가 이미 사이드바에 열려 있다면 닫은 뒤 Extensions에서 TransLay를 다시 여세요. 구독 상태가 자동으로 업데이트됩니다.",
+      subscription_success_confirm: "확인",
+      cancel_dialog_title: "구독을 취소하시겠습니까?",
+      cancel_dialog_body_monthly: "취소 후에도 현재 구독 기간이 끝날 때까지 정상적으로 사용할 수 있습니다. 사용하지 않은 기간은 환불되지 않습니다. 취소는 다음 결제 주기부터 적용됩니다.",
+      cancel_dialog_body_yearly: "취소 후에도 현재 연간 약정 기간이 끝날 때까지 정상적으로 사용할 수 있습니다. 사용하지 않은 기간은 환불되지 않습니다. 연간 약정 플랜은 기본적으로 환불되지 않습니다. 다만 처음 연간 약정을 구매한 사용자는 구매 후 14일 이내이고 해당 결제 이후 사용한 페이지가 0페이지인 경우 1회 환불을 요청할 수 있습니다. 취소는 다음 구독 주기부터 적용됩니다.",
+      cancel_dialog_confirm: "확인: 구독 취소 시작",
+      cancel_dialog_dismiss: "취소: 구독 유지",
+      opening_checkout_notice: "안전한 결제 페이지를 여는 중...",
+      purchase_received_notice: "구매 결과를 받았습니다. 구독 상태를 확인하는 중...",
+      credits_purchase_received_notice: "크레딧 구매 결과를 받았습니다. 잔액을 확인하는 중...",
+      credits_balance_label: "종량제 크레딧 잔액",
+      credits_refundable_label: "환불 가능 크레딧",
+      credits_quantity_label: "구매할 페이지 수",
+      credits_minimum_quantity_notice: "결제 채널의 최소 결제 금액은 {amount}이며 현재 최소 구매 수량은 {min}페이지입니다.",
+      credits_refund_quantity_label: "환불할 페이지 수",
+      credits_refund_in_progress_label: "환불 처리 중",
+      credits_purchase_cta: "구매",
+      credits_refund_cta: "환불",
+      credits_cancel_cta: "취소",
+      credits_refund_pending_notice: "환불 요청을 제출하는 중...",
+      credits_refund_submitted_notice: "환불 요청이 제출되었습니다.",
+      credits_refund_provider_pending_notice: "환불이 제출되었으며 결제 플랫폼에서 처리 중입니다.",
+      credits_refund_processing_banner: "환불 요청을 결제 플랫폼으로 전송해 처리 중입니다. 최대 30분이 걸릴 수 있습니다. 이후 결제 플랫폼의 알림 이메일을 받게 되니 받은편지함을 확인해 주세요. 문의가 있으면 support@example.com 으로 이메일을 보내 주세요. 현재 처리 중인 환불 크레딧: {units}. 예상 환불액: {amount}.",
+      subscription_confirmation_delayed_notice: "구매 결과를 받았습니다. 구독 상태 확인에 몇 초가 더 걸릴 수 있습니다.",
+      sign_in_required_notice: "구독을 시작하기 전에 Google로 로그인해 주세요.",
+      payment_failed_notice: "결제가 완료되지 않았습니다. 다시 시도하거나 다른 결제 수단을 사용해 주세요.",
+      checkout_unavailable_notice: "현재 이 구독 작업을 완료할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+      subscription_change_pending_notice: "구독을 업데이트하는 중...",
+      cancellation_redirect_notice: "Paddle의 안전한 구독 취소 페이지를 여는 중...",
+      cancellation_scheduled_notice: "구독 취소가 완료되었습니다. {date}까지 계속 사용할 수 있습니다.",
+      cancellation_failed_notice: "현재 구독 취소를 예약할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+      subscription_resumed_notice: "구독이 재개되었습니다.",
+      upgrade_success_notice: "연간 약정 업그레이드가 완료되었습니다. 이번 1회 업그레이드 비용은 {amount}입니다.",
+      upgrade_notice_title: "안내",
+      upgrade_notice_body: "연간 약정으로 업그레이드할 때 현재 월간 구독료가 차감되며 업그레이드 차액 {amount}만 결제하면 됩니다.",
+      upgrade_notice_confirm: "동의",
+      upgrade_notice_cancel: "취소",
+      upgrade_processing_title: "결제 처리 중...",
+      upgrade_processing_body: "Paddle이 업그레이드를 확인하고 있습니다. 이 페이지를 닫지 마세요.",
+      upgrade_completed_title: "업그레이드 완료",
+      upgrade_completed_body: "연간 약정 구독으로 업그레이드되었습니다. 유효 기간: {date}.",
+      upgrade_completed_confirm: "확인",
+      upgrade_failed_title: "업그레이드 미완료",
+      upgrade_failed_confirm: "확인",
+      payg_name: "종량제",
       payg_price: "$0.04",
       payg_per: "/slide",
-      payg_sub: "No commitment, no monthly cap",
-      payg_f1: "Unlimited volume",
-      payg_f2: "All languages",
-      payg_f3: "Rollover credits",
-      payg_f4: "Standard support",
-      payg_cta: "Buy credits"
+      payg_sub: "약정 없음, 월간 상한 없음",
+      payg_f1: "사용량 무제한",
+      payg_f2: "미사용 크레딧은 언제든 환불 가능",
+      payg_f3: "크레딧 누적 가능",
+      payg_f4: "참고: 결제 플랫폼 제한으로 1회 최소 구매 수량은 18페이지입니다",
+      payg_cta: "크레딧 구매",
+      payg_available_credits_label: "남은 크레딧",
+      payg_buy_entry_cta: "종량제 크레딧 구매",
+      payg_refund_entry_cta: "미사용 크레딧 환불"
     },
     faq: {
-      kicker: "FAQ",
-      title: "Questions, answered.",
-      q1: "How do I install TransLay?",
-      a1: "Search \"TransLay\" in the Google Workspace Marketplace and click Install. Grant access to Google Slides™, and the add-on will appear under Extensions → TransLay inside any presentation.",
-      q2: "How do I use it after installing?",
-      a2: "Open a Google Slides™ deck, go to Extensions → TransLay → Start. Pick your target language (preset or type any language in natural language), choose whether to create a new deck or append translated slides, and hit Translate.",
-      q3: "What's your refund policy?",
-      a3: "Monthly subscriptions are non-refundable. Annual commitment plans are also non-refundable, except that first-time annual commitment customers may request a one-time refund within 14 days of purchase if no pages have been used since that payment. Unused pay-as-you-go credits may be refunded in full; used credits are non-refundable. Refunds may also be issued for billing errors, unauthorized payments, major service failures, or where required by law.",
-      q4: "How do I get technical support?",
-      a4: "Every translation job has a Task ID you can copy from the sidebar. Email it to support@example.com and we typically respond within 24 hours. Priority plans get a 4-hour SLA.",
-      q5: "What is the maximum document size supported?",
-      a5: "TransLay currently supports a single Google Slides™ deck with up to 50 slides, which covers the vast majority of everyday usage scenarios.",
-      q6: "Does TransLay reproduce the original layout and styling 100% exactly?",
-      a6: "Not always. Different languages can require very different text lengths for the same meaning. TransLay uses AI and layout-preservation techniques to restore the original styling and structure as closely as possible, but 100% fidelity cannot be guaranteed. You can use the free 20-slide quota with your own real deck to evaluate the result before purchasing.",
-      q7: "How do I contact technical support?",
-      a7: "If you need support or feedback, please contact us: support@example.com"
+      kicker: "자주 묻는 질문",
+      title: "궁금한 내용을 모았습니다.",
+      q1: "TransLay는 어떻게 설치하나요?",
+      a1: "Google Workspace Marketplace에서 TransLay를 검색하고 설치를 클릭합니다. Google Slides™ 권한을 승인하면 아무 프레젠테이션에서나 Extensions → TransLay에서 사용할 수 있습니다.",
+      q2: "설치 후 어떻게 사용하나요?",
+      a2: "Google Slides™ 파일을 열고 Extensions → TransLay → Start를 차례로 클릭합니다. 대상 언어를 선택하세요. 사전 설정에서 고르거나 자연어로 원하는 언어를 입력할 수 있습니다. 출력 모드(새 파일 만들기 또는 원본 파일에 추가)를 선택한 뒤 Translate를 클릭하면 됩니다.",
+      q3: "환불 정책은 무엇인가요?",
+      a3: "월간 구독은 기본적으로 환불되지 않습니다. 연간 약정 플랜도 기본적으로 환불되지 않지만, 처음 연간 약정을 구매한 사용자는 구매 후 14일 이내이고 해당 결제 이후 사용한 페이지가 0페이지인 경우 1회 환불을 요청할 수 있습니다. 종량제로 구매한 크레딧은 미사용분에 대해 전액 환불을 요청할 수 있으며 사용된 부분은 환불되지 않습니다. 청구 오류, 무단 결제, 중대한 서비스 장애 또는 법률상 요구가 있는 경우에도 적용 규칙에 따라 환불을 처리합니다.",
+      q4: "기술 지원은 어떻게 받나요?",
+      a4: "각 번역 작업에는 사이드바에서 복사할 수 있는 Task ID가 있습니다. support@example.com 으로 보내 주세요. 보통 24시간 이내에 답변합니다. 우선 플랜은 4시간 응답을 제공합니다.",
+      q5: "지원되는 최대 문서 크기는 얼마인가요?",
+      a5: "현재 최대 50장의 슬라이드를 포함한 단일 Google Slides™ 파일을 지원하며, 대부분의 일상 사용 시나리오를 충족합니다.",
+      q6: "원본 문서의 레이아웃과 스타일을 100% 재현하나요?",
+      a6: "항상 100%는 아닙니다. 같은 의미라도 언어마다 문자 수가 크게 달라질 수 있습니다. TransLay는 AI와 레이아웃 보존 기술로 원본 스타일과 레이아웃을 최대한 복원하지만 완전한 재현을 보장할 수는 없습니다. 구매 전에 20페이지 무료 한도를 사용해 실제 파일로 결과를 확인할 수 있습니다.",
+      q7: "기술 지원에 어떻게 연락하나요?",
+      a7: "지원이나 피드백이 필요하면 support@example.com 으로 연락해 주세요."
     },
     cta: {
-      title: "처음 20장을 무료로 번역.",
-      subtitle: "30초 만에 설치. 신용카드 불필요.",
+      title: "처음 20장을 무료로 번역",
+      subtitle: "Google Workspace Marketplace에서 한 번 클릭해 설치하고 무료 한도를 바로 사용하세요.",
       button: "부가기능 설치"
     },
     footer: {
       tagline: "Google Slides™를 위한 LLM 번역 도구.",
       terms: "서비스 약관",
       privacy: "개인정보 처리방침",
-      copyright: "© 2026 example.com All rights reserved."
+      support: "지원",
+      support_subject: "TransLay 기술 지원 요청",
+      copyright: "© 2026 example.com 모든 권리 보유."
     },
     legal: {
-      back_home: "Back to home"
+      back_home: "홈으로 돌아가기"
+    },
+    successPage: {
+      document_title: "구매 완료 — TransLay",
+      kicker: "결제 상태",
+      title: "구매 완료",
+      body: "결제를 받았습니다. 부가기능에서 이 흐름을 시작했다면 Google Slides™로 돌아가 그곳에서 권한 상태를 새로고침하세요.",
+      back_pricing: "가격 페이지로 돌아가기",
+      go_home: "홈으로 돌아가기"
     },
     settings: {
       title: "설정",
@@ -5536,91 +5740,96 @@ window.TRANSLATIONS = {
       language: "언어"
     },
     auth: {
-      loading: "Checking session...",
-      consuming_ticket: "Signing you in...",
-      signing_in: "Completing sign-in...",
-      sign_out: "Sign out",
-      signed_in_as: "Signed in as",
-      plan_free: "Free",
-      plan_paid: "Paid",
-      google_client_missing: "Google sign-in is not configured yet."
+      loading: "세션 확인 중...",
+      consuming_ticket: "로그인 중...",
+      signing_in: "로그인을 완료하는 중...",
+      sign_out: "로그아웃",
+      signed_in_as: "현재 로그인 계정",
+      plan_free: "무료 플랜",
+      plan_paid: "유료 플랜",
+      google_client_missing: "Google 로그인이 아직 설정되지 않았습니다."
     },
     hero2: {
-      badge: "For Google Slides™",
-      title: "Your deck.",
-      title_accent: "In any language.",
-      title_end: "Untouched.",
-      subtitle: "TransLay translates Google Slides™ with the quality of an LLM and the fidelity of the original — every font, every box, exactly as you designed it."
+      badge: "Google Slides™를 위해",
+      title: "당신의 프레젠테이션.",
+      title_accent: "어떤 언어로도.",
+      title_end: "설계한 그대로.",
+      subtitle: "TransLay는 LLM 수준의 번역 품질과 픽셀 단위의 레이아웃 충실도로 Google Slides™를 번역합니다. 모든 글꼴과 모든 텍스트 상자가 원본과 일치하도록 유지됩니다."
     },
     legalPages: {
       terms: {
         title: "TransLay 서비스 약관",
         last_updated: "최종 업데이트: 2026-04-23",
         intro: [
-          "TransLay에 오신 것을 환영합니다. TransLay는 Google Workspace™용 번역 서비스이며, 현재 정식으로 제공되는 호스트는 Google Slides™입니다. TransLay를 설치, 접근 또는 사용하면 본 서비스 약관에 동의한 것으로 간주됩니다. 동의하지 않으면 사용하지 마십시오."
+          "TransLay에 오신 것을 환영합니다. TransLay는 Google Workspace™용 번역 서비스이며, 현재 정식으로 제공되는 호스트는 Google Slides™입니다. TransLay를 설치하거나 접근하거나 사용하면 본 서비스 약관의 적용에 동의하는 것으로 간주됩니다. 동의하지 않으면 TransLay를 사용하지 마세요."
         ],
         sections: [
           {
-            title: "1. 서비스",
+            title: "1. 서비스 설명",
             paragraphs: [
-              "TransLay는 현재 Google Slides™ 프레젠테이션 번역에 중점을 두고 있으며, 원래의 글꼴, 스타일, 레이아웃, 페이지 구조를 가능한 한 유지하려고 합니다. 선택한 작업 방식에 따라 번역 결과는 새 프레젠테이션에 출력되거나 원본 파일 뒤에 추가됩니다. speaker notes도 현재 지원 범위에 포함됩니다. Google Docs™와 Google Sheets™ 기능은 아직 개발 중이며 공식 제공되지 않았습니다."
+              "TransLay는 현재 주로 Google Slides™ 프레젠테이션 콘텐츠 번역에 사용되며, 원래의 글꼴, 스타일, 레이아웃, 페이지 구조를 최대한 유지합니다. 부가기능에서 선택한 방식에 따라 번역 결과를 새 프레젠테이션으로 출력하거나 원본 파일에 추가할 수 있습니다. speaker notes가 포함된 페이지도 지원 범위 안에서 함께 처리합니다. Google Docs™와 Google Sheets™ 관련 기능은 아직 개발 중이며 정식으로 제공되지 않았습니다."
             ]
           },
           {
-            title: "2. 계정 및 사용 자격",
+            title: "2. 계정 및 이용 자격",
             paragraphs: [
-              "TransLay를 설치하고 사용하려면 유효한 Google 계정이 필요합니다. 또한 제출하는 파일에 접근하고 번역 및 처리할 권한이 본인에게 있음을 보장해야 합니다. 팀, 회사 또는 다른 조직을 대신해 사용하는 경우, 해당 조직을 대신해 본 약관에 동의할 권한도 있어야 합니다."
+              "TransLay를 설치하고 사용하려면 유효한 Google 계정이 필요합니다. 제출하는 문서 내용에 접근하고 번역하며 처리할 권한이 본인에게 있는지 확인해야 합니다. 팀, 회사 또는 다른 조직을 대신해 TransLay를 사용하는 경우, 해당 주체를 대신해 본 약관을 수락하고 관련 파일을 사용할 권한도 있어야 합니다."
             ]
           },
           {
             title: "3. 구독 및 과금",
             paragraphs: [
-              "TransLay는 설치 시 1회 제공되는 20슬라이드 무료 할당량, 월간 구독, 연간 약정 플랜, 종량제 크레딧을 제공합니다. 구독 요금은 각 기간 시작 시 선결제로 청구됩니다. Manage Subscription 패널에서 언제든 해지할 수 있지만, 해지는 현재 청구 기간 또는 연간 기간 종료 시점에 적용됩니다。",
-              "Google Slides™ 번역 작업은 실제 전달 결과를 기준으로 과금됩니다. 슬라이드 본문이 완전히 번역되고 정상적으로 다시 기록된 경우에만 <strong>1 slide</strong>로 청구됩니다. speaker notes가 있는 경우 본문과 notes가 모두 성공해도 합계는 <strong>1 slide</strong>이며, 한쪽만 성공하면 <strong>0.5 slide</strong>로 청구됩니다. 페이지의 어떤 요소라도 번역 또는 기록에 실패하면 해당 페이지 본문은 과금되지 않습니다.",
-              "실행 중인 작업에는 임시 선차감 방식이 사용될 수 있습니다. 이미 성공적으로 번역된 슬라이드가 있으면, 이후 수동 취소하더라도 먼저 계산되어 최종 과금될 수 있습니다. 시작 전에 작업 설정을 확인해 주세요. 어떤 슬라이드도 성공하기 전에 취소하면 과금되지 않습니다. 과금 문의 시 Task ID를 포함해 <strong>support@example.com</strong> 로 보내 주세요."
+              "TransLay는 설치 후 1회 제공되는 무료 슬라이드 20장 한도와 함께 월간 구독, 연간 약정 플랜, 종량제 크레딧을 제공합니다. 구독 요금은 주기별로 선불 청구됩니다. Manage Subscription 패널에서 언제든 취소할 수 있으며, 취소는 현재 결제 주기 또는 연간 약정 주기 종료 시 적용됩니다.",
+              "Google Slides™ 번역 작업의 한도 과금은 실제 전달 결과를 기준으로 합니다. 특정 슬라이드의 페이지 내용이 완전히 번역되고 성공적으로 다시 기록된 경우에만 해당 페이지가 <strong>1 slide</strong>로 계산됩니다. 해당 페이지에 speaker notes가 포함된 경우, 페이지 내용과 notes가 모두 번역되고 성공적으로 다시 기록되어도 합산하여 여전히 <strong>1 slide</strong>로 계산됩니다. 둘 중 한쪽만 성공하면 해당 페이지는 <strong>0.5 slide</strong>로 계산됩니다. 페이지의 어떤 요소라도 번역 또는 다시 쓰기에 실패하면 해당 페이지 내용은 과금되지 않습니다.",
+              "TransLay는 작업 실행 중 임시 선차감 방식도 사용합니다. 특정 페이지가 이미 성공적으로 번역된 경우, 해당 성공 페이지가 먼저 계산되고 이후 사용자가 작업을 수동 취소하면 정산될 수 있습니다. 따라서 시작 전에 작업 설정을 확인해 주세요. 어떤 페이지도 성공적으로 번역되기 전에 취소하면 슬라이드 한도가 차감되지 않습니다. 과금 관련 질문이 있으면 이메일에 Task ID를 포함해 <strong>support@example.com</strong> 으로 보내 주세요. 더 빠르게 확인할 수 있습니다.",
+              "종량제 크레딧은 Google Slides™ 번역을 위한 선불 사용 크레딧이며, 구독 플랜에 포함된 한도와 별개입니다. 무료 플랜이든 유효한 유료 구독 중이든 추가 종량제 크레딧을 구매할 수 있습니다. 구독 한도와 종량제 크레딧이 동시에 있는 경우, TransLay는 먼저 현재 주기의 구독 한도를 사용하고 초과분에 선불 종량제 크레딧을 사용합니다.",
+              "Paddle 결제 플랫폼 제한으로 단일 거래의 결제 가능 금액은 USD 0.70을 초과해야 합니다. TransLay의 현재 종량제 크레딧 가격은 페이지당 USD 0.04이므로 1회 최소 구매 수량은 18페이지, 즉 USD 0.72입니다. 현재 1회 주문으로 구매할 수 있는 최대 수량은 100페이지입니다. 실제로 18페이지보다 적게 필요하더라도 먼저 18페이지를 구매한 뒤 미사용 초과 크레딧에 대해 환불을 요청할 수 있습니다."
             ]
           },
           {
             title: "4. 환불",
             paragraphs: [
-              "월간 구독은 환불되지 않습니다. 연간 약정 플랜도 원칙적으로 환불되지 않지만, 첫 연간 약정 구매자의 경우 결제 후 14일 이내이며 해당 결제 이후 사용된 페이지가 없는 경우 1회 환불을 요청할 수 있습니다. 이 예외는 계정당 1회로 제한됩니다. 청구 오류, 무단 결제, 중대한 서비스 장애, 또는 법률상 요구되는 경우에는 환불이 제공될 수 있습니다. 종량제 사용분은 소비 후 환불되지 않습니다. 사용량 기반 크레딧은 구독 기간 중 추가 구매한 크레딧을 포함하여 미사용분에 대해 전액 환불을 요청할 수 있습니다. 사용된 크레딧은 환불되지 않습니다."
+              "월간 구독은 기본적으로 환불되지 않습니다. 연간 약정 플랜도 기본적으로 환불되지 않습니다. 다만 처음 연간 약정 플랜을 구매한 고객은 구매 후 14일 이내이고 해당 결제 이후 어떤 페이지도 사용하지 않은 경우 1회 환불을 요청할 수 있습니다. 이 예외는 계정당 한 번만 사용할 수 있습니다. 구독 기간 중 추가로 구매한 종량제 크레딧을 포함해 종량제로 구매한 크레딧은 미사용 부분에 대해 전액 환불을 요청할 수 있으며, 사용된 부분은 환불되지 않습니다. 청구 오류, 승인되지 않은 결제, 중대한 서비스 장애 또는 적용 법률상 요구가 있는 경우에도 환불을 제공할 수 있습니다.",
+              "종량제 크레딧 환불의 최소 신청 단위는 1페이지입니다. 환불은 미사용 종량제 크레딧만 기준으로 계산됩니다. 성공적으로 전달된 번역 작업에서 이미 소비된 크레딧은 환불되지 않습니다.",
+              "Paddle은 원래 구매 거래를 기준으로 환불을 처리합니다. 하나의 환불 요청이 여러 종량제 구매 거래의 크레딧을 포함하는 경우, TransLay는 원래 거래에 따라 여러 Paddle 환불로 나누어 처리할 수 있습니다. 총 환불 금액은 변하지 않지만 Paddle 환불 알림 이메일을 여러 개 받을 수 있습니다.",
+              "월간 구독을 주기 종료 시 취소하도록 설정했지만 현재 월간 주기가 끝나기 전에 연간 약정 플랜으로 업그레이드하는 경우, TransLay는 먼저 해당 월간 구독을 재개한 뒤 연간 약정으로 업그레이드합니다. 이번 달에 이미 결제한 USD 9.99는 연간 약정 결제 금액에 차감되며, 현재 구독 권한은 연간 약정에 해당하는 월 500페이지 Google Slides™ 한도로 업데이트됩니다."
             ]
           },
           {
-            title: "5. 허용된 사용",
+            title: "5. 합리적 이용",
             paragraphs: [
-              "불법적이거나 권리 침해적인 내용, 명백히 권한 없는 내용, 기타 부적절한 내용에 TransLay를 사용하지 않기로 동의합니다. 또한 할당량 우회, 안전 제한 우회, 서비스 안정성 방해 등 부정 사용도 금지됩니다. 제출한 내용과 그 결과에 대한 책임은 사용자에게 있습니다."
+              "TransLay를 불법, 권리 침해, 타인의 권리를 명백히 침해하는 콘텐츠 또는 본인의 권한 범위를 벗어난 콘텐츠 처리에 사용하지 않기로 동의합니다. 또한 한도 우회, 안전 제한 우회, 서비스 안정성에 대한 악의적 방해 또는 기타 부적절한 방식으로 TransLay를 사용해서는 안 됩니다. 번역을 위해 제출한 콘텐츠와 그 사용으로 발생하는 결과에 대한 책임은 본인에게 있습니다."
             ]
           },
           {
-            title: "6. 귀하의 콘텐츠 및 권한",
+            title: "6. 귀하의 콘텐츠와 권한",
             paragraphs: [
-              "귀하는 자신의 문서, 프레젠테이션 및 그 내용에 대한 권리를 유지합니다. 귀하가 직접 시작한 번역 요청을 완료하기 위해, TransLay가 선택된 파일에 접근하고, 번역할 텍스트를 읽고, 번역문을 생성하고, 귀하의 지시에 따라 원본 파일 또는 새 대상 파일에 결과를 기록하는 것을 허용합니다. 이 권한은 서비스 제공 목적에만 존재하며 콘텐츠 소유권이 당사로 이전되는 것을 의미하지 않습니다.",
-              "본문, 번역문, comments, notes는 작업 실행 중에만 잠시 처리됩니다. 작업이 끝나면 이 내용은 당사의 데이터베이스와 캐시에서 즉시 삭제되며 클라우드 백업으로 보관되지 않습니다. 번역된 파일은 직접 보관해 주세요. 같은 문서를 같은 언어로 다시 번역하면 새로운 독립 작업으로 처리되며 해당 작업 규칙에 따라 전액 과금됩니다."
+              "귀하는 자신의 문서, 프레젠테이션 및 그 안의 콘텐츠에 대한 기존 권리를 유지합니다. 귀하가 직접 시작한 번역 요청을 완료하기 위해, 서비스 운영에 필요한 범위에서 TransLay가 선택한 파일에 접근하고, 번역 대상 콘텐츠를 읽고, 번역문을 생성하며, 귀하의 지시에 따라 원본 문서에 다시 쓰거나 새 대상 문서를 생성하는 것을 허용합니다. 이 권한은 서비스 자체를 완료하기 위한 것일 뿐이며, 귀하의 콘텐츠 소유권을 당사가 취득한다는 의미가 아닙니다.",
+              "번역 작업과 관련된 본문, 번역문, comments, notes는 작업 실행 중에만 짧게 처리됩니다. 작업이 종료되면 이러한 내용은 당사의 데이터베이스와 캐시에서 즉시 삭제되며, 귀하의 클라우드 백업으로 계속 저장되지 않습니다. 따라서 번역된 대상 문서는 직접 보관해 주세요. 나중에 같은 문서를 같은 언어로 다시 번역하는 경우, 당사는 이를 새로운 독립 작업으로 처리하고 해당 작업 규칙에 따라 전액 과금합니다."
             ]
           },
           {
             title: "7. 번역 결과 및 서비스 가용성",
             paragraphs: [
-              "TransLay는 AI 번역 기술을 사용합니다. 높은 품질과 원래 형식 유지를 위해 노력하지만, 의미 차이, 길이 변화, 줄바꿈 변화, 부분적 레이아웃 차이 등 예상과 완전히 같지 않은 결과가 발생할 수 있습니다. 계약, 법률, 재무, 의료 등 중요한 내용은 사용 전에 직접 검토해야 합니다. 또한 유지보수, 상위 플랫폼 변경, 네트워크 장애, 제3자 서비스 문제로 일시적인 지연, 중단 또는 이용 불가가 발생할 수 있습니다."
+              "TransLay는 AI 번역 기능을 사용해 서비스를 제공합니다. 당사는 번역 품질을 높이고 원본 레이아웃을 보존하기 위해 노력하지만, 번역 결과에는 의미 차이, 길이 변화, 줄바꿈 변화, 일부 레이아웃 차이 또는 기대와 완전히 일치하지 않는 기타 결과가 발생할 수 있습니다. 계약, 법률, 재무, 의료 또는 기타 중요한 콘텐츠의 경우 사용하거나 게시하기 전에 직접 검토해야 합니다. 또한 유지보수, 상위 플랫폼 변경, 네트워크 장애 또는 제3자 서비스 문제로 서비스가 일시적으로 이용 불가, 지연 또는 중단될 수 있습니다."
             ]
           },
           {
             title: "8. 책임 제한",
             paragraphs: [
-              "관련 법이 허용하는 최대 범위 내에서 TransLay는 '있는 그대로' 제공됩니다. 서비스 사용 또는 사용 불가, 번역 부정확성, 제3자 플랫폼 제한, 서비스 중단, 재기록 실패로 인해 발생하는 간접적, 부수적, 특별, 결과적 손해에 대해 당사는 책임지지 않습니다."
+              "적용 법률이 허용하는 최대 범위에서 TransLay는 '있는 그대로' 제공됩니다. 사용, 사용 불가, 번역 결과 차이, 제3자 플랫폼 제한, 서비스 중단 또는 데이터 다시 쓰기 실패 등으로 인해 발생하는 간접적, 부수적, 특별 또는 결과적 손해에 대해 당사는 책임을 지지 않습니다."
             ]
           },
           {
-            title: "9. 약관 변경",
+            title: "9. 약관 업데이트",
             paragraphs: [
-              "제품 변경, 법적 요구, 결제 요구 또는 운영상 필요에 따라 본 약관을 업데이트할 수 있습니다. 업데이트된 버전은 공식 웹사이트에 게시됩니다. 변경 후에도 계속 사용하면 업데이트된 약관에 동의한 것으로 봅니다."
+              "당사는 제품 발전, 법적 요구 사항 또는 결제 및 운영상 필요에 따라 본 약관을 업데이트할 수 있습니다. 업데이트된 버전은 공식 사이트의 관련 페이지에 게시됩니다. 업데이트가 효력을 가진 뒤에도 TransLay 사용을 계속하면 업데이트된 약관을 수락한 것으로 간주됩니다."
             ]
           },
           {
-            title: "10. 문의",
+            title: "10. 연락처",
             paragraphs: [
-              "본 약관에 관한 질문이 있으면 <strong>support@example.com</strong> 로 이메일을 보내 주세요."
+              "본 약관에 대해 질문이 있으면 <strong>support@example.com</strong> 으로 이메일을 보내 주세요."
             ]
           }
         ]
@@ -5629,88 +5838,541 @@ window.TRANSLATIONS = {
         title: "TransLay 개인정보 처리방침",
         last_updated: "최종 업데이트: 2026-04-23",
         intro: [
-          "우리의 기본 원칙은 단순합니다. 덜 수집하고, 덜 저장하고, 덜 노출하는 것입니다. TransLay 사용 시 번역, 로그인, 구독, 지원을 운영하는 데 필요한 최소한의 정보만 처리합니다. 수집하거나 보관할 필요가 없는 것은 가능한 한 건드리지 않습니다. 이 정책은 그 정보를 어떻게 다루는지 설명합니다."
+          "당사는 '덜 수집하고, 덜 저장하고, 덜 노출한다'는 원칙을 TransLay의 기본 원칙으로 삼습니다. TransLay를 사용할 때 당사는 번역, 로그인, 구독 및 사후 지원이 정상적으로 작동하는 데 필요한 최소한의 정보만 처리합니다. 수집해서는 안 되거나 장기간 저장해서는 안 되는 것은 가능한 한 다루지 않습니다. 본 개인정보 처리방침은 TransLay가 이러한 정보를 어떻게 처리하는지 설명합니다."
         ],
         sections: [
           {
-            title: "1. 개인정보 원칙",
+            title: "1. 당사가 지키는 개인정보 원칙",
             paragraphs: [
-              "TransLay는 사용자가 적극적으로 요청한 서비스를 완료하는 데 필요한 정보만 처리합니다. 관련 없는 정보는 수집하지 않고, 광고에 사용하지 않으며, 사용자 프로필이나 행동 분석도 하지 않습니다. 특히 문서 본문, 번역문, comments, notes에 대해서는 엄격한 최소화 원칙을 적용하며, 작업 종료 후 데이터베이스, 캐시, 애플리케이션 로그에 보관하지 않습니다."
+              "TransLay의 핵심 원칙은 간단합니다. 사용자가 능동적으로 시작한 서비스를 완료하기 위해 필요한 정보만 처리하고, 서비스와 무관한 수집, 광고 목적 사용, 사용자 프로파일링, 행동 분석을 하지 않습니다. 특히 문서 안의 본문, 번역문, comments, notes에 대해서는 엄격한 최소화 원칙을 따르며, 이러한 내용을 데이터베이스, 캐시 또는 애플리케이션 로그에 장기간 보관하지 않습니다."
             ]
           },
           {
-            title: "2. 서비스를 제공하기 위해 처리하는 정보",
+            title: "2. 서비스 제공을 위해 처리하는 최소 정보",
             paragraphs: [
-              "Google 계정 식별자, 이메일, 표시 이름, 아바타 등 기본 정보를 처리할 수 있습니다. 이는 본인 식별, 구독 및 할당량을 올바른 계정에 연결, 현재 로그인 계정 표시, 지원 대응을 위한 것입니다.",
-              "사용자가 명시적으로 선택한 Google Slides™ 콘텐츠는 번역 작업을 시작한 이후에만, 해당 작업 완료와 다시 쓰기를 위해서만 처리됩니다.",
-              "진행 상황 표시, 사용량 정산, 청구 조사, 지원 제공에 필요한 최소한의 작업 정보도 처리합니다. 예를 들어 Task ID, 작업 상태, 페이지 사용량, 타임스탬프, 제한된 문제 해결 메타데이터입니다.",
-              "플랜이나 크레딧을 구매한 경우, 결제 상태, 주문 번호, 구매 또는 환불 시각, 구독 상태 등 권한 확인에 필요한 최소한의 주문·구독 정보를 처리합니다. 전체 카드 정보는 Paddle이 처리하며 당사는 저장하지 않습니다.",
-              "웹사이트 세션에는 공식 사이트와 결제 페이지를 운영하는 데 필요한 최소한의 세션 정보만 사용합니다. Cookie에는 불투명한 session id만 저장되며 이메일, 플랜, 할당량 같은 읽을 수 있는 값은 직접 저장되지 않습니다."
+              "당사는 Google 계정 식별자, 이메일, 표시 이름, 아바타와 같은 Google 계정 기본 정보를 처리할 수 있습니다. 이는 신원 확인, 구독과 한도를 올바른 계정에 연결, 현재 로그인 계정 표시, 사후 지원 제공을 위한 것입니다.",
+              "사용자가 명시적으로 번역 대상으로 선택한 Google Slides™ 콘텐츠는 사용자가 번역 작업을 시작한 뒤에만, 해당 번역과 다시 쓰기를 완료하기 위한 목적으로만 처리합니다.",
+              "당사는 작업 진행 상황 표시, 한도 정산, 청구 문제 확인 및 지원 제공에 필요한 최소한의 작업 및 한도 정보도 처리합니다. 예를 들어 Task ID, 작업 상태, 페이지 사용 현황, 타임스탬프, 제한적인 문제 해결 메타데이터가 포함됩니다.",
+              "플랜 또는 크레딧을 구매하는 경우, 당사는 권한 확인에 필요한 최소한의 주문 및 구독 정보를 처리합니다. 예를 들어 결제 상태, 주문 번호, 구매 또는 환불 시간, 구독 상태입니다. 전체 카드 정보는 Paddle이 처리하며 당사는 저장하지 않습니다.",
+              "웹사이트 세션의 경우 공식 사이트와 구독 페이지를 정상적으로 작동시키는 데 필요한 최소한의 세션 정보만 사용합니다. Cookie는 불투명한 session id만 저장하며, 이메일, 플랜 또는 한도 같은 읽을 수 있는 평문 정보를 직접 저장하지 않습니다."
             ]
           },
           {
-            title: "3. 저장하지 않거나 수집하지 않는 것",
+            title: "3. 당사가 저장하거나 수집하지 않는 것",
             paragraphs: [
-              "문서 본문, 번역 결과, comments, notes의 평문은 데이터베이스, 캐시, 로그에 보관하지 않습니다. 번역 작업이 끝나면 이 내용은 당사의 데이터베이스와 캐시에서 즉시 삭제되며 문서 백업으로 유지되지 않습니다. 번역된 대상 파일은 직접 보관해 주세요.",
-              "같은 문서를 같은 언어로 다시 번역하면 새로운 독립 작업으로 처리됩니다. 이전 문서 내용이나 번역문을 보관하지 않기 때문에 이전 결과를 직접 재사용하지 않으며, 해당 작업 규칙에 따라 전액 과금됩니다.",
-              "당사는 귀하의 정보를 광고, 광고 기여도 측정, 사용자 프로파일링, 행동 분석에 사용하지 않습니다. 데이터를 판매하지 않으며, TransLay를 사용한다는 이유만으로 다른 웹사이트, 다른 문서, 다른 제품에서의 활동을 추적하지 않습니다.",
-              "전체 카드 번호, 은행 계좌 번호 또는 기타 완전한 결제 인증 정보를 저장하지 않습니다. 결제는 Paddle이 처리하며 당사는 주문과 지원에 필요한 최소 결과 정보만 받습니다."
+              "당사는 귀하의 문서 본문, 번역 결과, comments 또는 notes의 평문을 데이터베이스, 캐시 또는 로그에 저장하지 않습니다. 번역 작업이 종료되면 이러한 내용은 당사의 데이터베이스와 캐시에서 즉시 삭제되며, 문서 백업으로 유지되지 않습니다. 번역된 대상 문서는 직접 보관해 주세요.",
+              "나중에 같은 문서를 같은 언어로 다시 번역하는 경우, 당사는 이를 새로운 독립 작업으로 간주합니다. 이전 문서 내용이나 번역문을 저장하지 않기 때문에 이러한 작업은 이전 결과를 직접 재사용하지 않으며, 해당 작업 규칙에 따라 전액 과금됩니다.",
+              "당사는 귀하의 정보를 광고, 광고 기여 측정, 사용자 프로파일링 또는 행동 분석에 사용하지 않습니다. 데이터를 판매하지 않으며, TransLay를 사용했다는 이유만으로 다른 웹사이트, 다른 문서 또는 다른 제품에서의 행동을 추적하지 않습니다.",
+              "당사는 전체 은행 카드 번호, 은행 계좌 번호 또는 기타 완전한 결제 인증 정보를 저장하지 않습니다. 결제는 Paddle이 처리하며, 당사는 주문과 사후 지원에 필요한 최소한의 결과 정보만 받습니다."
             ]
           },
           {
             title: "4. Google 권한이 필요한 이유",
             paragraphs: [
-              "TransLay는 Google Workspace™ add-on입니다. Google Slides™ 안에서 제대로 동작하기 위해 현재 제품 범위에 직접 필요한 권한만 요청합니다.",
-              "Google Slides™ 권한은 번역할 프레젠테이션 내용을 읽고 원본 파일 또는 대상 파일에 다시 쓰기 위해 필요합니다.",
-              "Google Drive™ 권한은 현재 프레젠테이션 식별, '새 파일로 출력' 작업에서 사용자 소유 사본 생성, 대상 파일을 적절한 위치에 배치, 작업 중 임시 접근 관리에 필요합니다.",
-              "Google Drive™ file 권한은 현재 워크플로에 관련된 파일에 작업을 최대한 제한하는 데 도움이 됩니다.",
-              "Google Workspace™ 컨테이너 UI 권한은 Google Slides™ 안에 TransLay 사이드바를 표시하는 데 필요합니다.",
-              "외부 요청 권한은 번역 작업, 권한 새로고침, 로그인, 결제 관련 흐름을 위해 add-on이 백엔드와 안전하게 통신하는 데 필요합니다.",
-              "Google 계정 이메일과 아바타 권한은 본인 식별, 현재 계정 표시, 구독 연결, 지원 대응에 필요합니다."
+              "TransLay는 Google Workspace™ 부가기능입니다. Google Slides™ 안에서 정상적으로 작동하기 위해 현재 제품 범위에서 직접 필요한 권한만 요청합니다.",
+              "Google Slides™ 권한은 번역하려는 프레젠테이션 내용을 읽고 번역문을 원본 파일 또는 대상 파일에 다시 쓰기 위해 사용됩니다. 이 권한이 없으면 TransLay는 내용을 읽거나 다시 쓰기를 완료할 수 없습니다.",
+              "Google Drive™ 권한은 현재 프레젠테이션을 식별하고, '새 파일로 출력' 모드에서 사용자 소유 복사본을 만들고, 대상 파일을 적절한 위치에 배치하며, 작업 실행 중 필요한 임시 접근을 관리하는 데 사용됩니다. 이 권한이 없으면 일부 복사 및 다시 쓰기 흐름이 안정적으로 작동하지 않습니다.",
+              "Google Drive™ file 권한은 파일 작업을 현재 워크플로와 관련된 파일로 최대한 제한하는 데 도움이 됩니다.",
+              "Google Workspace™ 컨테이너 UI 권한은 TransLay 사이드바를 Google Slides™ 안에 표시하는 데 사용됩니다.",
+              "외부 요청 권한은 부가기능이 TransLay 백엔드와 안전하게 통신해 번역 작업, 권한 새로고침, 로그인 및 구독 관련 흐름을 완료하는 데 사용됩니다.",
+              "Google 계정 이메일과 아바타 권한은 로그인 식별, 현재 계정 표시, 구독 연결 및 사후 지원 처리에 사용됩니다."
             ]
           },
           {
-            title: "5. 이 권한을 부여하는 방법",
+            title: "5. 이러한 권한을 부여하는 방법",
             paragraphs: [
-              "Google Workspace Marketplace에서 TransLay를 설치한 후, 처음 Google Slides™ 안에서 실행하면 Google이 권한 부여 절차를 표시합니다. 일반적으로 add-on을 설치하고, 아무 Google Slides™ 프레젠테이션을 열고, Extensions에서 TransLay를 실행한 다음, 표시되는 Google 권한 확인 페이지로 이동합니다.",
-              "그 페이지에서 TransLay와 함께 사용할 Google 계정으로 로그인하고 필요한 권한을 선택한 뒤 Allow 또는 Confirm을 클릭하세요. 이 권한이 없으면 문서 읽기, 번역 실행, 대상 파일 생성, 결과 쓰기, 로그인과 구독 흐름 완료가 불가능합니다."
+              "Google Workspace Marketplace에서 TransLay를 설치한 뒤 처음 Google Slides™ 안에서 열고 실행하면 Google이 승인 흐름 완료를 요청합니다. 일반적으로 부가기능을 설치하고, 아무 Google Slides™ 프레젠테이션을 열고, Extensions로 들어가 TransLay를 실행한 다음 안내에 따라 Google 권한 확인 페이지로 이동합니다.",
+              "확인 페이지에서는 TransLay와 함께 사용할 Google 계정으로 로그인하세요. Google이 '모두 선택' 체크박스를 표시하는 경우 필요한 권한을 선택한 뒤 '허용' 또는 '확인'을 클릭합니다. 이러한 필수 권한을 부여하지 않으면 TransLay는 문서 읽기, 번역 실행, 대상 파일 생성, 결과 다시 쓰기 또는 로그인 및 구독 관련 흐름을 정상적으로 완료할 수 없습니다."
             ]
           },
           {
-            title: "6. 정보를 사용하는 방식",
+            title: "6. 당사가 이러한 정보를 사용하는 방식",
             paragraphs: [
-              "이 정보는 요청한 번역 실행, 로그인 상태 표시, 구독 및 할당량 연결, 청구 및 환불 처리, 지원 대응, 남용 방지, 안정적 운영을 위해서만 사용됩니다. 광고, 사용자 프로필, 마케팅 추천, 행동 분석에는 사용하지 않습니다. 또한 문서 내용을 당사 자체 모델 학습에도 사용하지 않습니다."
+              "이 정보는 사용자가 요청한 번역 완료, 현재 로그인 상태 표시, 구독과 한도 연결, 청구 및 환불 처리, 사후 지원 문의 답변, 남용 방지, 서비스 안정적 운영을 위해서만 사용됩니다. 당사는 이러한 정보를 광고, 사용자 프로파일링, 마케팅 추천 또는 행동 분석에 사용하지 않습니다. 또한 귀하의 문서 내용을 당사 자체 모델 학습에 사용하지 않습니다."
             ]
           },
           {
             title: "7. 제3자 서비스",
             paragraphs: [
-              "TransLay 운영을 위해 필요한 최소한의 제3자 서비스를 사용합니다. 예를 들어 호스팅, 문서 접근, 서비스 운영을 위한 Google Workspace™와 Google Cloud, 번역 처리를 위한 AI 및 클라우드 제공자, 결제·세금·환불을 위한 Paddle입니다. 이들은 현재 기능 제공에 필요한 범위에서만 관여합니다."
+              "TransLay를 운영하기 위해 당사는 필요한 경우 소수의 제3자 서비스에 의존합니다. 예를 들어 호스팅, 문서 접근 및 서비스 운영을 위한 Google Workspace™와 Google Cloud, 번역 처리를 위한 AI 및 클라우드 서비스 제공자, 결제, 세금 및 환불 흐름을 위한 Paddle입니다. 이러한 서비스는 현재 기능 제공에 필요한 범위에서만 처리에 참여합니다."
             ]
           },
           {
             title: "8. 보관 및 삭제",
             paragraphs: [
-              "우리의 목표는 가능한 한 적은 정보를 가능한 한 짧게 보관하는 것입니다. 번역 콘텐츠와 관련된 본문, 번역문, comments, notes는 작업 종료 후 즉시 데이터베이스와 캐시에서 삭제됩니다. 한편 계정 연결, 구독, 주문, 법적 준수에 필요한 최소 정보는 권한 확인, 환불 처리, 적법한 요청 대응을 위해 필요한 경우에만 보관될 수 있습니다.",
-              "계정 관련 개인정보 삭제나 남아 있는 최소 기록에 대해 알고 싶다면 <strong>support@example.com</strong> 로 문의해 주세요. 다만 구독 권한 증명 및 복구에 필요한 기록까지 삭제를 요청하면 나중에 해당 권한을 복구하지 못할 수 있습니다."
+              "당사의 목표는 가능한 한 적은 정보를 가능한 한 짧은 기간만 보관하는 것입니다. 번역 콘텐츠와 관련된 본문, 번역문, comments, notes는 작업 종료 후 즉시 데이터베이스와 캐시에서 삭제됩니다. 계정 연결, 구독, 주문 및 규정 준수에 필요한 소량의 정보는 권한 확인, 환불 처리 또는 합법적 요청 대응을 위해 정말 필요한 경우에만 계속 보관될 수 있습니다.",
+              "계정 관련 개인정보를 삭제하고 싶거나 어떤 최소 기록이 남아 있는지 알고 싶다면 <strong>support@example.com</strong> 으로 연락해 주세요. 구독 권한 증명과 복원에 필요한 기록 삭제를 요청하는 경우, 이후 해당 권한을 복원하지 못할 수 있습니다."
             ]
           },
           {
             title: "9. 귀하의 권리와 선택",
             paragraphs: [
-              "언제든 TransLay 사용을 중단할 수 있습니다. 구독 해지, 로그아웃, 개인정보 관련 문의도 가능합니다. 관련 법에 따라 접근, 정정, 삭제, 처리 제한 권리가 인정되는 경우 유효한 요청에 대해 해당 규칙에 따라 대응합니다."
+              "귀하는 언제든 TransLay 사용을 중단할 수 있습니다. 또한 구독 취소, 로그아웃 또는 개인정보 관련 요청을 위해 당사에 연락할 수 있습니다. 적용 법률이 접근, 정정, 삭제 또는 처리 제한 등의 권리를 부여하는 경우, 당사는 유효한 요청을 적용 규칙에 따라 처리합니다."
             ]
           },
           {
-            title: "10. 정책 업데이트 및 문의",
+            title: "10. 정책 업데이트 및 연락처",
             paragraphs: [
-              "제품, 결제 흐름, 법적 의무가 변경되면 본 정책을 업데이트할 수 있습니다. 업데이트된 버전은 공식 웹사이트에 게시됩니다. 개인정보, 데이터 처리, 보안에 관한 질문이 있으면 <strong>support@example.com</strong> 로 연락해 주세요."
+              "제품 형태, 결제 흐름 또는 법적 의무가 변경되는 경우 당사는 본 개인정보 처리방침을 업데이트할 수 있습니다. 업데이트된 버전은 공식 사이트의 관련 페이지에 게시됩니다. 개인정보, 데이터 처리 또는 보안에 대해 질문이 있으면 <strong>support@example.com</strong> 으로 이메일을 보내 주세요."
             ]
           }
         ]
       }
     }
   }
+
+};
+
+window.SUPPORT_PAGE_TRANSLATIONS = {
+  en: {
+    document_title: "Support - TransLay",
+    title: "Support",
+    last_updated: "Last updated: 2026-04-27",
+    intro: "If you need help with installation, translation jobs, subscriptions, credits, or refunds, contact us at <strong>support@example.com</strong>. If your question is about a specific translation task, include the Task ID shown in the Add-on.",
+    email_subject: "TransLay Support Request",
+    contact_cta: "Contact support",
+    pricing_cta: "View pricing",
+    faq_title: "FAQ",
+    questions: [
+      {
+        q: "What should I include when contacting support?",
+        a: "Please include your Google account email, the Task ID if available, the document host (Google Slides™), the action you were trying to complete, and any visible error message. Do not send confidential document content unless we specifically ask for a minimal example."
+      },
+      {
+        q: "I purchased a subscription or credits but the Add-on still shows Free. What should I do?",
+        a: "Make sure you are using the same Google account in the Add-on and on the TransLay website. Reopen TransLay from Extensions in Google Slides™, then use Subscribe or Manage Subscription again to refresh your entitlement. If it still does not update after a short wait, contact support with your order details."
+      },
+      {
+        q: "How do refunds work?",
+        a: "Unused pay-as-you-go credits can be refunded from the pricing page after you sign in. Monthly subscriptions are generally non-refundable. Annual commitment subscriptions follow the refund terms described in the Terms of Service. For billing errors or special cases, email support with your order details."
+      },
+      {
+        q: "Can I test TransLay before paying?",
+        a: "Yes. Each newly installed account receives a one-time free quota of 20 Google Slides™ pages, so you can test the core translation flow without purchasing a subscription or credits."
+      }
+    ]
+  },
+  fr: {
+    document_title: "Assistance - TransLay",
+    title: "Assistance",
+    last_updated: "Derniere mise a jour : 2026-04-27",
+    intro: "Si vous avez besoin d'aide pour l'installation, les taches de traduction, les abonnements, les credits ou les remboursements, contactez-nous a <strong>support@example.com</strong>. Si votre question concerne une tache de traduction precise, ajoutez le Task ID affiche dans l'Add-on.",
+    email_subject: "Demande d'assistance TransLay",
+    contact_cta: "Contacter l'assistance",
+    pricing_cta: "Voir les tarifs",
+    faq_title: "FAQ",
+    questions: [
+      {
+        q: "Que dois-je inclure dans ma demande d'assistance ?",
+        a: "Indiquez l'adresse e-mail de votre compte Google, le Task ID si disponible, l'hote du document (Google Slides™), l'action que vous tentiez d'effectuer et tout message d'erreur visible. N'envoyez pas de contenu confidentiel du document sauf si nous demandons explicitement un exemple minimal."
+      },
+      {
+        q: "J'ai achete un abonnement ou des credits, mais l'Add-on affiche encore Free. Que faire ?",
+        a: "Verifiez que vous utilisez le meme compte Google dans l'Add-on et sur le site TransLay. Rouvrez TransLay depuis Extensions dans Google Slides™, puis utilisez a nouveau Subscribe ou Manage Subscription pour actualiser vos droits. Si rien ne change apres un court delai, contactez l'assistance avec les details de commande."
+      },
+      {
+        q: "Comment fonctionnent les remboursements ?",
+        a: "Les credits pay-as-you-go inutilises peuvent etre rembourses depuis la page des tarifs apres connexion. Les abonnements mensuels ne sont generalement pas remboursables. Les abonnements annuels suivent les conditions de remboursement decrites dans les Conditions d'utilisation. Pour une erreur de facturation ou un cas particulier, envoyez les details de commande a l'assistance."
+      },
+      {
+        q: "Puis-je tester TransLay avant de payer ?",
+        a: "Oui. Chaque compte nouvellement installe recoit une quota gratuite unique de 20 pages Google Slides™, ce qui permet de tester le flux principal de traduction sans abonnement ni achat de credits."
+      }
+    ]
+  },
+  de: {
+    document_title: "Support - TransLay",
+    title: "Support",
+    last_updated: "Zuletzt aktualisiert: 2026-04-27",
+    intro: "Wenn Sie Hilfe bei Installation, Uebersetzungsaufgaben, Abonnements, Credits oder Erstattungen benoetigen, kontaktieren Sie uns unter <strong>support@example.com</strong>. Wenn es um eine konkrete Uebersetzungsaufgabe geht, geben Sie bitte die im Add-on angezeigte Task ID an.",
+    email_subject: "TransLay Support-Anfrage",
+    contact_cta: "Support kontaktieren",
+    pricing_cta: "Preise ansehen",
+    faq_title: "FAQ",
+    questions: [
+      {
+        q: "Was sollte ich bei einer Support-Anfrage angeben?",
+        a: "Bitte geben Sie Ihre Google-Konto-E-Mail, falls vorhanden die Task ID, den Dokument-Host (Google Slides™), die ausgefuehrte Aktion und sichtbare Fehlermeldungen an. Senden Sie keine vertraulichen Dokumentinhalte, es sei denn, wir bitten ausdruecklich um ein minimales Beispiel."
+      },
+      {
+        q: "Ich habe ein Abo oder Credits gekauft, aber das Add-on zeigt weiter Free. Was soll ich tun?",
+        a: "Stellen Sie sicher, dass Sie im Add-on und auf der TransLay-Website dasselbe Google-Konto verwenden. Oeffnen Sie TransLay erneut ueber Extensions in Google Slides™ und nutzen Sie Subscribe oder Manage Subscription, um Ihre Berechtigung zu aktualisieren. Wenn sie nach kurzer Wartezeit nicht aktualisiert wird, kontaktieren Sie den Support mit Ihren Bestelldaten."
+      },
+      {
+        q: "Wie funktionieren Erstattungen?",
+        a: "Ungenutzte Pay-as-you-go-Credits koennen nach der Anmeldung auf der Preisseite erstattet werden. Monatsabonnements sind in der Regel nicht erstattungsfaehig. Jahresabonnements folgen den in den Nutzungsbedingungen beschriebenen Erstattungsregeln. Bei Abrechnungsfehlern oder Sonderfaellen senden Sie dem Support Ihre Bestelldaten."
+      },
+      {
+        q: "Kann ich TransLay vor dem Bezahlen testen?",
+        a: "Ja. Jedes neu installierte Konto erhaelt einmalig eine kostenlose Quote von 20 Google-Slides-Seiten, sodass Sie den Kernablauf der Uebersetzung ohne Abo oder Credits testen koennen."
+      }
+    ]
+  },
+  it: {
+    document_title: "Supporto - TransLay",
+    title: "Supporto",
+    last_updated: "Ultimo aggiornamento: 2026-04-27",
+    intro: "Se hai bisogno di aiuto con installazione, attivita di traduzione, abbonamenti, crediti o rimborsi, contattaci a <strong>support@example.com</strong>. Se la domanda riguarda un'attivita di traduzione specifica, includi il Task ID mostrato nell'Add-on.",
+    email_subject: "Richiesta di supporto TransLay",
+    contact_cta: "Contatta il supporto",
+    pricing_cta: "Vedi prezzi",
+    faq_title: "FAQ",
+    questions: [
+      {
+        q: "Cosa devo includere quando contatto il supporto?",
+        a: "Includi l'e-mail del tuo account Google, il Task ID se disponibile, l'host del documento (Google Slides™), l'azione che stavi tentando di completare e qualsiasi messaggio di errore visibile. Non inviare contenuti riservati del documento salvo nostra richiesta esplicita di un esempio minimo."
+      },
+      {
+        q: "Ho acquistato un abbonamento o crediti, ma l'Add-on mostra ancora Free. Cosa devo fare?",
+        a: "Assicurati di usare lo stesso account Google nell'Add-on e sul sito TransLay. Riapri TransLay da Extensions in Google Slides™, poi usa di nuovo Subscribe o Manage Subscription per aggiornare i diritti. Se dopo una breve attesa non cambia, contatta il supporto con i dettagli dell'ordine."
+      },
+      {
+        q: "Come funzionano i rimborsi?",
+        a: "I crediti pay-as-you-go inutilizzati possono essere rimborsati dalla pagina prezzi dopo l'accesso. Gli abbonamenti mensili in genere non sono rimborsabili. Gli abbonamenti annuali seguono le condizioni di rimborso descritte nei Termini di servizio. Per errori di fatturazione o casi speciali, scrivi al supporto con i dettagli dell'ordine."
+      },
+      {
+        q: "Posso provare TransLay prima di pagare?",
+        a: "Si. Ogni account appena installato riceve una quota gratuita una tantum di 20 pagine Google Slides™, cosi puoi testare il flusso principale di traduzione senza acquistare abbonamenti o crediti."
+      }
+    ]
+  },
+  es: {
+    document_title: "Soporte - TransLay",
+    title: "Soporte",
+    last_updated: "Ultima actualizacion: 2026-04-27",
+    intro: "Si necesitas ayuda con la instalacion, tareas de traduccion, suscripciones, creditos o reembolsos, contactanos en <strong>support@example.com</strong>. Si tu pregunta es sobre una tarea de traduccion concreta, incluye el Task ID que aparece en el Add-on.",
+    email_subject: "Solicitud de soporte de TransLay",
+    contact_cta: "Contactar soporte",
+    pricing_cta: "Ver precios",
+    faq_title: "Preguntas frecuentes",
+    questions: [
+      {
+        q: "Que debo incluir al contactar con soporte?",
+        a: "Incluye el correo de tu cuenta de Google, el Task ID si esta disponible, el host del documento (Google Slides™), la accion que intentabas completar y cualquier mensaje de error visible. No envies contenido confidencial del documento salvo que pidamos especificamente un ejemplo minimo."
+      },
+      {
+        q: "Compre una suscripcion o creditos, pero el Add-on aun muestra Free. Que hago?",
+        a: "Asegurate de usar la misma cuenta de Google en el Add-on y en el sitio de TransLay. Vuelve a abrir TransLay desde Extensions en Google Slides™ y usa Subscribe o Manage Subscription otra vez para actualizar tus derechos. Si no se actualiza tras una breve espera, contacta con soporte e incluye los datos del pedido."
+      },
+      {
+        q: "Como funcionan los reembolsos?",
+        a: "Los creditos pay-as-you-go no usados pueden reembolsarse desde la pagina de precios tras iniciar sesion. Las suscripciones mensuales normalmente no son reembolsables. Las suscripciones anuales siguen las condiciones de reembolso descritas en los Terminos de servicio. Para errores de facturacion o casos especiales, escribe a soporte con los datos del pedido."
+      },
+      {
+        q: "Puedo probar TransLay antes de pagar?",
+        a: "Si. Cada cuenta recien instalada recibe una cuota gratuita unica de 20 paginas de Google Slides™, para que puedas probar el flujo principal de traduccion sin comprar una suscripcion ni creditos."
+      }
+    ]
+  },
+  pt: {
+    document_title: "Suporte - TransLay",
+    title: "Suporte",
+    last_updated: "Ultima atualizacao: 2026-04-27",
+    intro: "Se precisar de ajuda com instalacao, tarefas de traducao, assinaturas, creditos ou reembolsos, fale conosco em <strong>support@example.com</strong>. Se a pergunta for sobre uma tarefa de traducao especifica, inclua o Task ID exibido no Add-on.",
+    email_subject: "Solicitacao de suporte TransLay",
+    contact_cta: "Contatar suporte",
+    pricing_cta: "Ver precos",
+    faq_title: "FAQ",
+    questions: [
+      {
+        q: "O que devo incluir ao contatar o suporte?",
+        a: "Inclua o e-mail da sua conta Google, o Task ID se disponivel, o host do documento (Google Slides™), a acao que voce tentava concluir e qualquer mensagem de erro visivel. Nao envie conteudo confidencial do documento, a menos que solicitemos especificamente um exemplo minimo."
+      },
+      {
+        q: "Comprei uma assinatura ou creditos, mas o Add-on ainda mostra Free. O que devo fazer?",
+        a: "Confirme se voce esta usando a mesma conta Google no Add-on e no site da TransLay. Reabra o TransLay em Extensions no Google Slides™ e use Subscribe ou Manage Subscription novamente para atualizar seu direito. Se ainda nao atualizar apos uma breve espera, contate o suporte com os detalhes do pedido."
+      },
+      {
+        q: "Como funcionam os reembolsos?",
+        a: "Creditos pay-as-you-go nao usados podem ser reembolsados pela pagina de precos apos o login. Assinaturas mensais geralmente nao sao reembolsaveis. Assinaturas anuais seguem os termos de reembolso descritos nos Termos de Servico. Para erros de cobranca ou casos especiais, envie os detalhes do pedido ao suporte."
+      },
+      {
+        q: "Posso testar o TransLay antes de pagar?",
+        a: "Sim. Cada conta recem-instalada recebe uma cota gratuita unica de 20 paginas do Google Slides™, para testar o fluxo principal de traducao sem comprar assinatura ou creditos."
+      }
+    ]
+  },
+  ru: {
+    document_title: "Поддержка - TransLay",
+    title: "Поддержка",
+    last_updated: "Последнее обновление: 2026-04-27",
+    intro: "Если вам нужна помощь с установкой, задачами перевода, подписками, кредитами или возвратами, напишите нам на <strong>support@example.com</strong>. Если вопрос относится к конкретной задаче перевода, укажите Task ID из Add-on.",
+    email_subject: "Запрос поддержки TransLay",
+    contact_cta: "Связаться с поддержкой",
+    pricing_cta: "Посмотреть цены",
+    faq_title: "FAQ",
+    questions: [
+      {
+        q: "Что указать при обращении в поддержку?",
+        a: "Укажите email вашего Google-аккаунта, Task ID при наличии, хост документа (Google Slides™), действие, которое вы пытались выполнить, и видимое сообщение об ошибке. Не отправляйте конфиденциальное содержимое документа, если мы специально не попросим минимальный пример."
+      },
+      {
+        q: "Я купил подписку или кредиты, но Add-on все еще показывает Free. Что делать?",
+        a: "Убедитесь, что используете один и тот же Google-аккаунт в Add-on и на сайте TransLay. Снова откройте TransLay через Extensions в Google Slides™, затем используйте Subscribe или Manage Subscription для обновления прав. Если после короткого ожидания права не обновились, обратитесь в поддержку с деталями заказа."
+      },
+      {
+        q: "Как работают возвраты?",
+        a: "Неиспользованные pay-as-you-go кредиты можно вернуть на странице цен после входа. Месячные подписки, как правило, не подлежат возврату. Годовые подписки регулируются правилами возврата в Условиях использования. При ошибках оплаты или особых случаях отправьте детали заказа в поддержку."
+      },
+      {
+        q: "Можно ли протестировать TransLay до оплаты?",
+        a: "Да. Каждый новый установленный аккаунт получает разовую бесплатную квоту в 20 страниц Google Slides™, чтобы протестировать основной поток перевода без подписки или покупки кредитов."
+      }
+    ]
+  },
+  nl: {
+    document_title: "Ondersteuning - TransLay",
+    title: "Ondersteuning",
+    last_updated: "Laatst bijgewerkt: 2026-04-27",
+    intro: "Heb je hulp nodig met installatie, vertaaltaken, abonnementen, credits of terugbetalingen, neem dan contact op via <strong>support@example.com</strong>. Gaat je vraag over een specifieke vertaaktaak, vermeld dan de Task ID die in de Add-on staat.",
+    email_subject: "TransLay supportverzoek",
+    contact_cta: "Contact opnemen",
+    pricing_cta: "Prijzen bekijken",
+    faq_title: "FAQ",
+    questions: [
+      {
+        q: "Wat moet ik meesturen wanneer ik support contacteer?",
+        a: "Vermeld het e-mailadres van je Google-account, de Task ID indien beschikbaar, de documenthost (Google Slides™), de actie die je probeerde uit te voeren en eventuele zichtbare foutmeldingen. Stuur geen vertrouwelijke documentinhoud, tenzij we specifiek om een minimaal voorbeeld vragen."
+      },
+      {
+        q: "Ik heb een abonnement of credits gekocht, maar de Add-on toont nog steeds Free. Wat nu?",
+        a: "Controleer of je hetzelfde Google-account gebruikt in de Add-on en op de TransLay-website. Open TransLay opnieuw via Extensions in Google Slides™ en gebruik Subscribe of Manage Subscription om je rechten te vernieuwen. Als dit na korte tijd niet werkt, neem contact op met support en voeg je bestelgegevens toe."
+      },
+      {
+        q: "Hoe werken terugbetalingen?",
+        a: "Ongebruikte pay-as-you-go credits kunnen na inloggen via de prijspagina worden terugbetaald. Maandabonnementen zijn meestal niet restitueerbaar. Jaarabonnementen volgen de terugbetalingsvoorwaarden in de Servicevoorwaarden. Neem bij factuurfouten of bijzondere gevallen contact op met support met je bestelgegevens."
+      },
+      {
+        q: "Kan ik TransLay testen voordat ik betaal?",
+        a: "Ja. Elk nieuw geinstalleerd account krijgt een eenmalig gratis quotum van 20 Google Slides™-pagina's, zodat je de kernworkflow kunt testen zonder abonnement of credits."
+      }
+    ]
+  },
+  sv: {
+    document_title: "Support - TransLay",
+    title: "Support",
+    last_updated: "Senast uppdaterad: 2026-04-27",
+    intro: "Om du behover hjalp med installation, oversattningsjobb, prenumerationer, krediter eller aterbetalningar, kontakta oss pa <strong>support@example.com</strong>. Om fragan galler ett specifikt oversattningsjobb, inkludera Task ID som visas i Add-on.",
+    email_subject: "TransLay supportbegaran",
+    contact_cta: "Kontakta support",
+    pricing_cta: "Visa priser",
+    faq_title: "FAQ",
+    questions: [
+      {
+        q: "Vad ska jag inkludera nar jag kontaktar support?",
+        a: "Ange e-postadressen for ditt Google-konto, Task ID om det finns, dokumentvard (Google Slides™), vilken atgard du forsokte genomfora och eventuella synliga felmeddelanden. Skicka inte konfidentiellt dokumentinnehall om vi inte uttryckligen ber om ett minimalt exempel."
+      },
+      {
+        q: "Jag kopte en prenumeration eller krediter, men Add-on visar fortfarande Free. Vad gor jag?",
+        a: "Kontrollera att du anvander samma Google-konto i Add-on och pa TransLays webbplats. Oppna TransLay igen fran Extensions i Google Slides™ och anvand Subscribe eller Manage Subscription for att uppdatera din behorighet. Om den inte uppdateras efter en kort stund, kontakta support med orderuppgifter."
+      },
+      {
+        q: "Hur fungerar aterbetalningar?",
+        a: "Oanvanda pay-as-you-go-krediter kan aterbetalas fran prissidan efter inloggning. Manadsprenumerationer aterbetalas normalt inte. Arsabonnemang foljer aterbetalningsvillkoren i Anvandarvillkoren. Vid faktureringsfel eller specialfall, mejla support med orderuppgifter."
+      },
+      {
+        q: "Kan jag testa TransLay innan jag betalar?",
+        a: "Ja. Varje nyinstallerat konto far en engangs gratis kvot pa 20 Google Slides™-sidor, sa att du kan testa huvudflodet utan att kopa prenumeration eller krediter."
+      }
+    ]
+  },
+  el: {
+    document_title: "Υποστήριξη - TransLay",
+    title: "Υποστήριξη",
+    last_updated: "Τελευταία ενημέρωση: 2026-04-27",
+    intro: "Αν χρειάζεστε βοήθεια με εγκατάσταση, εργασίες μετάφρασης, συνδρομές, credits ή επιστροφές χρημάτων, επικοινωνήστε μαζί μας στο <strong>support@example.com</strong>. Αν η ερώτηση αφορά συγκεκριμένη εργασία μετάφρασης, συμπεριλάβετε το Task ID που εμφανίζεται στο Add-on.",
+    email_subject: "Αίτημα υποστήριξης TransLay",
+    contact_cta: "Επικοινωνία με υποστήριξη",
+    pricing_cta: "Προβολή τιμών",
+    faq_title: "FAQ",
+    questions: [
+      {
+        q: "Τι να συμπεριλάβω όταν επικοινωνώ με την υποστήριξη;",
+        a: "Συμπεριλάβετε το email του Google λογαριασμού σας, το Task ID αν υπάρχει, τον host του εγγράφου (Google Slides™), την ενέργεια που προσπαθούσατε να ολοκληρώσετε και κάθε ορατό μήνυμα σφάλματος. Μην στέλνετε εμπιστευτικό περιεχόμενο εγγράφου, εκτός αν ζητήσουμε συγκεκριμένα ένα ελάχιστο παράδειγμα."
+      },
+      {
+        q: "Αγόρασα συνδρομή ή credits, αλλά το Add-on δείχνει ακόμη Free. Τι να κάνω;",
+        a: "Βεβαιωθείτε ότι χρησιμοποιείτε τον ίδιο Google λογαριασμό στο Add-on και στον ιστότοπο TransLay. Ανοίξτε ξανά το TransLay από τα Extensions στο Google Slides™ και χρησιμοποιήστε ξανά Subscribe ή Manage Subscription για ανανέωση δικαιωμάτων. Αν δεν ενημερωθεί μετά από λίγο, επικοινωνήστε με την υποστήριξη με τα στοιχεία παραγγελίας."
+      },
+      {
+        q: "Πώς λειτουργούν οι επιστροφές χρημάτων;",
+        a: "Τα αχρησιμοποίητα pay-as-you-go credits μπορούν να επιστραφούν από τη σελίδα τιμών μετά τη σύνδεση. Οι μηνιαίες συνδρομές γενικά δεν επιστρέφονται. Οι ετήσιες συνδρομές ακολουθούν τους όρους επιστροφής που περιγράφονται στους Όρους χρήσης. Για λάθη χρέωσης ή ειδικές περιπτώσεις, στείλτε τα στοιχεία παραγγελίας στην υποστήριξη."
+      },
+      {
+        q: "Μπορώ να δοκιμάσω το TransLay πριν πληρώσω;",
+        a: "Ναι. Κάθε νέος εγκατεστημένος λογαριασμός λαμβάνει εφάπαξ δωρεάν όριο 20 σελίδων Google Slides™, ώστε να δοκιμάσετε τη βασική ροή μετάφρασης χωρίς συνδρομή ή αγορά credits."
+      }
+    ]
+  },
+  ar: {
+    document_title: "الدعم - TransLay",
+    title: "الدعم",
+    last_updated: "آخر تحديث: 2026-04-27",
+    intro: "إذا احتجت إلى مساعدة في التثبيت أو مهام الترجمة أو الاشتراكات أو الرصيد أو الاسترداد، يرجى إرسال بريد إلى <strong>support@example.com</strong>. إذا كانت المشكلة مرتبطة بمهمة ترجمة معينة، فأرفق Task ID الظاهر في الإضافة.",
+    email_subject: "طلب دعم فني لـ TransLay",
+    contact_cta: "التواصل مع الدعم",
+    pricing_cta: "عرض الأسعار",
+    faq_title: "الأسئلة الشائعة",
+    questions: [
+      {
+        q: "ما المعلومات المطلوبة عند التواصل مع الدعم؟",
+        a: "يرجى تزويدنا ببريد حساب Google، وTask ID إن وجد، ومضيف المستند (Google Slides™)، والإجراء الذي كنت تحاول تنفيذه، وأي رسالة خطأ ظاهرة. لا ترسل محتوى مستندات سريًا إلا إذا طلبنا صراحة مثالًا صغيرًا جدًا."
+      },
+      {
+        q: "اشتريت اشتراكًا أو رصيدًا، لكن الإضافة ما زالت تعرض Free. ماذا أفعل؟",
+        a: "يرجى التأكد من استخدام حساب Google نفسه في الإضافة وعلى موقع TransLay. أعد فتح TransLay من Extensions في Google Slides™، ثم استخدم Subscribe أو Manage Subscription مرة أخرى لتحديث الاستحقاق. إذا لم يتحدث بعد انتظار قصير، تواصل مع الدعم وأرفق معلومات الطلب."
+      },
+      {
+        q: "كيف تتم معالجة الاسترداد؟",
+        a: "بعد تسجيل الدخول، يمكنك طلب استرداد الرصيد غير المستخدم حسب الاستخدام من صفحة الأسعار. الاشتراكات الشهرية غير قابلة للاسترداد عادةً. الاشتراكات السنوية تخضع لقواعد الاسترداد الواردة في شروط الخدمة. في حال وجود خطأ فوترة أو ظرف خاص، تواصل مع الدعم وأرفق معلومات الطلب."
+      },
+      {
+        q: "هل يمكنني تجربة TransLay قبل الدفع؟",
+        a: "نعم. يحصل كل حساب جديد بعد التثبيت على رصيد مجاني لمرة واحدة قدره 20 صفحة Google Slides™، لذلك يمكنك اختبار مسار الترجمة الأساسي من دون شراء اشتراك أو رصيد."
+      }
+    ]
+  },
+  he: {
+    document_title: "תמיכה - TransLay",
+    title: "תמיכה",
+    last_updated: "עודכן לאחרונה: 2026-04-27",
+    intro: "אם אתם צריכים עזרה בהתקנה, משימות תרגום, מנויים, קרדיט או החזרים, שלחו אימייל אל <strong>support@example.com</strong>. אם הבעיה קשורה למשימת תרגום מסוימת, צרפו את ה-Task ID שמוצג בתוסף.",
+    email_subject: "בקשת תמיכה טכנית של TransLay",
+    contact_cta: "פנייה לתמיכה",
+    pricing_cta: "צפייה במחירים",
+    faq_title: "שאלות נפוצות",
+    questions: [
+      {
+        q: "איזה מידע צריך לצרף כשפונים לתמיכה?",
+        a: "צרפו את אימייל חשבון Google שלכם, Task ID אם יש, מארח המסמך (Google Slides™), הפעולה שניסיתם לבצע וכל הודעת שגיאה גלויה. אל תשלחו תוכן מסמכים סודי אלא אם ביקשנו במפורש דוגמה מינימלית."
+      },
+      {
+        q: "רכשתי מנוי או קרדיט, אבל התוסף עדיין מציג Free. מה לעשות?",
+        a: "ודאו שהתוסף ואתר TransLay משתמשים באותו חשבון Google. פתחו מחדש את TransLay מתוך Extensions ב-Google Slides™, ואז השתמשו שוב ב-Subscribe או Manage Subscription כדי לרענן זכאות. אם לאחר המתנה קצרה המצב עדיין לא מתעדכן, פנו לתמיכה עם פרטי ההזמנה."
+      },
+      {
+        q: "איך מטפלים בהחזרים?",
+        a: "לאחר התחברות ניתן לבקש החזר על קרדיט לפי שימוש שלא נוצל מתוך עמוד המחירים. מנויים חודשיים בדרך כלל אינם ניתנים להחזר. מנויים שנתיים מטופלים לפי כללי ההחזר שבתנאי השירות. במקרה של טעות חיוב או נסיבות מיוחדות, פנו לתמיכה עם פרטי ההזמנה."
+      },
+      {
+        q: "אפשר לנסות את TransLay לפני תשלום?",
+        a: "כן. כל חשבון חדש לאחר התקנה מקבל מכסה חינמית חד-פעמית של 20 עמודי Google Slides™, כך שאפשר לבדוק את תהליך התרגום המרכזי בלי לרכוש מנוי או קרדיט."
+      }
+    ]
+  },
+  zh: {
+    document_title: "支持 - TransLay",
+    title: "支持",
+    last_updated: "最后更新：2026-04-27",
+    intro: "如果您需要安装、翻译任务、订阅、额度或退款方面的帮助，请发送邮件至 <strong>support@example.com</strong>。如果问题与某一次翻译任务有关，请在邮件中附上 Add-on 中显示的 Task ID。",
+    email_subject: "TransLay 技术支持请求",
+    contact_cta: "联系支持",
+    pricing_cta: "查看价格",
+    faq_title: "常见问题",
+    questions: [
+      {
+        q: "联系支持时需要提供哪些信息？",
+        a: "请提供您的 Google 账号邮箱、Task ID（如有）、文档宿主（Google Slides™）、您当时尝试执行的操作，以及可见的错误信息。除非我们明确要求一个最小示例，请不要发送机密文档内容。"
+      },
+      {
+        q: "我已购买订阅或额度，但 Add-on 仍显示 Free，应该怎么办？",
+        a: "请确认 Add-on 与 TransLay 网站使用的是同一个 Google 账号。在 Google Slides™ 的 Extensions 中重新打开 TransLay，然后再次使用 Subscribe 或 Manage Subscription 刷新权益。如果短暂等待后仍未更新，请带上订单信息联系支持。"
+      },
+      {
+        q: "退款如何处理？",
+        a: "登录后，可以在价格页面申请退还未使用的按需额度。月度订阅通常不可退款。年度订阅按照服务条款中的退款规则处理。若遇到计费错误或特殊情况，请带上订单信息联系支持。"
+      },
+      {
+        q: "我可以在付费前试用 TransLay 吗？",
+        a: "可以。每个新安装账号都会获得一次性 20 页 Google Slides™ 免费额度，因此无需购买订阅或额度也可以测试核心翻译流程。"
+      }
+    ]
+  },
+  "zh-TW": {
+    document_title: "支援 - TransLay",
+    title: "支援",
+    last_updated: "最後更新：2026-04-27",
+    intro: "如果您需要安裝、翻譯任務、訂閱、額度或退款方面的幫助，請發送郵件至 <strong>support@example.com</strong>。如果問題與某一次翻譯任務有關，請在郵件中附上 Add-on 中顯示的 Task ID。",
+    email_subject: "TransLay 技術支援請求",
+    contact_cta: "聯繫支援",
+    pricing_cta: "查看價格",
+    faq_title: "常見問題",
+    questions: [
+      {
+        q: "聯繫支援時需要提供哪些資訊？",
+        a: "請提供您的 Google 賬戶郵箱、Task ID（如有）、文件宿主（Google Slides™）、您當時嘗試執行的操作，以及可見的錯誤資訊。除非我們明確要求一個最小示例，請不要發送機密文件內容。"
+      },
+      {
+        q: "我已購買訂閱或額度，但 Add-on 仍顯示 Free，應該怎麼辦？",
+        a: "請確認 Add-on 與 TransLay 網站使用的是同一個 Google 賬戶。在 Google Slides™ 的 Extensions 中重新打開 TransLay，然後再次使用 Subscribe 或 Manage Subscription 刷新權益。如果短暫等待後仍未更新，請帶上訂單資訊聯繫支援。"
+      },
+      {
+        q: "退款如何處理？",
+        a: "登入後，可以在價格頁面申請退還未使用的按需額度。月度訂閱通常不可退款。年度訂閱按照服務條款中的退款規則處理。若遇到計費錯誤或特殊情況，請帶上訂單資訊聯繫支援。"
+      },
+      {
+        q: "我可以在付費前試用 TransLay 嗎？",
+        a: "可以。每個新安裝賬戶都會獲得一次性 20 頁 Google Slides™ 免費額度，因此無需購買訂閱或額度也可以測試核心翻譯流程。"
+      }
+    ]
+  },
+  ja: {
+    document_title: "サポート - TransLay",
+    title: "サポート",
+    last_updated: "最終更新日: 2026-04-27",
+    intro: "インストール、翻訳タスク、サブスクリプション、クレジット、返金についてサポートが必要な場合は、<strong>support@example.com</strong> までメールでご連絡ください。特定の翻訳タスクに関する問題の場合は、アドオンに表示される Task ID をメールに記載してください。",
+    email_subject: "TransLay 技術サポート依頼",
+    contact_cta: "サポートに連絡",
+    pricing_cta: "料金を見る",
+    faq_title: "よくある質問",
+    questions: [
+      {
+        q: "サポートに連絡するときは何を伝えればよいですか？",
+        a: "Google アカウントのメールアドレス、Task ID（ある場合）、文書ホスト（Google Slides™）、そのとき実行しようとしていた操作、表示されたエラー情報をお知らせください。当社が最小限の例を明示的に依頼しない限り、機密文書の内容は送らないでください。"
+      },
+      {
+        q: "サブスクリプションまたはクレジットを購入しましたが、アドオンはまだ Free と表示されます。どうすればよいですか？",
+        a: "アドオンと TransLay ウェブサイトで同じ Google アカウントを使用していることを確認してください。Google Slides™ の Extensions から TransLay を開き直し、Subscribe または Manage Subscription を再度使用して権利を更新してください。少し待っても更新されない場合は、注文情報を添えてサポートにご連絡ください。"
+      },
+      {
+        q: "返金はどのように処理されますか？",
+        a: "ログイン後、料金ページから未使用の従量クレジットの返金を申請できます。月額購読は通常返金されません。年間購読は利用規約の返金ルールに従って処理されます。請求ミスや特別な事情がある場合は、注文情報を添えてサポートにご連絡ください。"
+      },
+      {
+        q: "支払い前に TransLay を試せますか？",
+        a: "はい。新規インストールアカウントごとに、一度限りの 20 ページ分 Google Slides™ 無料枠が付与されます。サブスクリプションやクレジットを購入しなくても、基本的な翻訳フローを試せます。"
+      }
+    ]
+  },
+  ko: {
+    document_title: "지원 - TransLay",
+    title: "지원",
+    last_updated: "최종 업데이트: 2026-04-27",
+    intro: "설치, 번역 작업, 구독, 크레딧 또는 환불에 도움이 필요하면 <strong>support@example.com</strong> 으로 이메일을 보내 주세요. 문제가 특정 번역 작업과 관련된 경우 부가기능에 표시되는 Task ID를 이메일에 포함해 주세요.",
+    email_subject: "TransLay 기술 지원 요청",
+    contact_cta: "지원팀에 문의",
+    pricing_cta: "가격 보기",
+    faq_title: "자주 묻는 질문",
+    questions: [
+      {
+        q: "지원팀에 연락할 때 어떤 정보를 제공해야 하나요?",
+        a: "Google 계정 이메일, Task ID(있는 경우), 문서 호스트(Google Slides™), 당시 실행하려던 작업, 표시된 오류 정보를 알려 주세요. 당사가 명시적으로 최소 예시를 요청하지 않는 한 기밀 문서 내용은 보내지 마세요."
+      },
+      {
+        q: "구독 또는 크레딧을 구매했지만 부가기능이 아직 Free로 표시됩니다. 어떻게 해야 하나요?",
+        a: "부가기능과 TransLay 웹사이트에서 같은 Google 계정을 사용하는지 확인해 주세요. Google Slides™의 Extensions에서 TransLay를 다시 열고 Subscribe 또는 Manage Subscription을 다시 사용해 권한을 새로고침하세요. 잠시 기다린 뒤에도 업데이트되지 않으면 주문 정보를 포함해 지원팀에 문의해 주세요."
+      },
+      {
+        q: "환불은 어떻게 처리되나요?",
+        a: "로그인 후 가격 페이지에서 미사용 종량제 크레딧 환불을 신청할 수 있습니다. 월간 구독은 일반적으로 환불되지 않습니다. 연간 구독은 서비스 약관의 환불 규칙에 따라 처리됩니다. 청구 오류나 특별한 사정이 있으면 주문 정보를 포함해 지원팀에 문의해 주세요."
+      },
+      {
+        q: "결제 전에 TransLay를 시험해 볼 수 있나요?",
+        a: "네. 새로 설치한 각 계정에는 1회성 Google Slides™ 20페이지 무료 한도가 제공되므로, 구독이나 크레딧을 구매하지 않아도 핵심 번역 흐름을 테스트할 수 있습니다."
+      }
+    ]
+  }
+
 };
 
 window.LANG_LIST = [

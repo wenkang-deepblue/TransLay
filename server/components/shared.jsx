@@ -126,7 +126,7 @@ function AnimatedBG() {
 function BrandMark() {
   return (
     <span className="brand-mark" aria-hidden>
-      <img className="brand-mark-image" src="assets/TransLay-logo_48px.png" alt="" />
+      <img className="brand-mark-image" src="assets/TransLay-logo_48px.png?v=20260428" alt="" />
     </span>
   );
 }

@@ -100,9 +100,9 @@ function ensureCurrentPresentationWorkerAccess() {
   }
 
   try {
-    DriveApp.getFileById(presentation.getId()).addEditor(WORKER_SERVICE_ACCOUNT_EMAIL);
+    grantWorkerAccess(presentation.getId());
   } catch (err) {
-    throw new Error('Failed to grant worker access to the current presentation.');
+    throw new Error('Failed to grant worker access to the current presentation: ' + err.message);
   }
 }
 
@@ -111,10 +111,11 @@ function ensureCurrentPresentationWorkerAccess() {
  * service account editor access so backend write-back can target this file.
  *
  * OAuth note: this flow intentionally keeps the broader Drive scope because
- * Apps Script must read the active source file via DriveApp.getFileById(),
- * create a sibling copy with inherited parent placement, and then mutate ACLs
- * with addEditor() on that user-owned file. Real-environment validation showed
- * that drive.file is insufficient for this combination in the Slides container
+ * Apps Script must copy the active source file and mutate ACLs on the
+ * user-owned destination file. The production path uses Drive REST first
+ * because DriveApp can return opaque service errors for some Slides files;
+ * DriveApp remains a fallback. Real-environment validation showed that
+ * drive.file is insufficient for this combination in the Slides container
  * context, so full Drive access is the minimum scope that preserves the
  * production create_new_file workflow.
  *
@@ -122,6 +123,152 @@ function ensureCurrentPresentationWorkerAccess() {
  * presentation and the freshly copied destination file.
  * Returns the copied presentation ID and URL.
  */
+var DRIVE_API_BASE_URL = 'https://www.googleapis.com/drive/v3';
+
+function driveApiRequest(path, options) {
+  var request = {
+    method: options.method,
+    muteHttpExceptions: true,
+    headers: {
+      Authorization: 'Bearer ' + getGoogleToken()
+    }
+  };
+
+  if (options.payload) {
+    request.contentType = 'application/json';
+    request.payload = JSON.stringify(options.payload);
+  }
+
+  var response = UrlFetchApp.fetch(DRIVE_API_BASE_URL + path, request);
+  var code = response.getResponseCode();
+  var text = response.getContentText();
+  var body = {};
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch (err) {
+      throw new Error(options.operation + ' failed with invalid Drive API response (HTTP ' + code + ')');
+    }
+  }
+
+  if (code >= 200 && code < 300) {
+    return body;
+  }
+
+  var error = body && body.error ? body.error : {};
+  var details = [];
+  if (error.status) {
+    details.push(error.status);
+  }
+  if (error.errors && error.errors.length && error.errors[0].reason) {
+    details.push(error.errors[0].reason);
+  }
+  if (error.message) {
+    details.push(error.message);
+  }
+  throw new Error(options.operation + ' failed (HTTP ' + code + '): ' + (details.join(' / ') || 'Unknown Drive API error'));
+}
+
+function grantWorkerAccess(documentId) {
+  try {
+    driveApiRequest(
+      '/files/' + encodeURIComponent(documentId) + '/permissions?supportsAllDrives=true&sendNotificationEmail=false&fields=id',
+      {
+        method: 'post',
+        operation: 'Drive permission grant',
+        payload: {
+          type: 'user',
+          role: 'writer',
+          emailAddress: WORKER_SERVICE_ACCOUNT_EMAIL
+        }
+      }
+    );
+    return;
+  } catch (apiErr) {
+    console.warn('Drive API permission grant failed, falling back to DriveApp: ' + apiErr.message);
+  }
+
+  DriveApp.getFileById(documentId).addEditor(WORKER_SERVICE_ACCOUNT_EMAIL);
+}
+
+function trashDriveFile(documentId) {
+  driveApiRequest(
+    '/files/' + encodeURIComponent(documentId) + '?supportsAllDrives=true&fields=id,trashed',
+    {
+      method: 'patch',
+      operation: 'Drive trash file',
+      payload: {
+        trashed: true
+      }
+    }
+  );
+}
+
+function copyPresentationFileViaDriveApi(sourceId, copyName) {
+  var copy = driveApiRequest(
+    '/files/' + encodeURIComponent(sourceId) + '/copy?supportsAllDrives=true&fields=id,webViewLink',
+    {
+      method: 'post',
+      operation: 'Drive copy file',
+      payload: {
+        name: copyName
+      }
+    }
+  );
+  if (!copy || !copy.id) {
+    throw new Error('Drive copy file returned no file id');
+  }
+  return {
+    documentId: copy.id,
+    documentUrl: copy.webViewLink || ('https://docs.google.com/presentation/d/' + copy.id + '/edit')
+  };
+}
+
+function getFirstParentFolderBestEffort(sourceFile) {
+  try {
+    var parents = sourceFile.getParents();
+    if (parents.hasNext()) {
+      return parents.next();
+    }
+  } catch (err) {
+    console.warn('Could not inspect source presentation parent folder: ' + err.message);
+  }
+  return null;
+}
+
+function copyPresentationFileViaDriveApp(sourceId, copyName) {
+  var sourceFile = DriveApp.getFileById(sourceId);
+  var parentFolder = getFirstParentFolderBestEffort(sourceFile);
+  var copiedFile;
+  if (parentFolder) {
+    try {
+      copiedFile = sourceFile.makeCopy(copyName, parentFolder);
+      return {
+        documentId: copiedFile.getId(),
+        documentUrl: 'https://docs.google.com/presentation/d/' + copiedFile.getId() + '/edit'
+      };
+    } catch (err) {
+      console.warn('Could not copy presentation into source folder, falling back to My Drive root: ' + err.message);
+    }
+  }
+
+  copiedFile = sourceFile.makeCopy(copyName);
+  return {
+    documentId: copiedFile.getId(),
+    documentUrl: 'https://docs.google.com/presentation/d/' + copiedFile.getId() + '/edit'
+  };
+}
+
+function copyPresentationFile(sourceId, copyName) {
+  try {
+    return copyPresentationFileViaDriveApi(sourceId, copyName);
+  } catch (apiErr) {
+    console.warn('Drive API copy failed, falling back to DriveApp: ' + apiErr.message);
+  }
+
+  return copyPresentationFileViaDriveApp(sourceId, copyName);
+}
+
 function prepareOutputPresentation(copyLabel) {
   var presentation = SlidesApp.getActivePresentation();
   if (!presentation) {
@@ -131,31 +278,20 @@ function prepareOutputPresentation(copyLabel) {
   var sourceId = presentation.getId();
   var sourceName = presentation.getName();
   var copyName = sourceName + ' (' + copyLabel + ')';
-  var sourceFile = DriveApp.getFileById(sourceId);
-  var parents = sourceFile.getParents();
-  var copiedFile;
-
-  if (parents.hasNext()) {
-    copiedFile = sourceFile.makeCopy(copyName, parents.next());
-  } else {
-    copiedFile = sourceFile.makeCopy(copyName);
-  }
+  var copiedFile = copyPresentationFile(sourceId, copyName);
 
   try {
-    copiedFile.addEditor(WORKER_SERVICE_ACCOUNT_EMAIL);
+    grantWorkerAccess(copiedFile.documentId);
   } catch (err) {
     try {
-      copiedFile.setTrashed(true);
+      trashDriveFile(copiedFile.documentId);
     } catch (cleanupErr) {
       console.error('Failed to trash copied presentation: ' + cleanupErr.message);
     }
-    throw new Error('Failed to grant worker access to the copied presentation.');
+    throw new Error('Failed to grant worker access to the copied presentation: ' + err.message);
   }
 
-  return {
-    documentId: copiedFile.getId(),
-    documentUrl: 'https://docs.google.com/presentation/d/' + copiedFile.getId() + '/edit'
-  };
+  return copiedFile;
 }
 
 /**
@@ -166,7 +302,7 @@ function cleanupPreparedPresentation(documentId) {
   if (!documentId) return;
 
   try {
-    DriveApp.getFileById(documentId).setTrashed(true);
+    trashDriveFile(documentId);
   } catch (err) {
     console.error('Failed to cleanup prepared presentation: ' + err.message);
   }

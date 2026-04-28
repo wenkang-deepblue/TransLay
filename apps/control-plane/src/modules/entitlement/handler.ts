@@ -30,20 +30,22 @@ export function entitlementHandler(pool: Pool) {
     });
 
     const periodKey = billingPeriodKey();
+    const isSuper = sub.plan_type === "super";
     const limits = getQuotaLimits(sub.plan_type);
     const usage = await getUsageSummary(pool, auth.user_id, periodKey);
     const credits = await getCreditBalance(pool, auth.user_id);
 
     const usageSnapshot: MeteredUsageSnapshot = {
       period_key: periodKey,
+      ...(isSuper && { unlimited: true }),
       slides_used: usage.slides_used,
-      slides_limit: limits.slides,
+      slides_limit: isSuper ? null : limits.slides,
       slides_credit_balance: credits.slides_balance,
       docs_pages_used: usage.docs_pages_used,
-      docs_pages_limit: limits.docs_pages,
+      docs_pages_limit: isSuper ? null : limits.docs_pages,
       docs_pages_credit_balance: credits.docs_pages_balance,
       sheets_cells_used: usage.sheets_cells_used,
-      sheets_cells_limit: limits.sheets_cells,
+      sheets_cells_limit: isSuper ? null : limits.sheets_cells,
       sheets_cells_credit_balance: credits.sheets_cells_balance,
     };
 
@@ -58,7 +60,7 @@ export function entitlementHandler(pool: Pool) {
       plan_type: sub.plan_type,
       subscription_status: sub.status,
       ...(sub.plan_type !== "free" &&
-        sub.provider_name !== "none" && {
+        (sub.provider_name !== "none" || sub.plan_type === "super") && {
         subscription: {
           provider_name: sub.provider_name,
           current_period_start: sub.current_period_start?.toISOString() ?? "",

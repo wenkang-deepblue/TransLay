@@ -207,7 +207,7 @@ function buildPortalSessionResponse(
     subscription_status: (subscription?.status ?? "active") as SessionConsumeResponse["subscription_status"],
     ...(subscription &&
       subscription.plan_type !== "free" &&
-      subscription.provider_name !== "none" && {
+      (subscription.provider_name !== "none" || subscription.plan_type === "super") && {
         subscription: {
           provider_name: subscription.provider_name,
           current_period_start: subscription.current_period_start?.toISOString() ?? "",
@@ -509,7 +509,7 @@ export function sessionMeHandler(pool: Pool) {
       subscription_status: sub?.status ?? "active",
       ...(sub &&
         sub.plan_type !== "free" &&
-        sub.provider_name !== "none" && {
+        (sub.provider_name !== "none" || sub.plan_type === "super") && {
           subscription: {
             provider_name: sub.provider_name,
             current_period_start: sub.current_period_start?.toISOString() ?? "",

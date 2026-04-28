@@ -32,7 +32,7 @@ export interface UpsertSubscriptionInput {
 
 /**
  * Returns the most relevant subscription for a user:
- * prioritizes active/grace_period pro subscriptions, falls back to free.
+ * prioritizes active/grace_period super, then pro subscriptions, then falls back to free.
  */
 export async function getActiveSubscription(
   pool: Queryable,
@@ -46,6 +46,7 @@ export async function getActiveSubscription(
      WHERE user_id = $1
      ORDER BY
        CASE WHEN status IN ('active', 'grace_period') THEN 0 ELSE 1 END,
+       CASE WHEN plan_type = 'super' THEN 0 ELSE 1 END,
        CASE WHEN plan_type != 'free' THEN 0 ELSE 1 END,
        updated_at DESC
      LIMIT 1`,

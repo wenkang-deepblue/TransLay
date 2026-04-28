@@ -75,6 +75,7 @@
       font-size: 12px;
     }
     .entitlement-bar.pro { background: #e6f4ea; }
+    .entitlement-bar.super { background: #fdebea; }
     .plan-row {
       display: flex;
       align-items: center;
@@ -91,6 +92,7 @@
     }
     .plan-badge.free { background: #d2e3fc; color: #1967d2; }
     .plan-badge.pro { background: #ceead6; color: #137333; }
+    .plan-badge.super { background: #e84133; color: #ffffff; }
     .subscription-expiry-badge {
       display: none;
       flex: 0 1 auto;
@@ -721,6 +723,7 @@
       cancelRequested: false,
       cancelRequestInFlight: false,
       isTranslating: false,
+      isPreparingSubmission: false,
       activeSubmission: null,
       pendingDuplicateSubmission: null,
       submissionSeq: 0,
@@ -871,7 +874,8 @@
       var upgradeBtn = document.getElementById('upgradeBtn');
 
       var planType = ent.plan_type || 'free';
-      var isPaid = ent.access === 'pro';
+      var isSuper = planType === 'super' || ent.access === 'super';
+      var isPaid = ent.access === 'pro' || isSuper;
       var planLabel = 'FREE';
       var subscriptionLabel = 'subscription';
       if (planType === 'pro_monthly') {
@@ -880,9 +884,12 @@
       } else if (planType === 'pro_yearly') {
         planLabel = 'YEARLY';
         subscriptionLabel = 'Yearly subscription';
+      } else if (isSuper) {
+        planLabel = 'Super';
+        subscriptionLabel = 'Super';
       }
-      bar.className = 'entitlement-bar' + (isPaid ? ' pro' : '');
-      badge.className = 'plan-badge ' + (isPaid ? 'pro' : 'free');
+      bar.className = 'entitlement-bar' + (isSuper ? ' super' : (isPaid ? ' pro' : ''));
+      badge.className = 'plan-badge ' + (isSuper ? 'super' : (isPaid ? 'pro' : 'free'));
       badge.textContent = planLabel;
 
       function formatDate(value) {
@@ -906,15 +913,32 @@
         var periodEndTime = new Date(periodEnd).getTime();
         var prefix = periodEndTime < Date.now() ? 'Expired on: ' : 'Expires on: ';
         expiryBadge.textContent = prefix + formattedPeriodEnd;
+        expiryBadge.style.borderColor = isSuper ? '#e84133' : '#34a853';
+        expiryBadge.style.color = isSuper ? '#e84133' : '#137333';
         expiryBadge.style.display = 'inline-block';
       } else {
         expiryBadge.textContent = '';
         expiryBadge.style.display = 'none';
+        expiryBadge.style.borderColor = '';
+        expiryBadge.style.color = '';
       }
 
       // Usage display
       var usage = ent.usage;
-      if (usage && !usage.unlimited) {
+      if (usage && isSuper) {
+        var unlimitedSymbol = '♾️';
+        document.getElementById('usageSlides').style.display = 'flex';
+        document.getElementById('usageSlidesText').textContent =
+          formatUsageNumber(usage.slides_used) + ' / ' + unlimitedSymbol;
+
+        document.getElementById('usageDocs').style.display = 'flex';
+        document.getElementById('usageDocsText').textContent =
+          formatUsageNumber(usage.docs_pages_used) + ' / ' + unlimitedSymbol;
+
+        document.getElementById('usageSheets').style.display = 'flex';
+        document.getElementById('usageSheetsText').textContent =
+          formatUsageNumber(usage.sheets_cells_used) + ' / ' + unlimitedSymbol;
+      } else if (usage && !usage.unlimited) {
         document.getElementById('usageSlides').style.display = 'flex';
         var slidesCreditBalance = Number(usage.slides_credit_balance || 0);
         var slidesUsageText =
@@ -959,11 +983,17 @@
 
     // ── Translate ──
     function handleTranslate() {
+      if (state.isTranslating || state.isPreparingSubmission) {
+        return;
+      }
+
+      setPreparingSubmission(true);
       hideDuplicateAction();
       resetSubmissionUiState();
 
       var submissionData = buildTranslationSubmission({ forceResubmit: false });
       if (!submissionData) {
+        setPreparingSubmission(false);
         return;
       }
 
@@ -980,6 +1010,7 @@
           showFullTranslationConfirmation(submissionData);
         })
         .withFailureHandler(function(err) {
+          setPreparingSubmission(false);
           var msg = err.message || 'Failed to preview usage quota.';
           if (msg.indexOf('[QUOTA_EXCEEDED]') !== -1) {
             showError('Usage quota exceeded. Upgrade your subscription or buy credits for more capacity.');
@@ -1007,6 +1038,7 @@
         'Confirm',
         'Cancel',
         function() {
+          setPreparingSubmission(false);
           executeTranslateSubmission(
             submissionData.jobRequest,
             submissionData.targetLang,
@@ -1015,7 +1047,10 @@
             submissionData.submissionNonce
           );
         },
-        true
+        true,
+        function() {
+          setPreparingSubmission(false);
+        }
       );
     }
 
@@ -1026,6 +1061,7 @@
         'Continue',
           'Cancel',
           function() {
+            setPreparingSubmission(false);
             var partialSubmission = applyQuotaPartialOption(submissionData, preview);
             executeTranslateSubmission(
             partialSubmission.jobRequest,
@@ -1036,7 +1072,9 @@
             );
           },
         true,
-        null,
+        function() {
+          setPreparingSubmission(false);
+        },
         'quota-dialog'
         );
     }
@@ -1190,6 +1228,7 @@
 
     function executeTranslateSubmission(jobRequest, targetLang, outputMode, rangeExpression, submissionNonce) {
       state.translatedUnitsBilled = 0;
+      setPreparingSubmission(false);
       var submission = beginSubmission(jobRequest.output_mode);
       if (outputMode !== 'create_new_file') {
         state.currentOutputDocumentId = state.documentId;
@@ -1483,6 +1522,7 @@
       state.translatedUnitsBilled = 0;
       state.lastPollActivityAt = 0;
       state.activeSubmission = null;
+      state.isPreparingSubmission = false;
       state.consecutivePollFailures = 0;
     }
 
@@ -2349,8 +2389,16 @@
 
     function updateTranslateButtonState() {
       var btn = document.getElementById('translateBtn');
-      btn.disabled = state.isTranslating || isDuplicateActionVisible();
-      btn.textContent = state.isTranslating ? 'Translating...' : 'Translate';
+      btn.disabled = state.isTranslating || state.isPreparingSubmission || isDuplicateActionVisible();
+      btn.textContent = state.isTranslating
+        ? 'Translating...'
+        : (state.isPreparingSubmission ? 'Preparing...' : 'Translate');
+    }
+
+    function setPreparingSubmission(active) {
+      state.isPreparingSubmission = active;
+      updateTranslateButtonState();
+      updateCancelButton();
     }
 
     function resetSubmissionUiState() {

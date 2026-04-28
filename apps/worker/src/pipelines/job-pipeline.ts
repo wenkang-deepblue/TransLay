@@ -2389,7 +2389,9 @@ async function settleSlideBilling(
     hostType: "slides",
     periodKey,
   });
-  const planRemainingBeforeJob = Math.max(0, planLimit - usedBeforeJob);
+  const planRemainingBeforeJob = Number.isFinite(planLimit)
+    ? Math.max(0, planLimit - usedBeforeJob)
+    : Number.POSITIVE_INFINITY;
   const creditUnitsToConsume = Math.max(
     0,
     settlement.net_billed_slides - planRemainingBeforeJob

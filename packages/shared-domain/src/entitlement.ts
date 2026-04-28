@@ -35,6 +35,14 @@ export function computeEntitlement(input: EntitlementInput): EntitlementResult {
     return { access: "free", active: true, cancellation_notice: null };
   }
 
+  if (plan_type === "super") {
+    return {
+      access: "super",
+      active: true,
+      cancellation_notice: null,
+    };
+  }
+
   let isPro: boolean;
   switch (subscription_status) {
     case "active":

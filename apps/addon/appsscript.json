@@ -5,7 +5,8 @@
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
   "urlFetchWhitelist": [
-    "https://your-domain.example.com/"
+    "https://your-domain.example.com/",
+    "https://www.googleapis.com/drive/v3/"
   ],
   "oauthScopes": [
     "https://www.googleapis.com/auth/presentations",

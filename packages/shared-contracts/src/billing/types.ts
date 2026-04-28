@@ -1,6 +1,6 @@
 import type { UserSummary } from "../auth/types";
 
-export const PLAN_TYPES = ["free", "pro_monthly", "pro_yearly"] as const;
+export const PLAN_TYPES = ["free", "pro_monthly", "pro_yearly", "super"] as const;
 export type PlanType = (typeof PLAN_TYPES)[number];
 
 export const SUBSCRIPTION_STATUSES = [
@@ -14,7 +14,7 @@ export const SUBSCRIPTION_STATUSES = [
 ] as const;
 export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 
-export type AccessLevel = "free" | "pro" | "blocked";
+export type AccessLevel = "free" | "pro" | "super" | "blocked";
 
 /** S6: Supported payment provider names. */
 export const PAYMENT_PROVIDER_NAMES = ["none", "paddle"] as const;
@@ -23,14 +23,15 @@ export type PaymentProviderName = (typeof PAYMENT_PROVIDER_NAMES)[number];
 /** Metered usage snapshot (free and pro with per-host limits). */
 export interface MeteredUsageSnapshot {
   readonly period_key: string;
+  readonly unlimited?: boolean;
   readonly slides_used: number;
-  readonly slides_limit: number;
+  readonly slides_limit: number | null;
   readonly slides_credit_balance?: number;
   readonly docs_pages_used: number;
-  readonly docs_pages_limit: number;
+  readonly docs_pages_limit: number | null;
   readonly docs_pages_credit_balance?: number;
   readonly sheets_cells_used: number;
-  readonly sheets_cells_limit: number;
+  readonly sheets_cells_limit: number | null;
   readonly sheets_cells_credit_balance?: number;
 }
 
