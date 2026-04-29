@@ -1,7 +1,8 @@
 // Shared primitives used across TransLay landing page
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
-const SUPPORT_EMAIL = "support@example.com";
+const SUPPORT_EMAIL = "translay@example.com";
 const SUPPORT_SUBJECT = "TransLay Support Needed";
+const GOOGLE_TRADEMARK_NOTICE = "Google Slides™, Google Docs™ and Google Sheets™ are trademarks of Google LLC";
 
 function getSupportMailtoHref(subject = SUPPORT_SUBJECT) {
   return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject || SUPPORT_SUBJECT)}`;
@@ -403,11 +404,12 @@ function Footer({ t }) {
             <a href="/privacy">{t.footer.privacy}</a>
           </div>
         </div>
+        <div className="footer-trademark">{GOOGLE_TRADEMARK_NOTICE}</div>
       </div>
     </footer>
   );
 }
 
 Object.assign(window, {
-  SUPPORT_EMAIL, SUPPORT_SUBJECT, getSupportMailtoHref, useI18n, useTheme, getBrowserLang, Reveal, AnimatedBG, BrandMark, AccountShell, SettingsDropdown, TopBar, Footer,
+  SUPPORT_EMAIL, SUPPORT_SUBJECT, GOOGLE_TRADEMARK_NOTICE, getSupportMailtoHref, useI18n, useTheme, getBrowserLang, Reveal, AnimatedBG, BrandMark, AccountShell, SettingsDropdown, TopBar, Footer,
 });

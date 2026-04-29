@@ -113,7 +113,7 @@
     });
     document.querySelectorAll("[data-legal-footer-support]").forEach((node) => {
       const subject = footer.support_subject || "TransLay Support Needed";
-      node.setAttribute("href", `mailto:support@example.com?subject=${encodeURIComponent(subject)}`);
+      node.setAttribute("href", `mailto:translay@example.com?subject=${encodeURIComponent(subject)}`);
     });
     if (successPage.document_title && document.querySelector("[data-success-title]")) {
       document.title = successPage.document_title;
@@ -185,7 +185,7 @@
       <div class="meta">${support.last_updated || ""}</div>
       <p>${support.intro || ""}</p>
       <div class="support-actions">
-        <a class="btn btn-primary keep" href="mailto:support@example.com?subject=${encodeURIComponent(support.email_subject || "TransLay Support Request")}">${support.contact_cta || "Contact support"}</a>
+        <a class="btn btn-primary keep" href="mailto:translay@example.com?subject=${encodeURIComponent(support.email_subject || "TransLay Support Request")}">${support.contact_cta || "Contact support"}</a>
         <a class="btn btn-ghost keep" href="/pricing">${support.pricing_cta || "View pricing"}</a>
       </div>
       <h2>${support.faq_title || "FAQ"}</h2>

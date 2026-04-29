@@ -37,7 +37,7 @@ function onInstall() {
 function showSidebar() {
   var ui = _getUi();
   if (!ui) {
-    throw new Error('TransLay requires Google Docs™, Sheets, or Slides.');
+    throw new Error('TransLay requires Google Docs™, Google Sheets™, or Google Slides™.');
   }
   var html = HtmlService.createHtmlOutputFromFile('src/sidebar/index')
     .setTitle('TransLay')

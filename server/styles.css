@@ -673,6 +673,14 @@ body {
   transform: scale(1.02);
 }
 
+.footer-trademark {
+  margin-top: 18px;
+  text-align: center;
+  color: var(--text-mute);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 /* ============ Settings dropdown ============ */
 .lang-selector {
   position: relative;

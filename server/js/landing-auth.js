@@ -25,7 +25,7 @@
       const existingScript = document.querySelector('script[data-translay-gis="1"]');
       if (existingScript) {
         existingScript.addEventListener("load", () => resolve(window.google?.accounts?.id));
-        existingScript.addEventListener("error", () => reject(new Error("Failed to load Google Identity Services.")));
+        existingScript.addEventListener("error", () => reject(new Error("Failed to load Google Identity Services™.")));
         return;
       }
 
@@ -36,12 +36,12 @@
       script.dataset.translayGis = "1";
       script.onload = () => {
         if (!window.google?.accounts?.id) {
-          reject(new Error("Google Identity Services is unavailable."));
+          reject(new Error("Google Identity Services™ is unavailable."));
           return;
         }
         resolve(window.google.accounts.id);
       };
-      script.onerror = () => reject(new Error("Failed to load Google Identity Services."));
+      script.onerror = () => reject(new Error("Failed to load Google Identity Services™."));
       document.head.appendChild(script);
     });
 
