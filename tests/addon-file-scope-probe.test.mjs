@@ -4,8 +4,8 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
 async function loadProbeContext() {
-  const hostContextSource = await readFile(
-    new URL("../apps/addon/src/server/host_context.gs", import.meta.url),
+  const driveApiSource = await readFile(
+    new URL("../apps/addon/src/server/drive_api.gs", import.meta.url),
     "utf8"
   );
   const probeSource = await readFile(
@@ -24,7 +24,7 @@ async function loadProbeContext() {
     },
   };
   vm.createContext(context);
-  vm.runInContext(hostContextSource, context);
+  vm.runInContext(driveApiSource, context);
   vm.runInContext(probeSource, context);
   return context;
 }
