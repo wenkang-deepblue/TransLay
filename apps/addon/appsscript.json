@@ -8,6 +8,28 @@
     "https://your-domain.example.com/",
     "https://www.googleapis.com/drive/v3/"
   ],
+  "addOns": {
+    "common": {
+      "name": "TransLay",
+      "logoUrl": "https://your-domain.example.com/assets/TransLay-logo_48px.png",
+      "layoutProperties": {
+        "primaryColor": "#4285f4",
+        "secondaryColor": "#4285f4"
+      },
+      "openLinkUrlPrefixes": [
+        "https://your-domain.example.com/"
+      ]
+    },
+    "slides": {
+      "homepageTrigger": {
+        "enabled": true,
+        "runFunction": "buildPhase1DriveFileScopeProbeHomepage"
+      },
+      "onFileScopeGrantedTrigger": {
+        "runFunction": "onPhase1DriveFileScopeGranted"
+      }
+    }
+  },
   "oauthScopes": [
     "https://www.googleapis.com/auth/presentations",
     "https://www.googleapis.com/auth/drive",
