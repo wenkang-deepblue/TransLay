@@ -321,8 +321,7 @@ window.TRANSLATIONS = {
             paragraphs: [
               "TransLay is a Google Workspace™ add-on. To work correctly inside Google Slides™, we ask only for permissions that are directly required by the current product scope.",
               "Google Slides™ permission is needed to read the presentation content you want translated and to write the translation back to the original file or a target file. Without it, TransLay cannot read the content or complete write-back.",
-              "Google Drive™ permission is needed to locate the active presentation, create user-owned copies in the “new file” workflow, place the target file in the right location, and manage temporary access needed during task execution. Without it, some copy and write-back flows cannot work reliably.",
-              "Google Drive™ file permission helps us limit file operations to the files involved in the active workflow.",
+              "Google Drive™ file permission is needed to access only the active presentation and any target copy created for the current workflow, create user-owned copies in the “new file” workflow, place the target file in the right location, and manage temporary worker access during task execution. This helps keep file operations limited to the files involved in the active workflow.",
               "Google Workspace™ container UI permission is needed so the TransLay sidebar can appear inside Google Slides™.",
               "External request permission is needed so the add-on can securely talk to the TransLay backend for translation tasks, entitlement refresh, sign-in, and billing-related flows.",
               "Google account email and avatar permissions are needed for sign-in identity, showing the current account, binding subscriptions, and handling support."
@@ -691,8 +690,7 @@ window.TRANSLATIONS = {
             paragraphs: [
               "TransLay est un module Google Workspace™. Pour fonctionner correctement dans Google Slides™, nous ne demandons que les autorisations directement nécessaires au périmètre actuel du produit.",
               "L'autorisation Google Slides™ sert à lire le contenu de la présentation que vous souhaitez traduire et à écrire la traduction dans le fichier d'origine ou le fichier cible. Sans cette autorisation, TransLay ne peut ni lire le contenu ni finaliser la réécriture.",
-              "L'autorisation Google Drive™ sert à localiser la présentation en cours, à créer une copie appartenant à l'utilisateur dans le mode \"sortie vers un nouveau fichier\", à placer le fichier cible au bon endroit et à gérer l'accès temporaire nécessaire pendant l'exécution de la tâche. Sans cette autorisation, certains flux de copie et de réécriture ne peuvent pas fonctionner de manière stable.",
-              "L'autorisation Google Drive™ file sert à nous aider à limiter autant que possible les opérations de fichiers aux fichiers concernés par le flux de travail en cours.",
+              "L'autorisation Google Drive™ file sert à accéder uniquement à la présentation active et à toute copie cible créée pour le flux de travail en cours, à créer une copie appartenant à l'utilisateur dans le mode \"sortie vers un nouveau fichier\", à placer le fichier cible au bon endroit et à gérer l'accès temporaire du worker pendant l'exécution de la tâche. Elle aide à limiter les opérations de fichiers aux fichiers concernés par le flux de travail actif.",
               "L'autorisation d'interface conteneur Google Workspace™ sert à afficher la barre latérale TransLay dans Google Slides™.",
               "L'autorisation de requêtes externes permet au module de communiquer de manière sécurisée avec le backend TransLay afin d'accomplir les tâches de traduction, l'actualisation des droits, la connexion et les flux liés aux abonnements.",
               "Les autorisations liées à l'e-mail et à l'avatar du compte Google servent à l'identification lors de la connexion, à l'affichage du compte actuel, à l'association des abonnements et au traitement du service après-vente."
@@ -1061,8 +1059,7 @@ window.TRANSLATIONS = {
             paragraphs: [
               "TransLay ist ein Google Workspace™ add-on. Damit es in Google Slides™ korrekt funktioniert, fordern wir nur die Berechtigungen an, die für den aktuellen Funktionsumfang direkt erforderlich sind.",
               "Die Google-Slides-Berechtigung wird benötigt, um den zu übersetzenden Präsentationsinhalt zu lesen und die Übersetzung in die Original- oder Zieldatei zurückzuschreiben. Ohne diese Berechtigung kann TransLay den Inhalt nicht lesen und das Ergebnis nicht zurückschreiben.",
-              "Die Google-Drive-Berechtigung wird benötigt, um die aktive Präsentation zu finden, benutzereigene Kopien im Modus \"Ausgabe in neue Datei\" zu erstellen, die Zieldatei am richtigen Ort abzulegen und temporäre Zugriffe während der Ausführung zu verwalten. Ohne diese Berechtigung können bestimmte Kopier- und Rückschreibabläufe nicht zuverlässig funktionieren.",
-              "Die Google-Drive-file-Berechtigung hilft uns, Dateioperationen möglichst auf die aktuell beteiligten Dateien zu beschränken.",
+              "Die Google-Drive-file-Berechtigung wird benötigt, um nur auf die aktive Präsentation und eine für den aktuellen Ablauf erstellte Zielkopie zuzugreifen, benutzereigene Kopien im Modus \"Ausgabe in neue Datei\" zu erstellen, die Zieldatei am richtigen Ort abzulegen und temporären Worker-Zugriff während der Ausführung zu verwalten. Dadurch bleiben Dateioperationen auf die am aktiven Ablauf beteiligten Dateien beschränkt.",
               "Die Google-Workspace-container-UI-Berechtigung wird benötigt, damit die TransLay-Seitenleiste in Google Slides™ angezeigt werden kann.",
               "Die Berechtigung für externe Anfragen wird benötigt, damit das add-on sicher mit dem TransLay-Backend für Übersetzungsaufgaben, Anspruchsaktualisierung, Anmeldung und Abrechnungsabläufe kommunizieren kann.",
               "Die Berechtigungen für Google-Konto-E-Mail und Avatar sind für die Anmeldeidentität, die Anzeige des aktuellen Kontos, die Zuordnung von Abonnements und den Support erforderlich."
@@ -1431,8 +1428,7 @@ window.TRANSLATIONS = {
             paragraphs: [
               "TransLay è un add-on di Google Workspace™. Per funzionare correttamente in Google Slides™, richiediamo solo le autorizzazioni direttamente necessarie all'ambito attuale del prodotto.",
               "L'autorizzazione Google Slides™ serve a leggere il contenuto della presentazione da tradurre e a scrivere la traduzione nel file originale o nel file di destinazione. Senza questa autorizzazione, TransLay non può leggere il contenuto né completare la scrittura.",
-              "L'autorizzazione Google Drive™ serve a individuare la presentazione corrente, creare copie di proprietà dell'utente nella modalità \"output in nuovo file\", collocare il file di destinazione nella posizione corretta e gestire gli accessi temporanei necessari durante l'esecuzione. Senza questa autorizzazione, alcuni flussi di copia e scrittura non possono funzionare stabilmente.",
-              "L'autorizzazione Google Drive™ file ci aiuta a limitare per quanto possibile le operazioni sui file ai soli file coinvolti nel workflow corrente.",
+              "L'autorizzazione Google Drive™ file serve ad accedere solo alla presentazione attiva e all'eventuale copia di destinazione creata per il workflow corrente, a creare copie di proprietà dell'utente nella modalità \"output in nuovo file\", a collocare il file di destinazione nella posizione corretta e a gestire l'accesso temporaneo del worker durante l'esecuzione. Questo aiuta a limitare le operazioni sui file ai soli file coinvolti nel workflow attivo.",
               "L'autorizzazione dell'interfaccia contenitore di Google Workspace™ serve a mostrare la barra laterale di TransLay dentro Google Slides™.",
               "L'autorizzazione per richieste esterne serve affinché l'add-on comunichi in modo sicuro con il backend TransLay per task di traduzione, aggiornamento dei diritti, accesso e flussi di abbonamento.",
               "Le autorizzazioni per email e avatar dell'account Google servono per identificare l'accesso, mostrare l'account corrente, collegare gli abbonamenti e gestire l'assistenza post-vendita."
@@ -1801,8 +1797,7 @@ window.TRANSLATIONS = {
             paragraphs: [
               "TransLay es un add-on de Google Workspace™. Para funcionar correctamente en Google Slides™, solicitamos solo los permisos directamente necesarios para el alcance actual del producto.",
               "El permiso de Google Slides™ sirve para leer el contenido de la presentación que debe traducirse y escribir la traducción en el archivo original o de destino. Sin este permiso, TransLay no puede leer el contenido ni completar la escritura.",
-              "El permiso de Google Drive™ sirve para encontrar la presentación actual, crear copias propiedad del usuario en el modo \"salida a nuevo archivo\", colocar el archivo de destino en la ubicación correcta y gestionar los accesos temporales necesarios durante la ejecución. Sin este permiso, algunos flujos de copia y escritura no pueden funcionar de forma estable.",
-              "El permiso de Google Drive™ file nos ayuda a limitar en lo posible las operaciones sobre archivos a los archivos implicados en el flujo actual.",
+              "El permiso de Google Drive™ file sirve para acceder solo a la presentación activa y a cualquier copia de destino creada para el flujo actual, crear copias propiedad del usuario en el modo \"salida a nuevo archivo\", colocar el archivo de destino en la ubicación correcta y gestionar el acceso temporal del worker durante la ejecución. Esto ayuda a limitar las operaciones sobre archivos a los archivos implicados en el flujo activo.",
               "El permiso de interfaz contenedora de Google Workspace™ sirve para mostrar la barra lateral de TransLay dentro de Google Slides™.",
               "El permiso para solicitudes externas sirve para que el add-on se comunique de forma segura con el backend de TransLay para tareas de traducción, actualización de derechos, inicio de sesión y flujos de suscripción.",
               "Los permisos de email y avatar de la cuenta de Google sirven para identificar el inicio de sesión, mostrar la cuenta actual, vincular suscripciones y gestionar el soporte posventa."
@@ -2171,8 +2166,7 @@ window.TRANSLATIONS = {
             paragraphs: [
               "O TransLay é um complemento do Google Workspace™. Para funcionar corretamente no Google Slides™, solicitamos apenas as permissões diretamente necessárias ao escopo atual do produto.",
               "A permissão do Google Slides™ é usada para ler o conteúdo da apresentação que você deseja traduzir e gravar a tradução de volta no arquivo original ou no arquivo de destino. Sem essa permissão, o TransLay não consegue ler o conteúdo nem concluir a gravação.",
-              "A permissão do Google Drive™ é usada para localizar a apresentação atual, criar uma cópia sua no modo \"gerar novo arquivo\", colocar o arquivo de destino no local adequado e gerenciar o acesso temporário necessário durante a execução da tarefa. Sem essa permissão, alguns fluxos de cópia e gravação não funcionam de forma estável.",
-              "A permissão Google Drive™ file nos ajuda a limitar, tanto quanto possível, as operações de arquivo aos arquivos envolvidos no fluxo atual.",
+              "A permissão Google Drive™ file é usada para acessar apenas a apresentação ativa e qualquer cópia de destino criada para o fluxo atual, criar uma cópia sua no modo \"gerar novo arquivo\", colocar o arquivo de destino no local adequado e gerenciar o acesso temporário do worker durante a execução da tarefa. Isso ajuda a limitar as operações de arquivo aos arquivos envolvidos no fluxo ativo.",
               "A permissão da interface de contêiner do Google Workspace™ permite que a barra lateral do TransLay apareça dentro do Google Slides™.",
               "A permissão de solicitações externas permite que o complemento se comunique com segurança com o backend do TransLay para concluir tarefas de tradução, atualização de benefícios, login e fluxos relacionados à assinatura.",
               "As permissões de email e avatar da conta Google são usadas para identificação no login, exibição da conta atual, vinculação de assinaturas e atendimento de suporte."
@@ -2541,8 +2535,7 @@ window.TRANSLATIONS = {
             paragraphs: [
               "TransLay — это дополнение Google Workspace™. Чтобы нормально работать в Google Slides™, мы запрашиваем только разрешения, напрямую необходимые для текущего объема продукта.",
               "Разрешение Google Slides™ используется, чтобы читать содержимое презентации, которую вы хотите перевести, и записывать перевод обратно в исходный или целевой файл. Без этого разрешения TransLay не сможет прочитать содержимое или завершить запись.",
-              "Разрешение Google Drive™ используется, чтобы найти текущую презентацию, создать вашу копию в режиме «создать новый файл», поместить целевой файл в подходящее место и управлять временным доступом, необходимым во время выполнения задачи. Без этого разрешения некоторые сценарии копирования и записи не смогут стабильно работать.",
-              "Разрешение Google Drive™ file помогает нам по возможности ограничивать операции с файлами теми файлами, которые участвуют в текущем рабочем процессе.",
+              "Разрешение Google Drive™ file используется, чтобы получать доступ только к активной презентации и целевой копии, созданной для текущего процесса, создавать вашу копию в режиме «создать новый файл», помещать целевой файл в подходящее место и управлять временным доступом worker во время выполнения задачи. Это помогает ограничивать операции с файлами теми файлами, которые участвуют в активном рабочем процессе.",
               "Разрешение интерфейса контейнера Google Workspace™ позволяет показывать боковую панель TransLay внутри Google Slides™.",
               "Разрешение на внешние запросы позволяет дополнению безопасно связываться с backend TransLay для выполнения задач перевода, обновления прав, входа и процессов, связанных с подпиской.",
               "Разрешения на email и аватар аккаунта Google используются для идентификации при входе, отображения текущего аккаунта, привязки подписок и обработки обращений в поддержку."
@@ -2911,8 +2904,7 @@ window.TRANSLATIONS = {
             paragraphs: [
               "TransLay is een Google Workspace™-add-on. Om goed te werken in Google Slides™ vragen we alleen machtigingen die rechtstreeks nodig zijn voor de huidige productscope.",
               "De Google Slides™-machtiging wordt gebruikt om de inhoud van de presentatie die je wilt vertalen te lezen en de vertaling terug te schrijven naar het oorspronkelijke bestand of het doelbestand. Zonder deze machtiging kan TransLay de inhoud niet lezen of terugschrijven.",
-              "De Google Drive™-machtiging wordt gebruikt om de huidige presentatie te vinden, in de modus \"uitvoeren naar nieuw bestand\" een kopie van de gebruiker te maken, het doelbestand op de juiste plek te plaatsen en tijdelijke toegang tijdens de taakuitvoering te beheren. Zonder deze machtiging kunnen bepaalde kopieer- en terugschrijfprocessen niet stabiel werken.",
-              "De Google Drive™ file-machtiging helpt ons bestandsbewerkingen zoveel mogelijk te beperken tot de bestanden die bij de huidige workflow horen.",
+              "De Google Drive™ file-machtiging wordt gebruikt om alleen toegang te krijgen tot de actieve presentatie en een doelkopie die voor de huidige workflow is gemaakt, in de modus \"uitvoeren naar nieuw bestand\" een kopie van de gebruiker te maken, het doelbestand op de juiste plek te plaatsen en tijdelijke worker-toegang tijdens de taakuitvoering te beheren. Dit helpt bestandsbewerkingen te beperken tot de bestanden die bij de actieve workflow horen.",
               "De Google Workspace™-containerinterface-machtiging wordt gebruikt om de zijbalk van TransLay in Google Slides™ weer te geven.",
               "De machtiging voor externe verzoeken wordt gebruikt zodat de add-on veilig met de backend van TransLay kan communiceren voor vertaaltaken, het vernieuwen van rechten, login en abonnementsflows.",
               "De machtigingen voor het e-mailadres en de avatar van je Google-account worden gebruikt voor loginherkenning, het tonen van het huidige account, het koppelen van abonnementen en het afhandelen van support."
@@ -3281,8 +3273,7 @@ window.TRANSLATIONS = {
             paragraphs: [
               "TransLay är ett Google Workspace™-tillägg. För att fungera korrekt i Google Slides™ begär vi bara behörigheter som direkt behövs inom produktens nuvarande omfattning.",
               "Google Slides™-behörigheten används för att läsa presentationen som ska översättas och skriva tillbaka översättningen till originalfilen eller måldokumentet. Utan denna behörighet kan TransLay inte läsa innehållet eller slutföra tillbakaskrivningen.",
-              "Google Drive™-behörigheten används för att identifiera den aktuella presentationen, skapa användarägda kopior i läget \"utdata till ny fil\", placera måldokumentet på rätt plats och hantera tillfällig åtkomst under uppgiften. Utan denna behörighet kan vissa kopierings- och tillbakaskrivningsflöden inte fungera stabilt.",
-              "Google Drive™ file-behörigheten hjälper oss att begränsa filåtgärder så långt som möjligt till de filer som ingår i det aktuella arbetsflödet.",
+              "Google Drive™ file-behörigheten används för att endast få åtkomst till den aktiva presentationen och eventuell målkopia som skapats för det aktuella arbetsflödet, skapa användarägda kopior i läget \"utdata till ny fil\", placera måldokumentet på rätt plats och hantera tillfällig worker-åtkomst under uppgiften. Det hjälper oss att begränsa filåtgärder till de filer som ingår i det aktiva arbetsflödet.",
               "Google Workspace™-behörigheten för containergränssnittet används för att visa TransLays sidofält i Google Slides™.",
               "Behörigheten för externa begäranden används för att tillägget säkert ska kunna kommunicera med TransLays backend och slutföra översättningsuppgifter, rättighetsuppdateringar, inloggning och prenumerationsflöden.",
               "Behörigheter för Google-kontots e-postadress och avatar används för inloggningsidentifiering, visning av aktuellt konto, koppling av prenumerationer och hantering av efterköpssupport."
@@ -3651,8 +3642,7 @@ window.TRANSLATIONS = {
             paragraphs: [
               "Το TransLay είναι πρόσθετο Google Workspace™. Για να λειτουργεί κανονικά στο Google Slides™, ζητάμε μόνο τις άδειες που χρειάζονται άμεσα για το τρέχον πεδίο του προϊόντος.",
               "Η άδεια Google Slides™ χρησιμοποιείται για την ανάγνωση του περιεχομένου της παρουσίασης που θέλετε να μεταφράσετε και για την επανεγγραφή της μετάφρασης στο αρχικό αρχείο ή στο αρχείο προορισμού. Χωρίς αυτή την άδεια, το TransLay δεν μπορεί να διαβάσει το περιεχόμενο ή να ολοκληρώσει την επανεγγραφή.",
-              "Η άδεια Google Drive™ χρησιμοποιείται για τον εντοπισμό της τρέχουσας παρουσίασης, τη δημιουργία αντιγράφων που ανήκουν στον χρήστη στη λειτουργία «έξοδος σε νέο αρχείο», την τοποθέτηση του αρχείου προορισμού στη σωστή θέση και τη διαχείριση προσωρινής πρόσβασης κατά την εκτέλεση της εργασίας. Χωρίς αυτή την άδεια, ορισμένες ροές αντιγραφής και επανεγγραφής δεν μπορούν να λειτουργήσουν σταθερά.",
-              "Η άδεια Google Drive™ file μάς βοηθά να περιορίζουμε όσο το δυνατόν περισσότερο τις ενέργειες αρχείων στα αρχεία που εμπλέκονται στην τρέχουσα ροή εργασίας.",
+              "Η άδεια Google Drive™ file χρησιμοποιείται για πρόσβαση μόνο στην ενεργή παρουσίαση και σε τυχόν αντίγραφο προορισμού που δημιουργείται για την τρέχουσα ροή εργασίας, για τη δημιουργία αντιγράφων που ανήκουν στον χρήστη στη λειτουργία «έξοδος σε νέο αρχείο», για την τοποθέτηση του αρχείου προορισμού στη σωστή θέση και για τη διαχείριση προσωρινής πρόσβασης του worker κατά την εκτέλεση της εργασίας. Αυτό βοηθά να περιορίζονται οι ενέργειες αρχείων στα αρχεία της ενεργής ροής εργασίας.",
               "Η άδεια διεπαφής container του Google Workspace™ χρησιμοποιείται για να εμφανίζεται η πλαϊνή μπάρα του TransLay μέσα στο Google Slides™.",
               "Η άδεια εξωτερικών αιτημάτων χρησιμοποιείται ώστε το πρόσθετο να επικοινωνεί με ασφάλεια με το backend του TransLay για εργασίες μετάφρασης, ανανέωση δικαιωμάτων, σύνδεση και ροές συνδρομής.",
               "Οι άδειες email και avatar λογαριασμού Google χρησιμοποιούνται για αναγνώριση σύνδεσης, εμφάνιση του τρέχοντος λογαριασμού, σύνδεση συνδρομών και χειρισμό υποστήριξης μετά την αγορά."
@@ -4021,8 +4011,7 @@ window.TRANSLATIONS = {
             paragraphs: [
               "TransLay إضافة Google Workspace™. لكي تعمل بشكل صحيح داخل Google Slides™، لا نطلب إلا الأذونات المطلوبة مباشرة ضمن نطاق المنتج الحالي.",
               "إذن Google Slides™ يُستخدم لقراءة محتوى العرض التقديمي الذي تريد ترجمته وكتابة الترجمة إلى الملف الأصلي أو الملف الهدف. من دون هذا الإذن، لا يستطيع TransLay قراءة المحتوى أو إكمال الكتابة.",
-              "إذن Google Drive™ يُستخدم لتحديد العرض التقديمي الحالي، وإنشاء نسخ يملكها المستخدم في وضع \"الإخراج إلى ملف جديد\"، ووضع الملف الهدف في المكان المناسب، وإدارة الوصول المؤقت المطلوب أثناء تنفيذ المهمة. من دون هذا الإذن، لا يمكن لبعض مسارات النسخ والكتابة أن تعمل بثبات.",
-              "إذن Google Drive™ file يساعدنا على حصر عمليات الملفات قدر الإمكان في الملفات المرتبطة بسير العمل الحالي.",
+              "إذن Google Drive™ file يُستخدم للوصول فقط إلى العرض التقديمي النشط وأي نسخة هدف تُنشأ لسير العمل الحالي، ولإنشاء نسخ يملكها المستخدم في وضع \"الإخراج إلى ملف جديد\"، ووضع الملف الهدف في المكان المناسب، وإدارة وصول العامل المؤقت أثناء تنفيذ المهمة. يساعد ذلك على حصر عمليات الملفات في الملفات المرتبطة بسير العمل النشط.",
               "إذن واجهة حاوية Google Workspace™ يُستخدم لإظهار الشريط الجانبي لـ TransLay داخل Google Slides™.",
               "إذن الطلبات الخارجية يُستخدم للسماح للإضافة بالتواصل بأمان مع خلفية TransLay لإكمال مهام الترجمة وتحديث الاستحقاقات وتسجيل الدخول والعمليات المرتبطة بالاشتراك.",
               "أذونات بريد حساب Google والصورة الشخصية تُستخدم للتعرف على تسجيل الدخول وعرض الحساب الحالي وربط الاشتراكات ومعالجة دعم ما بعد البيع."
@@ -4391,8 +4380,7 @@ window.TRANSLATIONS = {
             paragraphs: [
               "TransLay הוא תוסף Google Workspace™. כדי לפעול כראוי בתוך Google Slides™, אנו מבקשים רק הרשאות הנדרשות ישירות לטווח המוצר הנוכחי.",
               "הרשאת Google Slides™ משמשת לקריאת תוכן המצגת שברצונכם לתרגם ולכתיבת התרגום בחזרה לקובץ המקורי או לקובץ יעד. ללא הרשאה זו, TransLay לא יוכל לקרוא את התוכן או להשלים כתיבה בחזרה.",
-              "הרשאת Google Drive™ משמשת לאיתור המצגת הנוכחית, ליצירת עותקים בבעלות המשתמש במצב ״פלט לקובץ חדש״, להצבת קובץ היעד במיקום המתאים ולניהול גישה זמנית הנדרשת במהלך ביצוע המשימה. ללא הרשאה זו, חלק מתהליכי ההעתקה והכתיבה בחזרה לא יפעלו באופן יציב.",
-              "הרשאת Google Drive™ file מסייעת לנו להגביל ככל האפשר את פעולות הקבצים לקבצים המעורבים בתהליך העבודה הנוכחי.",
+              "הרשאת Google Drive™ file משמשת לגישה רק למצגת הפעילה ולכל עותק יעד שנוצר עבור תהליך העבודה הנוכחי, ליצירת עותקים בבעלות המשתמש במצב ״פלט לקובץ חדש״, להצבת קובץ היעד במיקום המתאים ולניהול גישה זמנית של ה-worker במהלך ביצוע המשימה. כך ניתן להגביל את פעולות הקבצים לקבצים המעורבים בתהליך העבודה הפעיל.",
               "הרשאת ממשק המיכל של Google Workspace™ משמשת להצגת סרגל הצד של TransLay בתוך Google Slides™.",
               "הרשאת בקשות חיצוניות משמשת כדי לאפשר לתוסף לתקשר בבטחה עם ה-backend של TransLay לצורך משימות תרגום, רענון זכאות, התחברות ותהליכים הקשורים למנוי.",
               "הרשאות אימייל ותמונת פרופיל של חשבון Google משמשות לזיהוי התחברות, הצגת החשבון הנוכחי, קישור מנויים וטיפול בתמיכה לאחר רכישה."
@@ -4761,8 +4749,7 @@ window.TRANSLATIONS = {
             paragraphs: [
               "TransLay 是一个 Google Workspace™ 插件。要在 Google Slides™ 中正常工作，我们只申请当前产品范围直接需要的权限。",
               "Google Slides™ 权限用于读取您要翻译的演示文稿内容，并把译文写回原文件或目标文件。没有这项权限，TransLay 就无法读取内容或完成写回。",
-              "Google Drive™ 权限用于定位当前演示文稿、在“输出到新文件”模式下创建用户自己的副本、把目标文件放到合适位置，并管理任务执行期间所需的临时访问。没有这项权限，某些复制和写回流程就无法稳定运行。",
-              "Google Drive™ file 权限用于帮助我们尽量把文件操作限制在当前工作流涉及的文件上。",
+              "Google Drive™ file 权限用于仅访问当前演示文稿和本次工作流创建的目标副本，在“输出到新文件”模式下创建用户自己的副本，把目标文件放到合适位置，并管理任务执行期间 worker 所需的临时访问。这有助于把文件操作限制在当前工作流涉及的文件上。",
               "Google Workspace™ 容器界面权限用于让 TransLay 侧边栏显示在 Google Slides™ 中。",
               "外部请求权限用于让插件安全地与 TransLay 后端通信，完成翻译任务、权益刷新、登录和订阅相关流程。",
               "Google 账户邮箱与头像权限用于登录识别、显示当前账户、绑定订阅以及处理售后支持。"
@@ -5131,8 +5118,7 @@ window.TRANSLATIONS = {
             paragraphs: [
               "TransLay 是一個 Google Workspace™ 外掛。要在 Google Slides™ 中正常工作，我們只申請目前產品範圍直接需要的權限。",
               "Google Slides™ 權限用於讀取您要翻譯的簡報內容，並把譯文寫回原檔案或目標檔案。沒有這項權限，TransLay 就無法讀取內容或完成寫回。",
-              "Google Drive™ 權限用於定位目前簡報、在「輸出到新檔案」模式下建立用戶自己的副本、把目標檔案放到合適位置，並管理任務執行期間所需的臨時訪問。沒有這項權限，某些複製和寫回流程就無法穩定運行。",
-              "Google Drive™ file 權限用於幫助我們盡量把檔案操作限制在目前工作流涉及的檔案上。",
+              "Google Drive™ file 權限用於僅存取目前簡報和本次工作流程建立的目標副本，在「輸出到新檔案」模式下建立用戶自己的副本，把目標檔案放到合適位置，並管理任務執行期間 worker 所需的臨時存取。這有助於把檔案操作限制在目前工作流程涉及的檔案上。",
               "Google Workspace™ 容器界面權限用於讓 TransLay 側邊欄顯示在 Google Slides™ 中。",
               "外部請求權限用於讓外掛安全地與 TransLay 後端通信，完成翻譯任務、權益刷新、登入和訂閱相關流程。",
               "Google 賬戶郵箱與頭像權限用於登入識別、顯示目前賬戶、綁定訂閱以及處理售後支援。"
@@ -5501,8 +5487,7 @@ window.TRANSLATIONS = {
             paragraphs: [
               "TransLay は Google Workspace™ アドオンです。Google Slides™ 内で正常に動作するために、現在の製品範囲で直接必要な権限のみを申請します。",
               "Google Slides™ 権限は、翻訳したいプレゼンテーション内容を読み取り、訳文を元ファイルまたは対象ファイルへ書き戻すために使用されます。この権限がないと、TransLay は内容を読み取ることも書き戻しを完了することもできません。",
-              "Google Drive™ 権限は、現在のプレゼンテーションの特定、「新しいファイルへ出力」モードでユーザー自身のコピーを作成すること、対象ファイルを適切な場所へ配置すること、タスク実行中に必要な一時的アクセスを管理することに使用されます。この権限がないと、一部のコピーおよび書き戻しフローは安定して動作しません。",
-              "Google Drive™ file 権限は、ファイル操作を現在のワークフローに関係するファイルへできるだけ限定するために役立ちます。",
+              "Google Drive™ file 権限は、現在のプレゼンテーションとこのワークフローで作成された対象コピーのみにアクセスし、「新しいファイルへ出力」モードでユーザー自身のコピーを作成し、対象ファイルを適切な場所へ配置し、タスク実行中の worker の一時的アクセスを管理するために使用されます。これにより、ファイル操作を現在のワークフローに関係するファイルへ限定しやすくなります。",
               "Google Workspace™ コンテナ UI 権限は、TransLay サイドバーを Google Slides™ 内に表示するために使用されます。",
               "外部リクエスト権限は、アドオンが TransLay バックエンドと安全に通信し、翻訳タスク、権利更新、ログイン、購読関連フローを完了するために使用されます。",
               "Google アカウントのメールアドレスとアバター権限は、ログイン識別、現在アカウントの表示、購読の紐付け、アフターサポート処理に使用されます。"
@@ -5871,8 +5856,7 @@ window.TRANSLATIONS = {
             paragraphs: [
               "TransLay는 Google Workspace™ 부가기능입니다. Google Slides™ 안에서 정상적으로 작동하기 위해 현재 제품 범위에서 직접 필요한 권한만 요청합니다.",
               "Google Slides™ 권한은 번역하려는 프레젠테이션 내용을 읽고 번역문을 원본 파일 또는 대상 파일에 다시 쓰기 위해 사용됩니다. 이 권한이 없으면 TransLay는 내용을 읽거나 다시 쓰기를 완료할 수 없습니다.",
-              "Google Drive™ 권한은 현재 프레젠테이션을 식별하고, '새 파일로 출력' 모드에서 사용자 소유 복사본을 만들고, 대상 파일을 적절한 위치에 배치하며, 작업 실행 중 필요한 임시 접근을 관리하는 데 사용됩니다. 이 권한이 없으면 일부 복사 및 다시 쓰기 흐름이 안정적으로 작동하지 않습니다.",
-              "Google Drive™ file 권한은 파일 작업을 현재 워크플로와 관련된 파일로 최대한 제한하는 데 도움이 됩니다.",
+              "Google Drive™ file 권한은 활성 프레젠테이션과 현재 워크플로에서 생성된 대상 복사본에만 접근하고, '새 파일로 출력' 모드에서 사용자 소유 복사본을 만들고, 대상 파일을 적절한 위치에 배치하며, 작업 실행 중 worker의 임시 접근을 관리하는 데 사용됩니다. 이를 통해 파일 작업을 활성 워크플로와 관련된 파일로 제한할 수 있습니다.",
               "Google Workspace™ 컨테이너 UI 권한은 TransLay 사이드바를 Google Slides™ 안에 표시하는 데 사용됩니다.",
               "외부 요청 권한은 부가기능이 TransLay 백엔드와 안전하게 통신해 번역 작업, 권한 새로고침, 로그인 및 구독 관련 흐름을 완료하는 데 사용됩니다.",
               "Google 계정 이메일과 아바타 권한은 로그인 식별, 현재 계정 표시, 구독 연결 및 사후 지원 처리에 사용됩니다."
