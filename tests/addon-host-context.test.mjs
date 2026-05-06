@@ -186,6 +186,7 @@ test("prepareOutputPresentation trashes copied file when worker grant fails", as
 
 test("ensureCurrentPresentationWorkerAccess returns the Drive REST permission id", async () => {
   const context = await loadHostContext();
+  const fetches = [];
   context.SlidesApp = {
     getActivePresentation() {
       return {
@@ -197,21 +198,52 @@ test("ensureCurrentPresentationWorkerAccess returns the Drive REST permission id
   };
   context.UrlFetchApp = {
     fetch(url, request) {
-      assert.equal(
+      fetches.push({
         url,
-        "https://www.googleapis.com/drive/v3/files/source-doc/permissions?supportsAllDrives=true&sendNotificationEmail=false&fields=id"
-      );
-      assert.equal(request.method, "post");
-      assert.deepEqual(JSON.parse(request.payload), {
-        type: "user",
-        role: "writer",
-        emailAddress: "worker@example.com",
+        method: request.method,
+        payload: request.payload ? JSON.parse(request.payload) : null,
       });
+      if (url === "https://www.googleapis.com/drive/v3/files/source-doc?supportsAllDrives=true&fields=id,name,mimeType,capabilities(canEdit,canCopy,canShare)") {
+        return createResponse(200, {
+          id: "source-doc",
+          name: "Source deck",
+          mimeType: "application/vnd.google-apps.presentation",
+          capabilities: {
+            canEdit: true,
+            canCopy: true,
+            canShare: true,
+          },
+        });
+      }
+      if (url !== "https://www.googleapis.com/drive/v3/files/source-doc/permissions?supportsAllDrives=true&sendNotificationEmail=false&fields=id") {
+        throw new Error("unexpected URL " + url);
+      }
       return createResponse(200, { id: "source-permission" });
     },
   };
 
-  assert.equal(context.ensureCurrentPresentationWorkerAccess(), "source-permission");
+  const access = context.ensureCurrentPresentationWorkerAccess();
+  assert.deepEqual(JSON.parse(JSON.stringify(access)), {
+    documentId: "source-doc",
+    documentName: "Source deck",
+    sourceWorkerPermissionId: "source-permission",
+  });
+  assert.deepEqual(fetches, [
+    {
+      url: "https://www.googleapis.com/drive/v3/files/source-doc?supportsAllDrives=true&fields=id,name,mimeType,capabilities(canEdit,canCopy,canShare)",
+      method: "get",
+      payload: null,
+    },
+    {
+      url: "https://www.googleapis.com/drive/v3/files/source-doc/permissions?supportsAllDrives=true&sendNotificationEmail=false&fields=id",
+      method: "post",
+      payload: {
+        type: "user",
+        role: "writer",
+        emailAddress: "worker@example.com",
+      },
+    },
+  ]);
 });
 
 test("cleanupPreparedPresentation trashes the prepared copy through Drive REST", async () => {
@@ -235,6 +267,85 @@ test("cleanupPreparedPresentation trashes the prepared copy through Drive REST",
       url: "https://www.googleapis.com/drive/v3/files/copy-doc?supportsAllDrives=true&fields=id,trashed",
       method: "patch",
       payload: { trashed: true },
+    },
+  ]);
+});
+
+test("cleanupPreparedTranslationSubmission revokes prepared permissions and trashes target", async () => {
+  const context = await loadHostContext();
+  const fetches = [];
+  context.UrlFetchApp = {
+    fetch(url, request) {
+      fetches.push({ url, method: request.method });
+      if (url === "https://www.googleapis.com/drive/v3/files/target-doc/permissions/target-permission?supportsAllDrives=true") {
+        return createResponse(204);
+      }
+      if (url === "https://www.googleapis.com/drive/v3/files/target-doc?supportsAllDrives=true&fields=id,trashed") {
+        return createResponse(200, { id: "target-doc", trashed: true });
+      }
+      if (url === "https://www.googleapis.com/drive/v3/files/source-doc/permissions/source-permission?supportsAllDrives=true") {
+        return createResponse(204);
+      }
+      throw new Error("unexpected URL " + url);
+    },
+  };
+
+  context.cleanupPreparedTranslationSubmission(
+    "source-doc",
+    "source-permission",
+    "target-doc",
+    "target-permission",
+    true
+  );
+
+  assert.deepEqual(fetches, [
+    {
+      url: "https://www.googleapis.com/drive/v3/files/target-doc/permissions/target-permission?supportsAllDrives=true",
+      method: "delete",
+    },
+    {
+      url: "https://www.googleapis.com/drive/v3/files/target-doc?supportsAllDrives=true&fields=id,trashed",
+      method: "patch",
+    },
+    {
+      url: "https://www.googleapis.com/drive/v3/files/source-doc/permissions/source-permission?supportsAllDrives=true",
+      method: "delete",
+    },
+  ]);
+});
+
+test("cleanupPreparedTranslationSubmission does not trash unconfirmed target documents", async () => {
+  const context = await loadHostContext();
+  const fetches = [];
+  context.UrlFetchApp = {
+    fetch(url, request) {
+      fetches.push({ url, method: request.method });
+      if (url === "https://www.googleapis.com/drive/v3/files/target-doc/permissions/target-permission?supportsAllDrives=true") {
+        return createResponse(204);
+      }
+      if (url === "https://www.googleapis.com/drive/v3/files/source-doc/permissions/source-permission?supportsAllDrives=true") {
+        return createResponse(204);
+      }
+      throw new Error("unexpected URL " + url);
+    },
+  };
+
+  context.cleanupPreparedTranslationSubmission(
+    "source-doc",
+    "source-permission",
+    "target-doc",
+    "target-permission",
+    false
+  );
+
+  assert.deepEqual(fetches, [
+    {
+      url: "https://www.googleapis.com/drive/v3/files/target-doc/permissions/target-permission?supportsAllDrives=true",
+      method: "delete",
+    },
+    {
+      url: "https://www.googleapis.com/drive/v3/files/source-doc/permissions/source-permission?supportsAllDrives=true",
+      method: "delete",
     },
   ]);
 });

@@ -27,6 +27,10 @@ export const ERROR_CODES = {
   // 409
   CONCURRENT_JOB_RUNNING: { status: 409, message: "A translation job is already in progress" },
   IDEMPOTENT_REPLAY: { status: 409, message: "This request has already been processed" },
+  DRIVE_CLEANUP_REQUIRED: {
+    status: 409,
+    message: "A previous request for this presentation still has pending temporary access cleanup",
+  },
   TICKET_ALREADY_CONSUMED: { status: 409, message: "Ticket has already been consumed" },
 
   // 429

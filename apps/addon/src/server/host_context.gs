@@ -102,7 +102,12 @@ function ensureCurrentPresentationWorkerAccess() {
   }
 
   try {
-    return grantWorkerAccess(presentation.getId());
+    var access = assertActivePresentationDriveFileAccess();
+    return {
+      documentId: access.documentId,
+      documentName: access.documentName,
+      sourceWorkerPermissionId: grantWorkerAccess(access.documentId)
+    };
   } catch (err) {
     throw new Error('Failed to grant worker access to the current presentation: ' + err.message);
   }
@@ -154,6 +159,38 @@ function cleanupPreparedPresentation(documentId) {
     trashDriveFile(documentId);
   } catch (err) {
     console.error('Failed to cleanup prepared presentation: ' + err.message);
+  }
+}
+
+/**
+ * Cleans up source and target Drive preparation when submission stops before
+ * the backend accepts the job. Best-effort and safe to call repeatedly.
+ */
+function cleanupPreparedTranslationSubmission(sourceDocumentId, sourcePermissionId, targetDocumentId, targetPermissionId, targetWasCopiedByAddon) {
+  if (targetDocumentId && targetPermissionId) {
+    try {
+      revokeWorkerPermission(targetDocumentId, targetPermissionId);
+    } catch (err) {
+      console.error('Failed to revoke prepared target worker permission: ' + err.message);
+    }
+  }
+
+  if (targetDocumentId && targetWasCopiedByAddon === true) {
+    try {
+      trashDriveFile(targetDocumentId);
+    } catch (err) {
+      console.error('Failed to trash prepared target presentation: ' + err.message);
+    }
+  } else if (targetDocumentId) {
+    console.warn('Skipped prepared target trash because add-on copy ownership was not confirmed.');
+  }
+
+  if (sourceDocumentId && sourcePermissionId) {
+    try {
+      revokeWorkerPermission(sourceDocumentId, sourcePermissionId);
+    } catch (err) {
+      console.error('Failed to revoke prepared source worker permission: ' + err.message);
+    }
   }
 }
 

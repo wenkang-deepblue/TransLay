@@ -103,6 +103,9 @@ export async function updateJobStatus(
     stageLeaseExpiresAt?: Date | null;
     stageLastHeartbeatAt?: Date | null;
     queuedTaskName?: string | null;
+    driveCleanupStatus?: DriveCleanupStatus;
+    driveCleanupLastErrorCode?: string | null;
+    incrementDriveCleanupAttempts?: boolean;
   }
 ): Promise<void> {
   const setClauses = ["status = $2"];
@@ -224,6 +227,31 @@ export async function updateJobStatus(
     setClauses.push(`queued_task_name = $${idx}`);
     params.push(extra.queuedTaskName);
     idx++;
+  }
+  if (extra?.driveCleanupStatus !== undefined) {
+    setClauses.push(`drive_cleanup_status = $${idx}`);
+    params.push(extra.driveCleanupStatus);
+    idx++;
+    if (extra.driveCleanupStatus === "succeeded") {
+      setClauses.push("drive_cleanup_last_error_code = NULL");
+      setClauses.push("drive_cleanup_completed_at = NOW()");
+    } else if (extra.driveCleanupStatus === "failed") {
+      setClauses.push(`drive_cleanup_last_error_code = $${idx}`);
+      params.push(extra.driveCleanupLastErrorCode ?? "drive_permission_delete_failed");
+      idx++;
+      setClauses.push("drive_cleanup_completed_at = NULL");
+    } else if (extra.driveCleanupStatus === "not_required") {
+      setClauses.push("drive_cleanup_last_error_code = NULL");
+      setClauses.push("drive_cleanup_completed_at = NULL");
+    }
+  } else if (extra?.driveCleanupLastErrorCode !== undefined) {
+    setClauses.push(`drive_cleanup_last_error_code = $${idx}`);
+    params.push(extra.driveCleanupLastErrorCode);
+    idx++;
+  }
+  if (extra?.incrementDriveCleanupAttempts) {
+    setClauses.push("drive_cleanup_attempts = drive_cleanup_attempts + 1");
+    setClauses.push("drive_cleanup_last_attempt_at = NOW()");
   }
 
   await poolOrClient.query(

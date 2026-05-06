@@ -1986,7 +1986,7 @@ test("writeBackNewFile retries rate-limited slide writes and enables slow mode f
 
     assert.equal(result.committedUnits, 2);
     assert.equal(batchUpdateCalls, 4);
-    assert.equal(sleepCalls.includes(500), true);
+    assert.equal(sleepCalls.includes(2000), true);
     assert.equal(sleepCalls.includes(1000), true);
     assert.equal(
       sleepCalls.some((ms) => ms >= 500 && ms <= 1000),
@@ -2147,7 +2147,7 @@ test("writeBackAppend limits quota retries and trips circuit breaker on repeated
       result.slide_results.map((item) => item.error_code),
       ["QUOTA_EXCEEDED", "QUOTA_EXCEEDED", "QUOTA_EXCEEDED"]
     );
-    assert.deepEqual(sleepCalls, [500, 500]);
+    assert.deepEqual(sleepCalls, [1000, 1000]);
   } finally {
     __resetSlidesClientForTests();
     __resetWriteRuntimeForTests();

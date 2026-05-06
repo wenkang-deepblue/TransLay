@@ -1082,7 +1082,7 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
       if (existingJob && hasUnresolvedDriveCleanup(existingJob)) {
         sendError(
           res,
-          "IDEMPOTENT_REPLAY",
+          "DRIVE_CLEANUP_REQUIRED",
           UNRESOLVED_DRIVE_CLEANUP_MESSAGE
         );
         return;
@@ -1095,7 +1095,7 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
       sourceDocId: body.document_id,
     });
     if (unresolvedCleanupJob) {
-      sendError(res, "IDEMPOTENT_REPLAY", UNRESOLVED_DRIVE_CLEANUP_MESSAGE);
+      sendError(res, "DRIVE_CLEANUP_REQUIRED", UNRESOLVED_DRIVE_CLEANUP_MESSAGE);
       return;
     }
 

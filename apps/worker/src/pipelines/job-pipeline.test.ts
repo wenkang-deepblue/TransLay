@@ -12,6 +12,12 @@ import {
   __selectSlidesReadyForMaterializationForTests,
   __selectSlidesReadyForWriteForTests,
   __shouldFinalizeAsPartialSuccessForTests,
+  __attemptTerminalDriveCleanupForTests,
+  __finalizeCanceledJobForTests,
+  __finalizeFailedJobForTests,
+  __finalizeSuccessfulJobForTests,
+  __resetTerminalDriveCleanupHookForTests,
+  __setTerminalDriveCleanupHookForTests,
   __summarizeSlideExecutionForTests,
   __toSafePipelineMessageForTests,
   __validateTargetLanguageOutputForTests,
@@ -25,6 +31,11 @@ import {
   markSlideTranslated,
 } from "./slide-results";
 import type { WriteBackResult } from "../adapters/slides";
+import {
+  __resetDrivePermissionsHooksForTests,
+  __setDrivePermissionsHooksForTests,
+} from "../adapters/drive/permissions";
+import { DriveCleanupAuthError } from "../adapters/drive/auth";
 
 test("selectSlidesReadyForMaterialization skips excluded and failed slides", () => {
   const slideResults = initializeJobSlideResults([1, 2, 3, 4]);
@@ -337,3 +348,212 @@ test("quota exhausted finalizes as partial success only after visible delivery e
     false
   );
 });
+
+test("terminal drive cleanup returns a failed status update without changing job terminal outcome", async () => {
+  __setDrivePermissionsHooksForTests({
+    getDriveClientForJob: async () => {
+      throw new DriveCleanupAuthError(
+        "host_oauth_token_expired",
+        "Host OAuth token is expired for Drive cleanup"
+      );
+    },
+  });
+
+  try {
+    const update = await __attemptTerminalDriveCleanupForTests(
+      {} as never,
+      createTerminalCleanupJob(),
+      "job-terminal-cleanup"
+    );
+
+    assert.deepEqual(update, {
+      driveCleanupStatus: "failed",
+      driveCleanupLastErrorCode: "host_oauth_token_expired",
+      incrementDriveCleanupAttempts: true,
+    });
+  } finally {
+    __resetDrivePermissionsHooksForTests();
+  }
+});
+
+test("terminal drive cleanup converts unexpected cleanup errors into failed cleanup metadata", async () => {
+  __setTerminalDriveCleanupHookForTests(async () => {
+    throw new Error("unexpected drive client construction failure");
+  });
+
+  try {
+    const update = await __attemptTerminalDriveCleanupForTests(
+      {} as never,
+      createTerminalCleanupJob(),
+      "job-terminal-cleanup"
+    );
+
+    assert.deepEqual(update, {
+      driveCleanupStatus: "failed",
+      driveCleanupLastErrorCode: "drive_cleanup_unexpected_error",
+      incrementDriveCleanupAttempts: true,
+    });
+  } finally {
+    __resetTerminalDriveCleanupHookForTests();
+  }
+});
+
+test("terminal drive cleanup is idempotent after a succeeded cleanup", async () => {
+  __setTerminalDriveCleanupHookForTests(async () => {
+    throw new Error("cleanup should not rerun for succeeded rows");
+  });
+
+  try {
+    const update = await __attemptTerminalDriveCleanupForTests(
+      {} as never,
+      createTerminalCleanupJob({
+        drive_cleanup_status: "succeeded",
+      }),
+      "job-terminal-cleanup"
+    );
+
+    assert.deepEqual(update, {});
+  } finally {
+    __resetTerminalDriveCleanupHookForTests();
+  }
+});
+
+test("terminal drive cleanup marks stale no-permission rows as not required", async () => {
+  const update = await __attemptTerminalDriveCleanupForTests(
+    {} as never,
+    createTerminalCleanupJob({
+      source_worker_permission_id: null,
+      target_worker_permission_id: null,
+      drive_cleanup_status: "pending",
+    }),
+    "job-terminal-cleanup"
+  );
+
+  assert.deepEqual(update, {
+    driveCleanupStatus: "not_required",
+    driveCleanupLastErrorCode: null,
+  });
+});
+
+test("terminal finalizers run drive cleanup before terminal token purge SQL", async () => {
+  const cases = [
+    {
+      name: "successful",
+      finalize: __finalizeSuccessfulJobForTests,
+      terminalStatus: "completed",
+    },
+    {
+      name: "canceled",
+      finalize: __finalizeCanceledJobForTests,
+      terminalStatus: "canceled",
+    },
+    {
+      name: "failed",
+      finalize: __finalizeFailedJobForTests,
+      terminalStatus: "failed",
+    },
+  ] as const;
+
+  for (const testCase of cases) {
+    const events: string[] = [];
+    __setTerminalDriveCleanupHookForTests(async () => {
+      events.push(`${testCase.name}:cleanup`);
+      return {
+        status: "succeeded",
+        attempted: true,
+        errorCode: null,
+        targetCount: 1,
+      };
+    });
+
+    try {
+      const pool = createFinalizePool(events, testCase.name);
+      const redis = createRedisMock();
+      await testCase.finalize(
+        pool as never,
+        redis as never,
+        createTerminalCleanupJob({ id: `${testCase.name}-job` as never }),
+        `${testCase.name}-job`,
+        createEmptyWriteResult(),
+        initializeJobSlideResults([])
+      );
+
+      const cleanupIndex = events.indexOf(`${testCase.name}:cleanup`);
+      const terminalUpdateIndex = events.findIndex((event) =>
+        event.startsWith(`${testCase.name}:terminal-update:`)
+      );
+      assert.equal(cleanupIndex, 0);
+      assert.equal(terminalUpdateIndex > cleanupIndex, true);
+      assert.ok(
+        events[terminalUpdateIndex]!.includes(`:${testCase.terminalStatus}:`),
+        `${testCase.name} terminal update should use ${testCase.terminalStatus}`
+      );
+      assert.match(events[terminalUpdateIndex]!, /host_oauth_access_token_enc = NULL/);
+      assert.match(events[terminalUpdateIndex]!, /drive_cleanup_attempts = drive_cleanup_attempts \+ 1/);
+    } finally {
+      __resetTerminalDriveCleanupHookForTests();
+    }
+  }
+});
+
+function createTerminalCleanupJob(
+  overrides: Partial<Parameters<typeof __attemptTerminalDriveCleanupForTests>[1]> = {}
+): Parameters<typeof __attemptTerminalDriveCleanupForTests>[1] {
+  return {
+    id: "job-terminal-cleanup",
+    user_id: "user-1",
+    source_doc_id: "source-doc",
+    target_doc_id: null,
+    source_worker_permission_id: "source-permission",
+    target_worker_permission_id: null,
+    drive_cleanup_status: "pending",
+    ...overrides,
+  } as Parameters<typeof __attemptTerminalDriveCleanupForTests>[1];
+}
+
+function createEmptyWriteResult(): WriteBackResult {
+  return {
+    outputUrl: "https://docs.google.com/presentation/d/output/edit",
+    committedUnits: 0,
+    committed_slide_indexes: [],
+    failed_slide_indexes: [],
+    slide_results: [],
+    warnings: [],
+  };
+}
+
+function createFinalizePool(events: string[], name: string) {
+  const client = {
+    query: async (sql: string, params?: unknown[]) => {
+      if (sql.includes("UPDATE translation_jobs")) {
+        events.push(`${name}:terminal-update:${String(params?.[1])}:${sql}`);
+      } else {
+        events.push(`${name}:sql:${sql}`);
+      }
+      return { rows: [] };
+    },
+    release() {
+      events.push(`${name}:release`);
+    },
+  };
+  return {
+    connect: async () => client,
+  };
+}
+
+function createRedisMock() {
+  return {
+    pipeline() {
+      return {
+        hset() {
+          return this;
+        },
+        expire() {
+          return this;
+        },
+        exec: async () => [],
+      };
+    },
+    del: async () => 1,
+  };
+}

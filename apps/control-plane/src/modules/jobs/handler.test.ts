@@ -836,7 +836,7 @@ test("createJobHandler does not delete an idempotency record while Drive cleanup
 
   assert.equal(statusCode, 409);
   assert.deepEqual(payload, {
-    error: "IDEMPOTENT_REPLAY",
+    error: "DRIVE_CLEANUP_REQUIRED",
     message: "A previous request for this presentation still has pending temporary access cleanup.",
   });
   assert.equal(calls.some((sql) => sql.includes("DELETE FROM idempotency_records")), false);
@@ -911,10 +911,83 @@ test("createJobHandler blocks unresolved Drive cleanup even without an idempoten
 
   assert.equal(statusCode, 409);
   assert.deepEqual(payload, {
-    error: "IDEMPOTENT_REPLAY",
+    error: "DRIVE_CLEANUP_REQUIRED",
     message: "A previous request for this presentation still has pending temporary access cleanup.",
   });
   assert.equal(calls.some((sql) => sql.includes("DELETE FROM idempotency_records")), false);
+});
+
+test("createJobHandler does not treat resubmit as cleanup recovery", async () => {
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("status IN ('completed', 'completed_with_warnings')")) {
+        return { rows: [{ id: "completed-job" }] };
+      }
+      if (sql.includes("FROM idempotency_records")) {
+        return { rows: [] };
+      }
+      if (sql.includes("drive_cleanup_status IN")) {
+        return {
+          rows: [{
+            ...createBaseJob(),
+            id: "cleanup-job",
+            status: "completed",
+            drive_cleanup_status: "failed",
+          }],
+        };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    },
+    connect: async () => {
+      throw new Error("job creation should not run while cleanup is unresolved");
+    },
+  } as unknown as Pool;
+
+  let statusCode = 200;
+  let payload: Record<string, unknown> | null = null;
+  const res = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    json(body: Record<string, unknown>) {
+      payload = body;
+      return this;
+    },
+  } as never;
+
+  await createJobHandler(
+    pool,
+    {} as Redis,
+    { jobs: { maxGlobalInFlightJobs: 50 } } as AppConfig
+  )(
+    {
+      authContext: { user_id: "user-1" as UserId },
+      headers: { authorization: "Bearer host-token" },
+      body: {
+        host_type: "slides",
+        document_id: "source-doc",
+        document_name: "Quarterly deck",
+        source_language_mode: "auto",
+        target_language_input: "French",
+        output_mode: "append_in_file",
+        range_mode: "custom",
+        range_expression: "1",
+        drive_access: {
+          source_worker_permission_id: "source-permission",
+        },
+        idempotency_key: "idem-resubmit",
+        resubmit: true,
+      },
+    } as never,
+    res
+  );
+
+  assert.equal(statusCode, 409);
+  assert.deepEqual(payload, {
+    error: "DRIVE_CLEANUP_REQUIRED",
+    message: "A previous request for this presentation still has pending temporary access cleanup.",
+  });
 });
 
 test("createJobHandler preserves cleanup metadata and idempotency when enqueue fails", async () => {

@@ -208,6 +208,13 @@
     }
     .btn-danger:hover:not(:disabled) { background: #b3261e; transform: scale(1.02); }
     .btn-danger:active:not(:disabled) { background: #8f1d18; transform: scale(0.98); }
+    .btn-danger:disabled {
+      background: #f4b4ad;
+      color: #fff;
+      cursor: not-allowed;
+      opacity: 1;
+      transform: none;
+    }
     .btn:focus-visible {
       outline: 2px solid #174ea6;
       outline-offset: 2px;
@@ -1265,37 +1272,73 @@
             return;
           }
           google.script.run
-            .withSuccessHandler(function() {
+            .withSuccessHandler(function(sourceAccess) {
               activeSubmission = getActiveSubmission(submission.token);
               if (!activeSubmission) {
+                cleanupPreparedSubmission(sourceAccess, null, jobRequest);
                 return;
               }
+
+              var sourcePermissionId = sourceAccess && sourceAccess.sourceWorkerPermissionId;
+              if (!sourcePermissionId) {
+                clearActiveSubmission();
+                setTranslating(false);
+                hideProgress();
+                showError('Failed to authorize the current presentation for translation: worker permission id was not returned.');
+                return;
+              }
+
+              activeSubmission.sourceDocumentId = sourceAccess.documentId || state.documentId;
+              activeSubmission.sourceWorkerPermissionId = sourcePermissionId;
+              jobRequest.drive_access = {
+                source_worker_permission_id: sourcePermissionId
+              };
+
               if (activeSubmission.cancelRequested) {
+                cleanupPreparedSubmission(activeSubmission, null, jobRequest);
                 finishSubmissionCanceled(jobRequest.output_mode);
                 return;
               }
+
               if (outputMode === 'create_new_file') {
                 google.script.run
                   .withSuccessHandler(function(prepared) {
                     activeSubmission = getActiveSubmission(submission.token);
                     if (!activeSubmission) {
-                      google.script.run.cleanupPreparedPresentation(prepared.documentId);
+                      cleanupPreparedSubmission(sourceAccess, prepared, jobRequest);
                       return;
                     }
+
+                    if (!prepared.targetWorkerPermissionId) {
+                      cleanupPreparedSubmission(activeSubmission, prepared, jobRequest);
+                      clearActiveSubmission();
+                      setTranslating(false);
+                      hideProgress();
+                      showError('Failed to prepare the new presentation: worker permission id was not returned.');
+                      return;
+                    }
+
                     activeSubmission.targetDocumentId = prepared.documentId;
+                    activeSubmission.targetWorkerPermissionId = prepared.targetWorkerPermissionId;
+                    activeSubmission.targetCopyWasCreated = true;
                     jobRequest.target_document_id = prepared.documentId;
+                    jobRequest.drive_access.target_worker_permission_id = prepared.targetWorkerPermissionId;
                     state.currentOutputDocumentId = prepared.documentId;
+
                     if (activeSubmission.cancelRequested) {
-                      google.script.run.cleanupPreparedPresentation(prepared.documentId);
+                      cleanupPreparedSubmission(activeSubmission, prepared, jobRequest);
                       finishSubmissionCanceled(jobRequest.output_mode);
                       return;
                     }
+
                     submitJob(jobRequest, submission.token);
                   })
                   .withFailureHandler(function(err) {
-                    if (!getActiveSubmission(submission.token)) {
+                    activeSubmission = getActiveSubmission(submission.token);
+                    if (!activeSubmission) {
                       return;
                     }
+                    cleanupPreparedSubmission(activeSubmission, null, jobRequest);
                     clearActiveSubmission();
                     setTranslating(false);
                     hideProgress();
@@ -1392,11 +1435,7 @@
           clearActiveSubmission();
           setTranslating(false);
           hideProgress();
-          if (jobRequest.output_mode === 'create_new_file' && activeSubmission.targetDocumentId) {
-            google.script.run.cleanupPreparedPresentation(activeSubmission.targetDocumentId);
-          } else if (jobRequest.output_mode === 'create_new_file' && jobRequest.target_document_id) {
-            google.script.run.cleanupPreparedPresentation(jobRequest.target_document_id);
-          }
+          cleanupPreparedSubmission(activeSubmission, null, jobRequest);
           var msg = err.message || 'Failed to create translation job.';
           if (msg.indexOf('[UNSUPPORTED_LANGUAGE]') !== -1) {
             showError('Language not recognized. Please try again.');
@@ -1427,6 +1466,8 @@
             }
           } else if (msg.indexOf('[CONCURRENT_JOB_RUNNING]') !== -1) {
             showError('A translation job is already in progress. Please wait for it to finish.');
+          } else if (msg.indexOf('[DRIVE_CLEANUP_REQUIRED]') !== -1) {
+            showError('Temporary access cleanup is still pending for this presentation. Please reopen TransLay and try again after cleanup, or contact support with the affected task ID.');
           } else if (msg.indexOf('[IDEMPOTENT_REPLAY]') !== -1) {
             showDuplicateAction(
               'This translation has already been submitted. You can also submit it again, but resubmitting will consume your usage quota.',
@@ -2363,6 +2404,44 @@
       }
     }
 
+    function cleanupPreparedSubmission(submissionLike, preparedTarget, jobRequest) {
+      var sourceDocumentId = (submissionLike && (
+        submissionLike.sourceDocumentId ||
+        submissionLike.documentId
+      )) || state.documentId || '';
+      var sourcePermissionId = (submissionLike && (
+        submissionLike.sourceWorkerPermissionId ||
+        submissionLike.source_worker_permission_id
+      )) || (jobRequest && jobRequest.drive_access && jobRequest.drive_access.source_worker_permission_id) || '';
+      var targetDocumentId = (preparedTarget && preparedTarget.documentId) ||
+        (submissionLike && submissionLike.targetCopyWasCreated && submissionLike.targetDocumentId) ||
+        '';
+      var targetPermissionId = (preparedTarget && preparedTarget.targetWorkerPermissionId) ||
+        (submissionLike && submissionLike.targetWorkerPermissionId) ||
+        (jobRequest && jobRequest.drive_access && jobRequest.drive_access.target_worker_permission_id) ||
+        '';
+      var targetWasCopiedByAddon = Boolean(
+        (preparedTarget && preparedTarget.documentId) ||
+        (submissionLike && submissionLike.targetCopyWasCreated)
+      );
+
+      if (!sourcePermissionId && !targetDocumentId && !targetPermissionId) {
+        return;
+      }
+
+      google.script.run
+        .withFailureHandler(function(err) {
+          console.error('Prepared submission cleanup failed: ' + (err && err.message ? err.message : err));
+        })
+        .cleanupPreparedTranslationSubmission(
+          sourceDocumentId,
+          sourcePermissionId,
+          targetDocumentId,
+          targetPermissionId,
+          targetWasCopiedByAddon
+        );
+    }
+
     function resolveOutputDocumentUrl(resp) {
       if (resp && resp.output_document_url) {
         return resp.output_document_url;
@@ -2452,7 +2531,7 @@
         (!!state.currentJobId || !!state.activeSubmission);
       var busy = state.pauseRequestInFlight || state.resumeRequestInFlight || state.cancelRequestInFlight;
       btn.style.display = isVisible ? 'inline-block' : 'none';
-      btn.disabled = !isVisible || busy || state.awaitingCancelDecision;
+      btn.disabled = !isVisible || busy || state.awaitingCancelDecision || state.cancelRequested;
       if (state.cancelRequestInFlight || state.cancelRequested) {
         btn.textContent = 'Canceling...';
       } else if (state.pauseRequestInFlight) {
@@ -2472,7 +2551,11 @@
         token: state.submissionSeq,
         outputMode: outputMode,
         cancelRequested: false,
-        targetDocumentId: null
+        sourceDocumentId: null,
+        sourceWorkerPermissionId: null,
+        targetWorkerPermissionId: null,
+        targetDocumentId: null,
+        targetCopyWasCreated: false
       };
       updateCancelButton();
       return state.activeSubmission;

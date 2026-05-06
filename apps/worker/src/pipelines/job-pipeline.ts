@@ -30,6 +30,7 @@ import {
   isCancelRequested,
   updateJobStatus,
 } from "../repositories/job-repo";
+import { cleanupDriveWorkerPermissionsForJob } from "../adapters/drive/permissions";
 import { upsertJobSlideResults } from "../repositories/job-slide-result-repo";
 import { upsertJobNodeResults } from "../repositories/job-node-result-repo";
 import {
@@ -136,6 +137,7 @@ const SPEAKER_NOTES_MAX_CHARS_PER_SLIDE = 5_000;
 const AUTHORITY_CHUNK_HEARTBEAT_INTERVAL_MS = 20_000;
 const PAUSE_POLL_INTERVAL_MS = 1_000;
 const PAUSE_HEARTBEAT_INTERVAL_MS = 15_000;
+let cleanupTerminalDrivePermissions = cleanupDriveWorkerPermissionsForJob;
 
 type SlideBillingSettlementMode = "successful" | "failed" | "canceled";
 
@@ -173,6 +175,12 @@ type NotesTranslationOutcome =
       readonly failure_reason_code: string;
       readonly blocked: boolean;
     };
+
+type TerminalDriveCleanupUpdate = {
+  readonly driveCleanupStatus?: "not_required" | "succeeded" | "failed";
+  readonly driveCleanupLastErrorCode?: string | null;
+  readonly incrementDriveCleanupAttempts?: boolean;
+};
 
 /**
  * Stage dispatcher for the translation worker.
@@ -1861,10 +1869,11 @@ async function finalizeSuccessfulJob(
   provisionallyBilledUnits: number,
   nodeResults?: JobNodeExecutionResultMap
 ): Promise<void> {
-  const client = await pool.connect();
   const finalWarnings = [...pipelineWarnings, ...writeResult.warnings];
   let completedStatus: "completed" | "completed_with_warnings" = "completed";
   let completionDetail = "Translation completed successfully.";
+  const driveCleanupUpdate = await attemptTerminalDriveCleanup(pool, job, jobId);
+  const client = await pool.connect();
   try {
     await client.query("BEGIN");
     if (nodeResults) {
@@ -1904,6 +1913,7 @@ async function finalizeSuccessfulJob(
       stageLeaseExpiresAt: null,
       stageLastHeartbeatAt: null,
       queuedTaskName: null,
+      ...driveCleanupUpdate,
     });
 
     await client.query("COMMIT");
@@ -1989,8 +1999,9 @@ async function finalizeCanceledJob(
   slideResults: ReturnType<typeof initializeJobSlideResults>,
   nodeResults?: JobNodeExecutionResultMap
 ): Promise<void> {
-  const client = await pool.connect();
   const detail = buildCanceledDetail(provisionallyBilledUnits);
+  const driveCleanupUpdate = await attemptTerminalDriveCleanup(pool, job, jobId);
+  const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
@@ -2016,6 +2027,7 @@ async function finalizeCanceledJob(
       stageLeaseExpiresAt: null,
       stageLastHeartbeatAt: null,
       queuedTaskName: null,
+      ...driveCleanupUpdate,
     });
 
     await client.query("COMMIT");
@@ -2056,8 +2068,9 @@ async function finalizeFailedJob(
   safeMessage: string,
   nodeResults?: JobNodeExecutionResultMap
 ): Promise<void> {
-  const client = await pool.connect();
   const finalWarnings = [...pipelineWarnings, ...writeResult.warnings];
+  const driveCleanupUpdate = await attemptTerminalDriveCleanup(pool, job, jobId);
+  const client = await pool.connect();
   try {
     await client.query("BEGIN");
     if (nodeResults) {
@@ -2085,6 +2098,7 @@ async function finalizeFailedJob(
       stageLeaseExpiresAt: null,
       stageLastHeartbeatAt: null,
       queuedTaskName: null,
+      ...driveCleanupUpdate,
     });
 
     await client.query("COMMIT");
@@ -2125,6 +2139,66 @@ function logTrackDTerminalStatus(
       ...extra,
     })
   );
+}
+
+async function attemptTerminalDriveCleanup(
+  pool: Pool,
+  job: NonNullable<Awaited<ReturnType<typeof getJobById>>>,
+  jobId: string
+): Promise<TerminalDriveCleanupUpdate> {
+  if (job.drive_cleanup_status === "succeeded") {
+    // Already successful cleanup is terminal metadata; retries should not mutate it.
+    return {};
+  }
+
+  if (!job.source_worker_permission_id && !job.target_worker_permission_id) {
+    // Existing not-required rows need no terminal update; only stale cleanup rows are corrected.
+    if (job.drive_cleanup_status === "pending" || job.drive_cleanup_status === "failed") {
+      return {
+        driveCleanupStatus: "not_required",
+        driveCleanupLastErrorCode: null,
+      };
+    }
+    return {};
+  }
+
+  let result: Awaited<ReturnType<typeof cleanupDriveWorkerPermissionsForJob>>;
+  try {
+    result = await cleanupTerminalDrivePermissions(pool, job);
+  } catch (error) {
+    console.warn(
+      "[drive-cleanup] unexpected cleanup error",
+      JSON.stringify({
+        job_id: jobId,
+        cleanup_status: "failed",
+        error_code: "drive_cleanup_unexpected_error",
+        error_name: error instanceof Error ? error.name : typeof error,
+      })
+    );
+    return {
+      driveCleanupStatus: "failed",
+      driveCleanupLastErrorCode: "drive_cleanup_unexpected_error",
+      incrementDriveCleanupAttempts: true,
+    };
+  }
+  const logPayload = {
+    job_id: jobId,
+    cleanup_status: result.status,
+    target_count: result.targetCount,
+    attempted: result.attempted,
+    error_code: result.errorCode,
+  };
+  if (result.status === "failed") {
+    console.warn("[drive-cleanup] permission cleanup failed", JSON.stringify(logPayload));
+  } else {
+    console.info("[drive-cleanup] permission cleanup finalized", JSON.stringify(logPayload));
+  }
+
+  return {
+    driveCleanupStatus: result.status,
+    driveCleanupLastErrorCode: result.errorCode,
+    incrementDriveCleanupAttempts: result.attempted,
+  };
 }
 
 function markSlideFailures(
@@ -2692,6 +2766,88 @@ export function __shouldFinalizeAsPartialSuccessForTests(
   slideResults: ReturnType<typeof initializeJobSlideResults>
 ): boolean {
   return shouldFinalizeAsPartialSuccess(errorCode, slideResults);
+}
+
+export async function __attemptTerminalDriveCleanupForTests(
+  pool: Pool,
+  job: NonNullable<Awaited<ReturnType<typeof getJobById>>>,
+  jobId: string
+): Promise<TerminalDriveCleanupUpdate> {
+  return attemptTerminalDriveCleanup(pool, job, jobId);
+}
+
+export async function __finalizeSuccessfulJobForTests(
+  pool: Pool,
+  redis: Redis,
+  job: NonNullable<Awaited<ReturnType<typeof getJobById>>>,
+  jobId: string,
+  writeResult: WriteBackResult,
+  slideResults: ReturnType<typeof initializeJobSlideResults>
+): Promise<void> {
+  await finalizeSuccessfulJob(
+    pool,
+    redis,
+    job,
+    jobId,
+    "de",
+    writeResult,
+    [],
+    slideResults,
+    0
+  );
+}
+
+export async function __finalizeCanceledJobForTests(
+  pool: Pool,
+  redis: Redis,
+  job: NonNullable<Awaited<ReturnType<typeof getJobById>>>,
+  jobId: string,
+  writeResult: WriteBackResult,
+  slideResults: ReturnType<typeof initializeJobSlideResults>
+): Promise<void> {
+  await finalizeCanceledJob(pool, redis, job, jobId, writeResult, 0, slideResults);
+}
+
+export async function __finalizeFailedJobForTests(
+  pool: Pool,
+  redis: Redis,
+  job: NonNullable<Awaited<ReturnType<typeof getJobById>>>,
+  jobId: string,
+  writeResult: WriteBackResult,
+  slideResults: ReturnType<typeof initializeJobSlideResults>
+): Promise<void> {
+  await finalizeFailedJob(
+    pool,
+    redis,
+    job,
+    jobId,
+    writeResult,
+    [],
+    0,
+    slideResults,
+    "JOB_INTERNAL_ERROR",
+    "Test failure"
+  );
+}
+
+export function __setTerminalDriveCleanupHookForTests(
+  hook: typeof cleanupDriveWorkerPermissionsForJob
+): void {
+  if (isProductionLikeNodeEnv()) {
+    throw new Error("Terminal Drive cleanup test hooks are disabled in production-like environments");
+  }
+  cleanupTerminalDrivePermissions = hook;
+}
+
+export function __resetTerminalDriveCleanupHookForTests(): void {
+  if (isProductionLikeNodeEnv()) {
+    throw new Error("Terminal Drive cleanup test hooks are disabled in production-like environments");
+  }
+  cleanupTerminalDrivePermissions = cleanupDriveWorkerPermissionsForJob;
+}
+
+function isProductionLikeNodeEnv(): boolean {
+  return process.env.NODE_ENV === "production" || process.env.NODE_ENV === "staging";
 }
 
 function isRetryableProviderError(error: unknown): boolean {
