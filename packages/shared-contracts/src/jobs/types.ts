@@ -157,12 +157,26 @@ export type SegmentStatus = (typeof SEGMENT_STATUSES)[number];
 export const USAGE_UNITS = ["pages", "cells", "slides"] as const;
 export type UsageUnit = (typeof USAGE_UNITS)[number];
 
+export const DRIVE_CLEANUP_STATUSES = [
+  "not_required",
+  "pending",
+  "succeeded",
+  "failed",
+] as const;
+export type DriveCleanupStatus = (typeof DRIVE_CLEANUP_STATUSES)[number];
+
+export interface DriveAccessMetadata {
+  readonly source_worker_permission_id?: string;
+  readonly target_worker_permission_id?: string;
+}
+
 /** POST /api/jobs request body. */
 export interface CreateJobRequest {
   readonly host_type: HostType;
   readonly document_id: string;
   readonly document_name: string;
   readonly target_document_id?: string;
+  readonly drive_access?: DriveAccessMetadata;
   readonly resubmit?: boolean;
   readonly source_language_mode: SourceLanguageMode;
   readonly target_language_input: string;

@@ -17,6 +17,7 @@ const MAX_RANGE_PARTS = 50;
 const MAX_TARGET_LANGUAGE_INPUT_LENGTH = 100;
 /** Keep custom language descriptions phrase-like rather than sentence-like. */
 const MAX_TARGET_LANGUAGE_TOKENS = 8;
+const MAX_DRIVE_PERMISSION_ID_LENGTH = 256;
 
 const TARGET_LANGUAGE_HARD_BLOCK_PATTERNS: readonly RegExp[] = [
   /\b(ignore|disregard|forget|override|bypass)\b.{0,80}\b(previous|prior|above|all)\b.{0,60}\b(instruction|prompt|message|rule)s?\b/i,
@@ -32,6 +33,12 @@ const TARGET_LANGUAGE_HARD_BLOCK_PATTERNS: readonly RegExp[] = [
 
 const TARGET_LANGUAGE_DISALLOWED_CHARS = /[`"=:;{}[\]\\<>|]/u;
 const TARGET_LANGUAGE_ALLOWED_CHARS = /^[\p{L}\p{M}\p{N}\s\-()\/,&'.]+$/u;
+const DRIVE_PERMISSION_ID_ALLOWED_CHARS = /^[A-Za-z0-9._-]+$/u;
+const OAUTH_TOKEN_LIKE_PATTERNS: readonly RegExp[] = [
+  /^ya29\./i,
+  /^eyJ[A-Za-z0-9_-]*\./,
+  /\bBearer\b/i,
+];
 
 export function validateTargetLanguageInput(input: unknown): string | null {
   if (typeof input !== "string" || input.length === 0) {
@@ -73,6 +80,76 @@ export function validateTargetLanguageInput(input: unknown): string | null {
 
   if (TARGET_LANGUAGE_HARD_BLOCK_PATTERNS.some((pattern) => pattern.test(normalized))) {
     return "target_language_input looks like prompt instructions, not a language name";
+  }
+
+  return null;
+}
+
+function validateDrivePermissionId(
+  value: unknown,
+  fieldName: string,
+  requiredMessage: string
+): string | null {
+  if (typeof value !== "string" || value.length === 0) {
+    return requiredMessage;
+  }
+
+  if (value.trim() !== value) {
+    return `${fieldName} must not contain surrounding whitespace`;
+  }
+
+  if (value.length > MAX_DRIVE_PERMISSION_ID_LENGTH) {
+    return `${fieldName} exceeds maximum length`;
+  }
+
+  if (!DRIVE_PERMISSION_ID_ALLOWED_CHARS.test(value)) {
+    return `${fieldName} contains unsupported characters`;
+  }
+
+  if (OAUTH_TOKEN_LIKE_PATTERNS.some((pattern) => pattern.test(value))) {
+    return `${fieldName} must be a Drive permission id, not an OAuth token`;
+  }
+
+  return null;
+}
+
+function validateCreateJobDriveAccess(req: Record<string, unknown>): string | null {
+  const driveAccess = req.drive_access;
+  const isSlidesJob = req.host_type === "slides";
+
+  if (!isSlidesJob) {
+    return driveAccess === undefined || driveAccess === null
+      ? null
+      : "drive_access is only supported for Slides jobs";
+  }
+
+  if (!driveAccess || typeof driveAccess !== "object" || Array.isArray(driveAccess)) {
+    return "drive_access is required for Slides jobs";
+  }
+
+  const access = driveAccess as Record<string, unknown>;
+  const sourceError = validateDrivePermissionId(
+    access.source_worker_permission_id,
+    "drive_access.source_worker_permission_id",
+    "drive_access.source_worker_permission_id is required for Slides jobs"
+  );
+  if (sourceError) {
+    return sourceError;
+  }
+
+  if (req.output_mode === "create_new_file") {
+    const targetError = validateDrivePermissionId(
+      access.target_worker_permission_id,
+      "drive_access.target_worker_permission_id",
+      "drive_access.target_worker_permission_id is required when output_mode is 'create_new_file'"
+    );
+    if (targetError) {
+      return targetError;
+    }
+  } else {
+    if (access.target_worker_permission_id !== undefined && access.target_worker_permission_id !== null) {
+      return "drive_access.target_worker_permission_id is only allowed when output_mode is 'create_new_file'";
+    }
   }
 
   return null;
@@ -185,6 +262,11 @@ export function validateCreateJobRequest(body: unknown): string | null {
 
   if (typeof req.idempotency_key === "string" && req.idempotency_key.length > 512)
     return "idempotency_key exceeds maximum length";
+
+  const driveAccessError = validateCreateJobDriveAccess(req);
+  if (driveAccessError) {
+    return driveAccessError;
+  }
 
   return null;
 }

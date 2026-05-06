@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import type {
   HostType,
+  DriveCleanupStatus,
   JobExecutionStage,
   JobStageStatus,
   JobWarning,
@@ -18,6 +19,13 @@ export interface JobRow {
   source_doc_id: string;
   source_doc_name: string;
   target_doc_id: string | null;
+  source_worker_permission_id: string | null;
+  target_worker_permission_id: string | null;
+  drive_cleanup_status: DriveCleanupStatus;
+  drive_cleanup_attempts: number;
+  drive_cleanup_last_error_code: string | null;
+  drive_cleanup_last_attempt_at: Date | null;
+  drive_cleanup_completed_at: Date | null;
   source_language_mode: string;
   source_language: string | null;
   target_language_input: string;
@@ -50,6 +58,9 @@ export interface JobRow {
 }
 
 const JOB_COLUMNS = `id, user_id, host_type, source_doc_id, source_doc_name, target_doc_id,
+  source_worker_permission_id, target_worker_permission_id,
+  drive_cleanup_status, drive_cleanup_attempts, drive_cleanup_last_error_code,
+  drive_cleanup_last_attempt_at, drive_cleanup_completed_at,
   source_language_mode, source_language, target_language_input, target_language_code,
   output_mode, range_mode, range_expression, provider_route, status,
   provisionally_billed_units, gross_billed_slides, refunded_slides, net_billed_slides, total_units_billed,
@@ -324,6 +335,7 @@ function normalizeJobRow(row: JobRow | undefined): JobRow | null {
     net_billed_slides: toNumber(row.net_billed_slides),
     total_units_billed: toNumber(row.total_units_billed),
     warnings: Array.isArray(row.warnings) ? row.warnings : [],
+    drive_cleanup_attempts: toNumber(row.drive_cleanup_attempts),
     stage_cursor: toJsonObject(row.stage_cursor),
     stage_payload: toJsonObject(row.stage_payload),
     stage_attempt: toNumber(row.stage_attempt),

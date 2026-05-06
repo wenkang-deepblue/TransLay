@@ -27,6 +27,7 @@ import type {
   JobQuotaPreviewResponse,
   RangeMode,
   UserId,
+  DriveCleanupStatus,
 } from "@translay/shared-contracts";
 import {
   validateCreateJobRequest,
@@ -46,6 +47,7 @@ import { getCreditBalance } from "../../repositories/credit-repo";
 import {
   acquireCreateJobAdmission,
   createJob,
+  findUnresolvedDriveCleanupJobForSource,
   getJobById,
   hasRunningJob,
   hasCompletedEquivalentJob,
@@ -70,6 +72,8 @@ const HOST_OAUTH_TOKEN_LIFETIME_MS = 55 * 60 * 1000;
 const MAX_HOST_OAUTH_TOKEN_BYTES = 8 * 1024;
 const HOST_OAUTH_SWEEP_GRACE_PERIOD_MINUTES = 60;
 const HOST_OAUTH_SWEEP_BATCH_LIMIT = 500;
+const UNRESOLVED_DRIVE_CLEANUP_MESSAGE =
+  "A previous request for this presentation still has pending temporary access cleanup.";
 
 type ResolvedHostOauthPersistence = {
   readonly encryptedHostOauthToken: Buffer | null;
@@ -168,6 +172,20 @@ function isRunningLiveStatus(status: string | null | undefined): status is JobIn
     status === "extracting" ||
     status === "translating" ||
     status === "writing"
+  );
+}
+
+function initialDriveCleanupStatus(body: CreateJobRequest): DriveCleanupStatus {
+  return body.drive_access?.source_worker_permission_id ||
+    body.drive_access?.target_worker_permission_id
+    ? "pending"
+    : "not_required";
+}
+
+function hasUnresolvedDriveCleanup(job: JobRow): boolean {
+  return (
+    (job.source_worker_permission_id !== null || job.target_worker_permission_id !== null) &&
+    (job.drive_cleanup_status === "pending" || job.drive_cleanup_status === "failed")
   );
 }
 
@@ -1061,7 +1079,24 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
         sendError(res, "CONCURRENT_JOB_RUNNING");
         return;
       }
+      if (existingJob && hasUnresolvedDriveCleanup(existingJob)) {
+        sendError(
+          res,
+          "IDEMPOTENT_REPLAY",
+          UNRESOLVED_DRIVE_CLEANUP_MESSAGE
+        );
+        return;
+      }
       await deleteIdempotencyRecord(pool, auth.user_id, body.idempotency_key);
+    }
+
+    const unresolvedCleanupJob = await findUnresolvedDriveCleanupJobForSource(pool, {
+      userId: auth.user_id,
+      sourceDocId: body.document_id,
+    });
+    if (unresolvedCleanupJob) {
+      sendError(res, "IDEMPOTENT_REPLAY", UNRESOLVED_DRIVE_CLEANUP_MESSAGE);
+      return;
     }
 
     const running = await hasRunningJob(pool, auth.user_id);
@@ -1162,6 +1197,9 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
         hostType: body.host_type,
         sourceDocId: body.document_id,
         targetDocId: body.target_document_id ?? null,
+        sourceWorkerPermissionId: body.drive_access?.source_worker_permission_id ?? null,
+        targetWorkerPermissionId: body.drive_access?.target_worker_permission_id ?? null,
+        driveCleanupStatus: initialDriveCleanupStatus(body),
         sourceLangMode: body.source_language_mode,
         targetLanguageInput: body.target_language_input,
         targetLanguageCode,
@@ -1209,13 +1247,7 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
       await updateJobStatus(pool, jobId, "failed", {
         errorCode: "JOB_INTERNAL_ERROR",
         errorMessage: "Failed to enqueue job for processing. Please retry.",
-      });
-
-      await deleteIdempotencyRecord(pool, auth.user_id, body.idempotency_key).catch((cleanupErr) => {
-        console.error(
-          "Failed to cleanup idempotency record after enqueue failure:",
-          cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)
-        );
+        preserveHostOauthForCleanup: true,
       });
 
       const failedResults = await redis

@@ -21,6 +21,13 @@ function createBaseJob() {
     source_doc_id: "source-doc",
     source_doc_name: "Quarterly deck",
     target_doc_id: "target-doc",
+    source_worker_permission_id: "source-permission",
+    target_worker_permission_id: "target-permission",
+    drive_cleanup_status: "pending" as const,
+    drive_cleanup_attempts: 0,
+    drive_cleanup_last_error_code: null,
+    drive_cleanup_last_attempt_at: null,
+    drive_cleanup_completed_at: null,
     source_language_mode: "auto",
     source_language: "en",
     target_language_input: "Spanish",
@@ -760,10 +767,320 @@ test("KMS test hooks are disabled in production-like environments", () => {
   }
 });
 
+test("createJobHandler does not delete an idempotency record while Drive cleanup is pending", async () => {
+  const calls: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      calls.push(sql);
+      if (sql.includes("status IN ('completed', 'completed_with_warnings')")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM idempotency_records")) {
+        return { rows: [{ job_id: "job-1" }] };
+      }
+      if (sql.includes("FROM translation_jobs WHERE id = $1 AND user_id = $2")) {
+        return {
+          rows: [{
+            ...createBaseJob(),
+            id: "job-1",
+            status: "failed",
+            drive_cleanup_status: "pending",
+          }],
+        };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    },
+    connect: async () => {
+      throw new Error("job creation should not run while cleanup is pending");
+    },
+  } as unknown as Pool;
+
+  let statusCode = 200;
+  let payload: Record<string, unknown> | null = null;
+  const res = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    json(body: Record<string, unknown>) {
+      payload = body;
+      return this;
+    },
+  } as never;
+
+  await createJobHandler(
+    pool,
+    {} as Redis,
+    { jobs: { maxGlobalInFlightJobs: 50 } } as AppConfig
+  )(
+    {
+      authContext: { user_id: "user-1" as UserId },
+      headers: { authorization: "Bearer host-token" },
+      body: {
+        host_type: "slides",
+        document_id: "source-doc",
+        document_name: "Quarterly deck",
+        source_language_mode: "auto",
+        target_language_input: "French",
+        output_mode: "append_in_file",
+        range_mode: "custom",
+        range_expression: "1",
+        drive_access: {
+          source_worker_permission_id: "source-permission",
+        },
+        idempotency_key: "idem-1",
+      },
+    } as never,
+    res
+  );
+
+  assert.equal(statusCode, 409);
+  assert.deepEqual(payload, {
+    error: "IDEMPOTENT_REPLAY",
+    message: "A previous request for this presentation still has pending temporary access cleanup.",
+  });
+  assert.equal(calls.some((sql) => sql.includes("DELETE FROM idempotency_records")), false);
+});
+
+test("createJobHandler blocks unresolved Drive cleanup even without an idempotency record", async () => {
+  const calls: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      calls.push(sql);
+      if (sql.includes("status IN ('completed', 'completed_with_warnings')")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM idempotency_records")) {
+        return { rows: [] };
+      }
+      if (sql.includes("drive_cleanup_status IN")) {
+        return {
+          rows: [{
+            ...createBaseJob(),
+            id: "orphan-cleanup-job",
+            status: "failed",
+            drive_cleanup_status: "failed",
+          }],
+        };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    },
+    connect: async () => {
+      throw new Error("job creation should not run while cleanup is unresolved");
+    },
+  } as unknown as Pool;
+
+  let statusCode = 200;
+  let payload: Record<string, unknown> | null = null;
+  const res = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    json(body: Record<string, unknown>) {
+      payload = body;
+      return this;
+    },
+  } as never;
+
+  await createJobHandler(
+    pool,
+    {} as Redis,
+    { jobs: { maxGlobalInFlightJobs: 50 } } as AppConfig
+  )(
+    {
+      authContext: { user_id: "user-1" as UserId },
+      headers: { authorization: "Bearer host-token" },
+      body: {
+        host_type: "slides",
+        document_id: "source-doc",
+        document_name: "Quarterly deck",
+        source_language_mode: "auto",
+        target_language_input: "French",
+        output_mode: "append_in_file",
+        range_mode: "custom",
+        range_expression: "1",
+        drive_access: {
+          source_worker_permission_id: "source-permission",
+        },
+        idempotency_key: "idem-new",
+      },
+    } as never,
+    res
+  );
+
+  assert.equal(statusCode, 409);
+  assert.deepEqual(payload, {
+    error: "IDEMPOTENT_REPLAY",
+    message: "A previous request for this presentation still has pending temporary access cleanup.",
+  });
+  assert.equal(calls.some((sql) => sql.includes("DELETE FROM idempotency_records")), false);
+});
+
+test("createJobHandler preserves cleanup metadata and idempotency when enqueue fails", async () => {
+  const poolCalls: Array<{ sql: string; params: unknown[] | undefined }> = [];
+  const clientCalls: Array<{ sql: string; params: unknown[] | undefined }> = [];
+  const pool = {
+    query: async (sql: string, params?: unknown[]) => {
+      poolCalls.push({ sql, params });
+      if (sql.includes("status IN ('completed', 'completed_with_warnings')")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM idempotency_records")) {
+        return { rows: [] };
+      }
+      if (sql.includes("drive_cleanup_status IN")) {
+        return { rows: [] };
+      }
+      if (sql.includes("status IN ('pending', 'queued', 'extracting', 'translating', 'writing')")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM subscriptions")) {
+        return {
+          rows: [{
+            id: "sub-1",
+            user_id: "user-1",
+            plan_type: "free",
+            status: "active",
+            provider_name: "paddle",
+            provider_customer_id: null,
+            provider_subscription_id: null,
+            current_period_start: null,
+            current_period_end: null,
+            cancel_at_period_end: false,
+          }],
+        };
+      }
+      if (sql.includes("FROM usage_ledgers")) {
+        return {
+          rows: [{
+            slides_used: "0",
+            docs_pages_used: "0",
+            sheets_cells_used: "0",
+            total_jobs: 0,
+          }],
+        };
+      }
+      if (sql.includes("FROM users u")) {
+        return {
+          rows: [{
+            slides_balance: "0",
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+            slides_refundable_units: "0",
+          }],
+        };
+      }
+      if (sql.includes("UPDATE translation_jobs")) {
+        return { rows: [], rowCount: 1 };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    },
+    connect: async () => ({
+      query: async (sql: string, params?: unknown[]) => {
+        clientCalls.push({ sql, params });
+        if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") {
+          return { rows: [], rowCount: 1 };
+        }
+        if (sql.includes("pg_advisory_xact_lock")) {
+          return { rows: [], rowCount: 1 };
+        }
+        if (sql.includes("SELECT 1 FROM translation_jobs")) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (sql.includes("COUNT(*)::int AS n")) {
+          return { rows: [{ n: "0" }], rowCount: 1 };
+        }
+        if (sql.includes("INSERT INTO translation_jobs")) {
+          return { rows: [{ id: "job-1" }], rowCount: 1 };
+        }
+        if (sql.includes("INSERT INTO idempotency_records")) {
+          return { rows: [], rowCount: 1 };
+        }
+        throw new Error(`Unexpected client query: ${sql}`);
+      },
+      release: () => {},
+    }),
+  } as unknown as Pool;
+
+  const redis = {
+    multi: () => ({
+      hset() {
+        return this;
+      },
+      expire() {
+        return this;
+      },
+      exec: async () => [[null, 1], [null, 1]],
+    }),
+  } as unknown as Redis;
+
+  let statusCode = 200;
+  let payload: Record<string, unknown> | null = null;
+  const res = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    json(body: Record<string, unknown>) {
+      payload = body;
+      return this;
+    },
+  } as never;
+
+  await createJobHandler(
+    pool,
+    redis,
+    {
+      jobs: { maxGlobalInFlightJobs: 50 },
+      cloudTasks: {
+        workerUrl: "",
+        invokerServiceAccount: "worker-invoker@example.com",
+      },
+    } as AppConfig
+  )(
+    {
+      authContext: { user_id: "user-1" as UserId },
+      headers: { authorization: "Bearer host-token" },
+      body: {
+        host_type: "slides",
+        document_id: "source-doc",
+        document_name: "Quarterly deck",
+        source_language_mode: "auto",
+        target_language_input: "French",
+        output_mode: "append_in_file",
+        range_mode: "custom",
+        range_expression: "1",
+        drive_access: {
+          source_worker_permission_id: "source-permission",
+        },
+        idempotency_key: "idem-1",
+      },
+    } as never,
+    res
+  );
+
+  const failedUpdate = poolCalls.find((call) => call.params?.[1] === "failed");
+  assert.equal(statusCode, 500);
+  assert.deepEqual(payload, {
+    error: "JOB_INTERNAL_ERROR",
+    message: "Failed to enqueue job for processing. Please retry.",
+  });
+  assert.ok(failedUpdate, "expected failed job update");
+  assert.doesNotMatch(failedUpdate!.sql, /host_oauth_access_token_enc = NULL/);
+  assert.doesNotMatch(failedUpdate!.sql, /host_oauth_token_expires_at = NULL/);
+  assert.doesNotMatch(failedUpdate!.sql, /host_oauth_purged_at = NOW\(\)/);
+  assert.equal(poolCalls.some((call) => call.sql.includes("DELETE FROM idempotency_records")), false);
+  assert.equal(clientCalls.some((call) => call.sql.includes("INSERT INTO idempotency_records")), true);
+});
+
 test("createJobHandler returns a partial quota option when selected slides exceed remaining quota", async () => {
   const pool = {
     query: async (sql: string) => {
       if (sql.includes("FROM idempotency_records")) {
+        return { rows: [] };
+      }
+      if (sql.includes("drive_cleanup_status IN")) {
         return { rows: [] };
       }
       if (sql.includes("status IN ('completed', 'completed_with_warnings')")) {
@@ -840,6 +1157,9 @@ test("createJobHandler returns a partial quota option when selected slides excee
       output_mode: "append_in_file",
       range_mode: "custom",
       range_expression: "1~10",
+      drive_access: {
+        source_worker_permission_id: "source-permission",
+      },
       idempotency_key: "idem-1",
     },
   } as never;
@@ -1040,6 +1360,9 @@ test("createJobHandler returns JOB_QUEUE_BUSY when the global in-flight gate is 
       if (sql.includes("FROM idempotency_records")) {
         return { rows: [] };
       }
+      if (sql.includes("drive_cleanup_status IN")) {
+        return { rows: [] };
+      }
       if (sql.includes("status IN ('completed', 'completed_with_warnings')")) {
         return { rows: [] };
       }
@@ -1209,6 +1532,9 @@ test("createJobHandler returns JOB_QUEUE_BUSY when the global in-flight gate is 
       output_mode: "append_in_file",
       range_mode: "custom",
       range_expression: "1",
+      drive_access: {
+        source_worker_permission_id: "source-permission",
+      },
       idempotency_key: "idem-1",
     },
   } as never;
@@ -1226,6 +1552,9 @@ test("createJobHandler returns CONCURRENT_JOB_RUNNING when atomic admission sees
   const pool = {
     query: async (sql: string) => {
       if (sql.includes("FROM idempotency_records")) {
+        return { rows: [] };
+      }
+      if (sql.includes("drive_cleanup_status IN")) {
         return { rows: [] };
       }
       if (sql.includes("status IN ('completed', 'completed_with_warnings')")) {
@@ -1397,6 +1726,9 @@ test("createJobHandler returns CONCURRENT_JOB_RUNNING when atomic admission sees
       output_mode: "append_in_file",
       range_mode: "custom",
       range_expression: "1",
+      drive_access: {
+        source_worker_permission_id: "source-permission",
+      },
       idempotency_key: "idem-1",
     },
   } as never;

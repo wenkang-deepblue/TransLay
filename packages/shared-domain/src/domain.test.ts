@@ -148,12 +148,111 @@ test("validateCreateJobRequest surfaces detailed page-range validation for slide
     target_document_id: "target_123",
     range_mode: "custom",
     range_expression: "1，3",
+    drive_access: {
+      source_worker_permission_id: "source-permission",
+      target_worker_permission_id: "target-permission",
+    },
     idempotency_key: "job-key",
   });
 
   assert.equal(
     error,
     "Range expression must use ASCII commas (,), hyphens (-), or tildes (~) only."
+  );
+});
+
+test("validateCreateJobRequest requires Drive worker permission ids for Slides jobs", () => {
+  assert.equal(
+    validateCreateJobRequest({
+      host_type: "slides",
+      document_id: "doc_123",
+      document_name: "Deck",
+      source_language_mode: "auto",
+      target_language_input: "French",
+      output_mode: "append_in_file",
+      range_mode: "custom",
+      range_expression: "1",
+      idempotency_key: "job-key",
+    }),
+    "drive_access is required for Slides jobs"
+  );
+
+  assert.equal(
+    validateCreateJobRequest({
+      host_type: "slides",
+      document_id: "doc_123",
+      document_name: "Deck",
+      target_document_id: "target_123",
+      source_language_mode: "auto",
+      target_language_input: "French",
+      output_mode: "create_new_file",
+      range_mode: "custom",
+      range_expression: "1",
+      idempotency_key: "job-key",
+      drive_access: {
+        source_worker_permission_id: "source-permission",
+      },
+    }),
+    "drive_access.target_worker_permission_id is required when output_mode is 'create_new_file'"
+  );
+});
+
+test("validateCreateJobRequest rejects target permission ids for append-in-file Slides jobs", () => {
+  assert.equal(
+    validateCreateJobRequest({
+      host_type: "slides",
+      document_id: "doc_123",
+      document_name: "Deck",
+      source_language_mode: "auto",
+      target_language_input: "French",
+      output_mode: "append_in_file",
+      range_mode: "custom",
+      range_expression: "1",
+      idempotency_key: "job-key",
+      drive_access: {
+        source_worker_permission_id: "source-permission",
+        target_worker_permission_id: "target-permission",
+      },
+    }),
+    "drive_access.target_worker_permission_id is only allowed when output_mode is 'create_new_file'"
+  );
+});
+
+test("validateCreateJobRequest rejects token-like and content-like values as Drive permission ids", () => {
+  assert.equal(
+    validateCreateJobRequest({
+      host_type: "slides",
+      document_id: "doc_123",
+      document_name: "Deck",
+      source_language_mode: "auto",
+      target_language_input: "French",
+      output_mode: "append_in_file",
+      range_mode: "custom",
+      range_expression: "1",
+      idempotency_key: "job-key",
+      drive_access: {
+        source_worker_permission_id: "ya29.oauth-token",
+      },
+    }),
+    "drive_access.source_worker_permission_id must be a Drive permission id, not an OAuth token"
+  );
+
+  assert.equal(
+    validateCreateJobRequest({
+      host_type: "slides",
+      document_id: "doc_123",
+      document_name: "Deck",
+      source_language_mode: "auto",
+      target_language_input: "French",
+      output_mode: "append_in_file",
+      range_mode: "custom",
+      range_expression: "1",
+      idempotency_key: "job-key",
+      drive_access: {
+        source_worker_permission_id: "Translate this speaker note text",
+      },
+    }),
+    "drive_access.source_worker_permission_id contains unsupported characters"
   );
 });
 

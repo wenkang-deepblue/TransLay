@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import type {
   HostType,
+  DriveCleanupStatus,
   JobExecutionStage,
   JobStageStatus,
   JobWarning,
@@ -19,6 +20,13 @@ export interface JobRow {
   source_doc_id: string;
   source_doc_name: string | null;
   target_doc_id: string | null;
+  source_worker_permission_id: string | null;
+  target_worker_permission_id: string | null;
+  drive_cleanup_status: DriveCleanupStatus;
+  drive_cleanup_attempts: number;
+  drive_cleanup_last_error_code: string | null;
+  drive_cleanup_last_attempt_at: Date | null;
+  drive_cleanup_completed_at: Date | null;
   source_language_mode: string;
   source_language: string | null;
   target_language_input: string;
@@ -52,6 +60,9 @@ export interface JobRow {
 
 // S7: Explicit column list instead of SELECT *
 const JOB_COLUMNS = `id, user_id, host_type, source_doc_id, source_doc_name, target_doc_id,
+  source_worker_permission_id, target_worker_permission_id,
+  drive_cleanup_status, drive_cleanup_attempts, drive_cleanup_last_error_code,
+  drive_cleanup_last_attempt_at, drive_cleanup_completed_at,
   source_language_mode, source_language, target_language_input, target_language_code,
   output_mode, range_mode, range_expression, provider_route, status,
   provisionally_billed_units, gross_billed_slides, refunded_slides, net_billed_slides, total_units_billed,
@@ -68,6 +79,9 @@ export async function createJob(
     hostType: HostType;
     sourceDocId: string;
     targetDocId: string | null;
+    sourceWorkerPermissionId: string | null;
+    targetWorkerPermissionId: string | null;
+    driveCleanupStatus: DriveCleanupStatus;
     sourceLangMode: SourceLanguageMode;
     targetLanguageInput: string;
     targetLanguageCode: string | null;
@@ -82,17 +96,21 @@ export async function createJob(
   const result = await client.query(
     `INSERT INTO translation_jobs
        (user_id, host_type, source_doc_id, target_doc_id,
+        source_worker_permission_id, target_worker_permission_id, drive_cleanup_status,
         source_language_mode, target_language_input, target_language_code,
        output_mode, range_mode, range_expression, host_oauth_access_token_enc,
        host_oauth_token_expires_at, host_oauth_source,
        status, current_stage, stage_status, stage_cursor, stage_payload, stage_attempt)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'pending', 'extract', 'pending', '{}'::jsonb, '{}'::jsonb, 0)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'pending', 'extract', 'pending', '{}'::jsonb, '{}'::jsonb, 0)
      RETURNING id`,
     [
       params.userId,
       params.hostType,
       params.sourceDocId,
       params.targetDocId,
+      params.sourceWorkerPermissionId,
+      params.targetWorkerPermissionId,
+      params.driveCleanupStatus,
       params.sourceLangMode,
       params.targetLanguageInput,
       params.targetLanguageCode,
@@ -115,6 +133,31 @@ export async function getJobById(
   const result = await pool.query(
     `SELECT ${JOB_COLUMNS} FROM translation_jobs WHERE id = $1 AND user_id = $2`,
     [jobId, userId]
+  );
+  return normalizeJobRow(result.rows[0]);
+}
+
+export async function findUnresolvedDriveCleanupJobForSource(
+  pool: Pool,
+  params: {
+    readonly userId: UserId;
+    readonly sourceDocId: string;
+  }
+): Promise<JobRow | null> {
+  const result = await pool.query(
+    `SELECT ${JOB_COLUMNS}
+       FROM translation_jobs
+      WHERE user_id = $1
+        AND source_doc_id = $2
+        AND status IN ('completed', 'completed_with_warnings', 'failed', 'canceled', 'rolled_back')
+        AND drive_cleanup_status IN ('pending', 'failed')
+        AND (
+          source_worker_permission_id IS NOT NULL
+          OR target_worker_permission_id IS NOT NULL
+        )
+      ORDER BY started_at DESC
+      LIMIT 1`,
+    [params.userId, params.sourceDocId]
   );
   return normalizeJobRow(result.rows[0]);
 }
@@ -189,6 +232,7 @@ export async function updateJobStatus(
     stageLeaseExpiresAt?: Date | null;
     stageLastHeartbeatAt?: Date | null;
     queuedTaskName?: string | null;
+    preserveHostOauthForCleanup?: boolean;
   }
 ): Promise<void> {
   const setClauses = ["status = $2"];
@@ -203,10 +247,12 @@ export async function updateJobStatus(
     status === "rolled_back"
   ) {
     setClauses.push("completed_at = NOW()");
-    setClauses.push("host_oauth_access_token_enc = NULL");
-    setClauses.push("host_oauth_token_expires_at = NULL");
-    setClauses.push("host_oauth_source = 'sa_fallback'");
-    setClauses.push("host_oauth_purged_at = NOW()");
+    if (!extra?.preserveHostOauthForCleanup) {
+      setClauses.push("host_oauth_access_token_enc = NULL");
+      setClauses.push("host_oauth_token_expires_at = NULL");
+      setClauses.push("host_oauth_source = 'sa_fallback'");
+      setClauses.push("host_oauth_purged_at = NOW()");
+    }
   }
   if (extra?.errorCode !== undefined) {
     setClauses.push(`error_code = $${idx}`);
@@ -397,6 +443,7 @@ function normalizeJobRow(row: JobRow | undefined): JobRow | null {
     net_billed_slides: toNumber(row.net_billed_slides),
     total_units_billed: toNumber(row.total_units_billed),
     warnings: Array.isArray(row.warnings) ? row.warnings : [],
+    drive_cleanup_attempts: toNumber(row.drive_cleanup_attempts),
     stage_cursor: toJsonObject(row.stage_cursor),
     stage_payload: toJsonObject(row.stage_payload),
     stage_attempt: toNumber(row.stage_attempt),
