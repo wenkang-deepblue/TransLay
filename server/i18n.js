@@ -286,7 +286,7 @@ window.TRANSLATIONS = {
       },
       privacy: {
         title: "TransLay Privacy Policy",
-        last_updated: "Last updated: April 23, 2026",
+        last_updated: "Last updated: May 7, 2026",
         intro: [
           "We treat “collect less, keep less, expose less” as TransLay's basic principle. When you use TransLay, we process only the minimum information needed to keep translation, sign-in, subscription, and after-sales support working. If something should not be collected or should not be retained long-term, we try not to touch it. This Privacy Policy explains how TransLay handles that information."
         ],
@@ -655,7 +655,7 @@ window.TRANSLATIONS = {
       },
       privacy: {
         title: "Politique de confidentialité de TransLay",
-        last_updated: "Dernière mise à jour : 2026-04-23",
+        last_updated: "Dernière mise à jour : 2026-05-07",
         intro: [
           "Nous faisons de \"collecter moins, conserver moins, exposer moins\" un principe fondamental de TransLay. Lorsque vous utilisez TransLay, nous ne traitons que le minimum d'informations nécessaire au fonctionnement normal de la traduction, de la connexion, des abonnements et du service après-vente. Ce qui ne devrait pas être collecté ou conservé durablement, nous essayons de ne pas y toucher. La présente Politique de confidentialité explique comment TransLay traite ces informations."
         ],
@@ -1024,7 +1024,7 @@ window.TRANSLATIONS = {
       },
       privacy: {
         title: "TransLay Datenschutzerklärung",
-        last_updated: "Zuletzt aktualisiert: 23. April 2026",
+        last_updated: "Zuletzt aktualisiert: 7. Mai 2026",
         intro: [
           "Unsere Grundregel ist einfach: weniger sammeln, weniger speichern, weniger offenlegen. Wenn Sie TransLay nutzen, verarbeiten wir nur die minimalen Informationen, die für Übersetzung, Anmeldung, Abonnement und Support erforderlich sind. Was nicht gesammelt oder gespeichert werden muss, versuchen wir gar nicht erst anzufassen. Diese Erklärung beschreibt, wie wir mit diesen Informationen umgehen."
         ],
@@ -1393,7 +1393,7 @@ window.TRANSLATIONS = {
       },
       privacy: {
         title: "Informativa sulla privacy di TransLay",
-        last_updated: "Ultimo aggiornamento: 23 aprile 2026",
+        last_updated: "Ultimo aggiornamento: 7 maggio 2026",
         intro: [
           "Consideriamo \"raccogliere meno, conservare meno, esporre meno\" un principio di base di TransLay. Quando usi TransLay, trattiamo solo le informazioni minime necessarie per far funzionare traduzione, accesso, abbonamento e assistenza post-vendita; ciò che non dovrebbe essere raccolto o conservato a lungo cerchiamo di non toccarlo. Questa informativa spiega come TransLay tratta tali informazioni."
         ],
@@ -1762,7 +1762,7 @@ window.TRANSLATIONS = {
       },
       privacy: {
         title: "Política de privacidad de TransLay",
-        last_updated: "Última actualización: 23 de abril de 2026",
+        last_updated: "Última actualización: 7 de mayo de 2026",
         intro: [
           "Consideramos \"recopilar menos, conservar menos, exponer menos\" un principio básico de TransLay. Cuando usas TransLay, tratamos solo la información mínima necesaria para que funcionen la traducción, el inicio de sesión, la suscripción y el soporte posventa; aquello que no debería recopilarse o conservarse a largo plazo intentamos no tocarlo. Esta política explica cómo TransLay trata esa información."
         ],
@@ -2131,7 +2131,7 @@ window.TRANSLATIONS = {
       },
       privacy: {
         title: "Política de Privacidade do TransLay",
-        last_updated: "Última atualização: 2026-04-23",
+        last_updated: "Última atualização: 2026-05-07",
         intro: [
           "Tratamos \"coletar menos, guardar menos e expor menos\" como um princípio básico do TransLay. Quando você usa o TransLay, processamos apenas as informações mínimas necessárias para que tradução, login, assinatura e suporte funcionem normalmente. O que não deve ser coletado ou mantido por longo prazo, tentamos não tocar. Esta Política de Privacidade explica como o TransLay trata essas informações."
         ],
@@ -2500,7 +2500,7 @@ window.TRANSLATIONS = {
       },
       privacy: {
         title: "Политика конфиденциальности TransLay",
-        last_updated: "Последнее обновление: 2026-04-23",
+        last_updated: "Последнее обновление: 2026-05-07",
         intro: [
           "Мы считаем принцип «меньше собирать, меньше хранить, меньше раскрывать» базовым для TransLay. Когда вы используете TransLay, мы обрабатываем только минимальную информацию, необходимую для нормальной работы перевода, входа, подписки и поддержки после покупки. То, что не должно собираться или долго храниться, мы стараемся не затрагивать. Эта Политика конфиденциальности объясняет, как TransLay обрабатывает такую информацию."
         ],
@@ -2869,7 +2869,7 @@ window.TRANSLATIONS = {
       },
       privacy: {
         title: "Privacybeleid van TransLay",
-        last_updated: "Laatst bijgewerkt: 2026-04-23",
+        last_updated: "Laatst bijgewerkt: 2026-05-07",
         intro: [
           "Wij beschouwen \"minder verzamelen, minder bewaren, minder blootstellen\" als een basisprincipe van TransLay. Wanneer je TransLay gebruikt, verwerken we alleen de minimale informatie die nodig is om vertaling, login, abonnementen en support goed te laten werken. Wat niet verzameld hoeft te worden of niet langdurig bewaard hoort te worden, proberen we niet aan te raken. Dit privacybeleid legt uit hoe TransLay met deze informatie omgaat."
         ],
@@ -3238,7 +3238,7 @@ window.TRANSLATIONS = {
       },
       privacy: {
         title: "TransLay integritetspolicy",
-        last_updated: "Senast uppdaterad: 2026-04-23",
+        last_updated: "Senast uppdaterad: 2026-05-07",
         intro: [
           "Vi ser \"samla in mindre, spara mindre, exponera mindre\" som en grundprincip för TransLay. När du använder TransLay behandlar vi bara den minsta information som krävs för att översättning, inloggning, prenumeration och efterköpssupport ska fungera. Det som inte bör samlas in eller inte bör sparas långsiktigt försöker vi låta bli att röra. Denna integritetspolicy förklarar hur TransLay behandlar denna information."
         ],
@@ -3607,7 +3607,7 @@ window.TRANSLATIONS = {
       },
       privacy: {
         title: "Πολιτική απορρήτου TransLay",
-        last_updated: "Τελευταία ενημέρωση: 2026-04-23",
+        last_updated: "Τελευταία ενημέρωση: 2026-05-07",
         intro: [
           "Θεωρούμε το «συλλέγουμε λιγότερα, αποθηκεύουμε λιγότερα, εκθέτουμε λιγότερα» βασική αρχή του TransLay. Όταν χρησιμοποιείτε το TransLay, επεξεργαζόμαστε μόνο τις ελάχιστες πληροφορίες που είναι απαραίτητες για να λειτουργούν η μετάφραση, η σύνδεση, η συνδρομή και η υποστήριξη μετά την αγορά. Ό,τι δεν πρέπει να συλλέγεται ή δεν πρέπει να διατηρείται μακροπρόθεσμα προσπαθούμε να μην το αγγίζουμε. Αυτή η Πολιτική απορρήτου εξηγεί πώς το TransLay επεξεργάζεται αυτές τις πληροφορίες."
         ],
@@ -3976,7 +3976,7 @@ window.TRANSLATIONS = {
       },
       privacy: {
         title: "سياسة خصوصية TransLay",
-        last_updated: "آخر تحديث: 2026-04-23",
+        last_updated: "آخر تحديث: 2026-05-07",
         intro: [
           "نعد \"تقليل الجمع، وتقليل الحفظ، وتقليل التعرض\" مبدأ TransLay الأساسي. عند استخدامك TransLay، لا نعالج إلا الحد الأدنى من المعلومات اللازمة لتشغيل الترجمة وتسجيل الدخول والاشتراكات ودعم ما بعد البيع. وكل ما لا ينبغي جمعه أو لا ينبغي حفظه طويلًا نحاول ألا نلمسه. توضح سياسة الخصوصية هذه كيف يتعامل TransLay مع هذه المعلومات."
         ],
@@ -4345,7 +4345,7 @@ window.TRANSLATIONS = {
       },
       privacy: {
         title: "מדיניות הפרטיות של TransLay",
-        last_updated: "עודכן לאחרונה: 2026-04-23",
+        last_updated: "עודכן לאחרונה: 2026-05-07",
         intro: [
           "אנו רואים ב״לאסוף פחות, לשמור פחות, לחשוף פחות״ עיקרון בסיסי של TransLay. כאשר אתם משתמשים ב-TransLay, אנו מעבדים רק את המידע המינימלי הדרוש כדי שתרגום, התחברות, מנויים ותמיכה לאחר רכישה יפעלו כראוי. כל מה שלא צריך להיאסף או להישמר לטווח ארוך, אנו משתדלים לא לגעת בו. מדיניות פרטיות זו מסבירה כיצד TransLay מטפל במידע זה."
         ],
@@ -4714,7 +4714,7 @@ window.TRANSLATIONS = {
       },
       privacy: {
         title: "TransLay 隐私政策",
-        last_updated: "最后更新：2026-04-23",
+        last_updated: "最后更新：2026-05-07",
         intro: [
           "我们把“少收集、少保存、少暴露”当作 TransLay 的基本原则。您使用 TransLay 时，我们只处理让翻译、登录、订阅和售后能够正常运转所必需的最少信息；凡是不该收集的，不该长期保存的，我们都尽量不碰。本隐私政策说明 TransLay 如何处理这些信息。"
         ],
@@ -5083,7 +5083,7 @@ window.TRANSLATIONS = {
       },
       privacy: {
         title: "TransLay 隱私政策",
-        last_updated: "最後更新：2026-04-23",
+        last_updated: "最後更新：2026-05-07",
         intro: [
           "我們把「少收集、少保存、少暴露」當作 TransLay 的基本原則。您使用 TransLay 時，我們只處理讓翻譯、登入、訂閱和售後能夠正常運轉所必需的最少資訊；凡是不該收集的，不該長期保存的，我們都盡量不碰。本隱私政策說明 TransLay 如何處理這些資訊。"
         ],
@@ -5452,7 +5452,7 @@ window.TRANSLATIONS = {
       },
       privacy: {
         title: "TransLay プライバシーポリシー",
-        last_updated: "最終更新日：2026-04-23",
+        last_updated: "最終更新日：2026-05-07",
         intro: [
           "当社は「少なく収集し、少なく保存し、少なく露出する」ことを TransLay の基本原則としています。TransLay を利用する際、当社は翻訳、ログイン、購読、アフターサポートを正常に動かすために必要な最小限の情報だけを処理します。収集すべきでないもの、長期保存すべきでないものには、できるだけ触れません。本プライバシーポリシーは、TransLay がこれらの情報をどのように扱うかを説明します。"
         ],
@@ -5821,7 +5821,7 @@ window.TRANSLATIONS = {
       },
       privacy: {
         title: "TransLay 개인정보 처리방침",
-        last_updated: "최종 업데이트: 2026-04-23",
+        last_updated: "최종 업데이트: 2026-05-07",
         intro: [
           "당사는 '덜 수집하고, 덜 저장하고, 덜 노출한다'는 원칙을 TransLay의 기본 원칙으로 삼습니다. TransLay를 사용할 때 당사는 번역, 로그인, 구독 및 사후 지원이 정상적으로 작동하는 데 필요한 최소한의 정보만 처리합니다. 수집해서는 안 되거나 장기간 저장해서는 안 되는 것은 가능한 한 다루지 않습니다. 본 개인정보 처리방침은 TransLay가 이러한 정보를 어떻게 처리하는지 설명합니다."
         ],
