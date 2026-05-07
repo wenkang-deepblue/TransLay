@@ -193,34 +193,3 @@ function cleanupPreparedTranslationSubmission(sourceDocumentId, sourcePermission
     }
   }
 }
-
-/**
- * Revokes the worker service account's editor access from a document
- * after job completion, failure, or cancellation. Best-effort: failures
- * are logged but never surfaced to the user.
- */
-function revokeWorkerAccess(documentId) {
-  if (!documentId) return;
-
-  try {
-    var permissionId = findWorkerPermissionId(documentId);
-    if (!permissionId) {
-      console.log('No worker access permission found for ' + documentId);
-      return;
-    }
-    revokeWorkerPermission(documentId, permissionId);
-  } catch (err) {
-    console.log('Could not revoke worker access from ' + documentId + ': ' + err.message);
-  }
-}
-
-/**
- * Revokes worker access from both source and target documents after job ends.
- * Skips revocation if both IDs are the same (append_in_file mode).
- */
-function revokeWorkerAccessForJob(sourceDocumentId, targetDocumentId) {
-  revokeWorkerAccess(sourceDocumentId);
-  if (targetDocumentId && targetDocumentId !== sourceDocumentId) {
-    revokeWorkerAccess(targetDocumentId);
-  }
-}

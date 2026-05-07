@@ -88,25 +88,25 @@ export async function cleanupDriveWorkerPermissionsForJob(
 
 export function buildDriveCleanupTargets(job: DriveCleanupJob): DriveCleanupTarget[] {
   const targets: DriveCleanupTarget[] = [];
-  if (job.source_worker_permission_id) {
-    targets.push({
-      kind: "source",
-      fileId: job.source_doc_id,
-      permissionId: job.source_worker_permission_id,
-    });
-  }
+  const seen = new Set<string>();
+  const addTarget = (
+    kind: DriveCleanupTarget["kind"],
+    fileId: string | null,
+    permissionId: string | null
+  ) => {
+    if (!fileId || !permissionId) {
+      return;
+    }
+    const key = `${fileId}:${permissionId}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    targets.push({ kind, fileId, permissionId });
+  };
 
-  if (
-    job.target_doc_id &&
-    job.target_doc_id !== job.source_doc_id &&
-    job.target_worker_permission_id
-  ) {
-    targets.push({
-      kind: "target",
-      fileId: job.target_doc_id,
-      permissionId: job.target_worker_permission_id,
-    });
-  }
+  addTarget("source", job.source_doc_id, job.source_worker_permission_id);
+  addTarget("target", job.target_doc_id, job.target_worker_permission_id);
 
   return targets;
 }

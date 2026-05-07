@@ -432,6 +432,20 @@
     .duplicate-actions .btn {
       margin-top: 0;
     }
+    .cleanup-action {
+      display: none;
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      background: #e8f0fe;
+      color: #174ea6;
+      font-size: 12px;
+      text-align: center;
+    }
+    .cleanup-action.visible { display: block; }
+    .cleanup-action .btn {
+      margin-top: 10px;
+    }
 
     /* ── Confirm dialog ── */
     .dialog-overlay {
@@ -608,6 +622,12 @@
         </button>
       </div>
     </div>
+    <div class="cleanup-action" id="cleanupAction">
+      <div id="cleanupMessage"></div>
+      <button class="btn btn-secondary btn-inline" id="cleanupRetryBtn" onclick="handleCleanupRetry()" type="button">
+        Remove temporary access
+      </button>
+    </div>
 
     <!-- Source Language -->
     <div class="section">
@@ -745,6 +765,9 @@
       awaitingCancelDecision: false,
       cancelRequested: false,
       cancelRequestInFlight: false,
+      cleanupRecoveryInFlight: false,
+      pendingCleanupJobId: null,
+      pendingPreparedCleanup: null,
       isTranslating: false,
       isPreparingSubmission: false,
       activeSubmission: null,
@@ -815,7 +838,10 @@
       // Fetch entitlement before revealing the form so the user never sees the
       // static fallback FREE badge before the real account state arrives.
       refreshEntitlement(false, {
-        onSettled: showMainView
+        onSettled: function() {
+          showMainView();
+          retryPendingDriveCleanupOnStartup();
+        }
       });
     }
 
@@ -1043,6 +1069,7 @@
         })
         .previewJob({
           host_type: submissionData.jobRequest.host_type,
+          document_id: submissionData.jobRequest.document_id,
           range_mode: submissionData.jobRequest.range_mode,
           range_expression: submissionData.jobRequest.range_expression
         });
@@ -1294,61 +1321,95 @@
                 source_worker_permission_id: sourcePermissionId
               };
 
-              if (activeSubmission.cancelRequested) {
-                cleanupPreparedSubmission(activeSubmission, null, jobRequest);
-                finishSubmissionCanceled(jobRequest.output_mode);
-                return;
-              }
+              registerPreparedCleanupForSubmission(activeSubmission, null, jobRequest, function() {
+                activeSubmission = getActiveSubmission(submission.token);
+                if (!activeSubmission) {
+                  cleanupPreparedSubmission(sourceAccess, null, jobRequest);
+                  return;
+                }
 
-              if (outputMode === 'create_new_file') {
-                google.script.run
-                  .withSuccessHandler(function(prepared) {
-                    activeSubmission = getActiveSubmission(submission.token);
-                    if (!activeSubmission) {
-                      cleanupPreparedSubmission(sourceAccess, prepared, jobRequest);
-                      return;
-                    }
+                if (activeSubmission.cancelRequested) {
+                  cleanupPreparedSubmission(activeSubmission, null, jobRequest);
+                  finishSubmissionCanceled(jobRequest.output_mode);
+                  return;
+                }
 
-                    if (!prepared.targetWorkerPermissionId) {
-                      cleanupPreparedSubmission(activeSubmission, prepared, jobRequest);
+                if (outputMode === 'create_new_file') {
+                  google.script.run
+                    .withSuccessHandler(function(prepared) {
+                      activeSubmission = getActiveSubmission(submission.token);
+                      if (!activeSubmission) {
+                        cleanupPreparedSubmission(sourceAccess, prepared, jobRequest);
+                        return;
+                      }
+
+                      if (!prepared.targetWorkerPermissionId) {
+                        cleanupPreparedSubmission(activeSubmission, prepared, jobRequest);
+                        clearActiveSubmission();
+                        setTranslating(false);
+                        hideProgress();
+                        showError('Failed to prepare the new presentation: worker permission id was not returned.');
+                        return;
+                      }
+
+                      activeSubmission.targetDocumentId = prepared.documentId;
+                      activeSubmission.targetWorkerPermissionId = prepared.targetWorkerPermissionId;
+                      activeSubmission.targetCopyWasCreated = true;
+                      jobRequest.target_document_id = prepared.documentId;
+                      jobRequest.drive_access.target_worker_permission_id = prepared.targetWorkerPermissionId;
+                      state.currentOutputDocumentId = prepared.documentId;
+
+                      registerPreparedCleanupForSubmission(activeSubmission, prepared, jobRequest, function() {
+                        activeSubmission = getActiveSubmission(submission.token);
+                        if (!activeSubmission) {
+                          cleanupPreparedSubmission(sourceAccess, prepared, jobRequest);
+                          return;
+                        }
+                        if (activeSubmission.cancelRequested) {
+                          cleanupPreparedSubmission(activeSubmission, prepared, jobRequest);
+                          finishSubmissionCanceled(jobRequest.output_mode);
+                          return;
+                        }
+                        submitJob(jobRequest, submission.token);
+                      }, function() {
+                        activeSubmission = getActiveSubmission(submission.token);
+                        if (!activeSubmission) {
+                          return;
+                        }
+                        cleanupPreparedSubmission(activeSubmission, prepared, jobRequest);
+                        clearActiveSubmission();
+                        setTranslating(false);
+                        hideProgress();
+                        showError('Failed to register temporary access cleanup. Please try again.');
+                      });
+                    })
+                    .withFailureHandler(function(err) {
+                      activeSubmission = getActiveSubmission(submission.token);
+                      if (!activeSubmission) {
+                        return;
+                      }
+                      cleanupPreparedSubmission(activeSubmission, null, jobRequest);
                       clearActiveSubmission();
                       setTranslating(false);
                       hideProgress();
-                      showError('Failed to prepare the new presentation: worker permission id was not returned.');
-                      return;
-                    }
+                      showError('Failed to prepare the new presentation: ' + err.message);
+                    })
+                    .prepareOutputPresentation(targetLang);
+                  return;
+                }
 
-                    activeSubmission.targetDocumentId = prepared.documentId;
-                    activeSubmission.targetWorkerPermissionId = prepared.targetWorkerPermissionId;
-                    activeSubmission.targetCopyWasCreated = true;
-                    jobRequest.target_document_id = prepared.documentId;
-                    jobRequest.drive_access.target_worker_permission_id = prepared.targetWorkerPermissionId;
-                    state.currentOutputDocumentId = prepared.documentId;
-
-                    if (activeSubmission.cancelRequested) {
-                      cleanupPreparedSubmission(activeSubmission, prepared, jobRequest);
-                      finishSubmissionCanceled(jobRequest.output_mode);
-                      return;
-                    }
-
-                    submitJob(jobRequest, submission.token);
-                  })
-                  .withFailureHandler(function(err) {
-                    activeSubmission = getActiveSubmission(submission.token);
-                    if (!activeSubmission) {
-                      return;
-                    }
-                    cleanupPreparedSubmission(activeSubmission, null, jobRequest);
-                    clearActiveSubmission();
-                    setTranslating(false);
-                    hideProgress();
-                    showError('Failed to prepare the new presentation: ' + err.message);
-                  })
-                  .prepareOutputPresentation(targetLang);
-                return;
-              }
-
-              submitJob(jobRequest, submission.token);
+                submitJob(jobRequest, submission.token);
+              }, function() {
+                activeSubmission = getActiveSubmission(submission.token);
+                if (!activeSubmission) {
+                  return;
+                }
+                cleanupPreparedSubmission(activeSubmission, null, jobRequest);
+                clearActiveSubmission();
+                setTranslating(false);
+                hideProgress();
+                showError('Failed to register temporary access cleanup. Please try again.');
+              });
             })
             .withFailureHandler(function(err) {
               if (!getActiveSubmission(submission.token)) {
@@ -1357,7 +1418,7 @@
               clearActiveSubmission();
               setTranslating(false);
               hideProgress();
-              showError('Failed to authorize the current presentation for translation: ' + err.message);
+              showError(formatDriveAccessError(err));
             })
             .ensureCurrentPresentationWorkerAccess();
         })
@@ -1467,7 +1528,11 @@
           } else if (msg.indexOf('[CONCURRENT_JOB_RUNNING]') !== -1) {
             showError('A translation job is already in progress. Please wait for it to finish.');
           } else if (msg.indexOf('[DRIVE_CLEANUP_REQUIRED]') !== -1) {
-            showError('Temporary access cleanup is still pending for this presentation. Please reopen TransLay and try again after cleanup, or contact support with the affected task ID.');
+            showCleanupAction(
+              'Temporary access cleanup is still pending for this presentation.',
+              state.pendingCleanupJobId
+            );
+            retryPendingDriveCleanupForDocument(false);
           } else if (msg.indexOf('[IDEMPOTENT_REPLAY]') !== -1) {
             showDuplicateAction(
               'This translation has already been submitted. You can also submit it again, but resubmitting will consume your usage quota.',
@@ -1497,10 +1562,30 @@
       }
     }
 
+    function formatDriveAccessError(err) {
+      var msg = err && err.message ? err.message : String(err || '');
+      var reason = (err && err.driveReason) || '';
+      var reasonMatch = /\[DRIVE_REASON:([^\]]+)\]/.exec(msg);
+      if (!reason && reasonMatch) {
+        reason = reasonMatch[1];
+      }
+      if (reasonMatch) {
+        msg = msg.replace(/\[DRIVE_REASON:[^\]]+\]\s*/, '');
+      }
+      if (reason === 'insufficientFilePermissions' || reason === 'notFound') {
+        return 'Authorize this presentation from the TransLay add-on card, then reopen TransLay.';
+      }
+      if (reason === 'invalidSharingRequest' || msg.indexOf('cannot be shared') !== -1 || msg.indexOf('can be shared') !== -1) {
+        return 'This file cannot be shared with TransLay worker access. Ask the owner to allow sharing or make a copy you own.';
+      }
+      return 'Failed to authorize the current presentation for translation: ' + msg;
+    }
+
     // ── Job polling ──
     var POLL_IDLE_TIMEOUT_MS = 20 * 60 * 1000;
     var POLL_MAX_BACKOFF_MS = 60 * 1000;
     var POLL_RETRY_AFTER_RE = /\[(?:RATE_LIMITED|JOB_QUEUE_BUSY)(?::retry=(\d+))?\]/;
+    var CLEANUP_STARTUP_THROTTLE_MS = 60 * 1000;
 
     function _scheduleNextPoll(jobId, delayMs) {
       if (state.pollTimer) {
@@ -1617,7 +1702,7 @@
               resp.warnings || [],
               resp
             );
-            revokeWorkerAccessAfterJob();
+            retryTerminalDriveCleanup(resp);
             refreshEntitlement(true);
             return;
           } else if (resp.status === 'canceled') {
@@ -1625,7 +1710,7 @@
             setTranslating(false);
             hideProgress();
             showCanceledResult(resp);
-            revokeWorkerAccessAfterJob();
+            retryTerminalDriveCleanup(resp);
             refreshEntitlement(true);
             return;
           } else if (resp.status === 'failed') {
@@ -1639,12 +1724,21 @@
               resp.warnings || [],
               resp
             );
-            revokeWorkerAccessAfterJob();
+            retryTerminalDriveCleanup(resp);
             return;
           }
           // In progress — render and schedule next poll at the steady cadence.
           state.translatedUnitsBilled = resp.translated_units_billed || 0;
           var pct = resp.progress_percent || 0;
+          if (state.cancelRequested) {
+            showProgress(
+              pct,
+              'Canceling...',
+              'Cancellation confirmed. The worker will stop at the next safe checkpoint.'
+            );
+            _scheduleNextPoll(jobId, state.jobPollIntervalMs);
+            return;
+          }
           var step = formatStep(resp.current_step || resp.current_stage || resp.status);
           var detail = resp.details || '';
           showProgress(pct, step, detail);
@@ -1826,6 +1920,7 @@
               output_mode: outputMode,
               output_document_url: resp.output_document_url || null
             });
+            retryTerminalDriveCleanup(resp);
             refreshEntitlement(true);
           } else if (
             resp.status === 'already_completed' ||
@@ -1837,7 +1932,7 @@
             if (!state.pollTimer) {
               startPolling(jobId);
             }
-          } else if (!state.pollTimer) {
+          } else {
             startPolling(jobId);
           }
         })
@@ -2141,14 +2236,10 @@
 
     function showCanceledResult(resp) {
       var message = resp.message || 'Translation canceled.';
-      if (
-        resp.output_mode === 'create_new_file' &&
-        resp.total_units_billed > 0 &&
-        !!resp.output_document_url
-      ) {
-        message += ' The generated file was kept, and the generated slides were counted toward your quota.';
+      if (resp.output_mode === 'create_new_file') {
+        message += ' Temporary file moved to Trash.';
       }
-      showResult(false, message, resolveOutputDocumentUrl(resp), [], resp);
+      showResult(false, message, null, [], resp);
     }
 
     function shouldDisplayCompletedWithoutWarnings(resultMeta) {
@@ -2396,14 +2487,6 @@
       done(copied);
     }
 
-    function revokeWorkerAccessAfterJob() {
-      var sourceId = state.documentId;
-      var targetId = state.currentOutputDocumentId;
-      if (sourceId || targetId) {
-        google.script.run.revokeWorkerAccessForJob(sourceId || '', targetId || '');
-      }
-    }
-
     function cleanupPreparedSubmission(submissionLike, preparedTarget, jobRequest) {
       var sourceDocumentId = (submissionLike && (
         submissionLike.sourceDocumentId ||
@@ -2429,17 +2512,106 @@
         return;
       }
 
+      runPreparedSubmissionCleanup({
+        sourceDocumentId: sourceDocumentId,
+        sourcePermissionId: sourcePermissionId,
+        targetDocumentId: targetDocumentId,
+        targetPermissionId: targetPermissionId,
+        targetWasCopiedByAddon: targetWasCopiedByAddon
+      }, false);
+    }
+
+    function buildPreparedCleanupRequest(submissionLike, preparedTarget, jobRequest) {
+      var sourceDocumentId = (submissionLike && (
+        submissionLike.sourceDocumentId ||
+        submissionLike.documentId
+      )) || state.documentId || '';
+      var sourcePermissionId = (submissionLike && (
+        submissionLike.sourceWorkerPermissionId ||
+        submissionLike.source_worker_permission_id
+      )) || (jobRequest && jobRequest.drive_access && jobRequest.drive_access.source_worker_permission_id) || '';
+      var targetDocumentId = (preparedTarget && preparedTarget.documentId) ||
+        (submissionLike && submissionLike.targetCopyWasCreated && submissionLike.targetDocumentId) ||
+        (jobRequest && jobRequest.target_document_id) ||
+        '';
+      var targetPermissionId = (preparedTarget && preparedTarget.targetWorkerPermissionId) ||
+        (submissionLike && submissionLike.targetWorkerPermissionId) ||
+        (jobRequest && jobRequest.drive_access && jobRequest.drive_access.target_worker_permission_id) ||
+        '';
+      var targetWasCopiedByAddon = Boolean(
+        (preparedTarget && preparedTarget.documentId) ||
+        (submissionLike && submissionLike.targetCopyWasCreated)
+      );
+
+      return {
+        document_id: sourceDocumentId,
+        source_worker_permission_id: sourcePermissionId,
+        target_document_id: targetDocumentId,
+        target_worker_permission_id: targetPermissionId,
+        target_was_copied_by_addon: targetWasCopiedByAddon
+      };
+    }
+
+    function registerPreparedCleanupForSubmission(submissionLike, preparedTarget, jobRequest, onSuccess, onFailure) {
+      var request = buildPreparedCleanupRequest(submissionLike, preparedTarget, jobRequest);
+      if (!request.document_id || (
+        !request.source_worker_permission_id &&
+        !request.target_document_id &&
+        !request.target_worker_permission_id
+      )) {
+        if (onSuccess) onSuccess();
+        return;
+      }
+
       google.script.run
+        .withSuccessHandler(function() {
+          if (onSuccess) onSuccess();
+        })
+        .withFailureHandler(function() {
+          if (onFailure) onFailure();
+        })
+        .registerPreparedDriveCleanup(request);
+    }
+
+    function runPreparedSubmissionCleanup(cleanup, userInitiated) {
+      if (!cleanup || state.cleanupRecoveryInFlight) {
+        return;
+      }
+      state.pendingPreparedCleanup = cleanup;
+      state.cleanupRecoveryInFlight = true;
+      updateCleanupRetryButton();
+      updateTranslateButtonState();
+
+      google.script.run
+        .withSuccessHandler(function() {
+          state.cleanupRecoveryInFlight = false;
+          state.pendingPreparedCleanup = null;
+          clearPreparedCleanupRecordBestEffort(cleanup.sourceDocumentId);
+          if (userInitiated) {
+            clearError();
+          }
+          hideCleanupAction();
+        })
         .withFailureHandler(function(err) {
-          console.error('Prepared submission cleanup failed: ' + (err && err.message ? err.message : err));
+          state.cleanupRecoveryInFlight = false;
+          showCleanupAction('Temporary access cleanup could not be completed. Please retry.', null);
         })
         .cleanupPreparedTranslationSubmission(
-          sourceDocumentId,
-          sourcePermissionId,
-          targetDocumentId,
-          targetPermissionId,
-          targetWasCopiedByAddon
+          cleanup.sourceDocumentId,
+          cleanup.sourcePermissionId,
+          cleanup.targetDocumentId,
+          cleanup.targetPermissionId,
+          cleanup.targetWasCopiedByAddon
         );
+    }
+
+    function clearPreparedCleanupRecordBestEffort(documentId) {
+      if (!documentId) {
+        return;
+      }
+      google.script.run
+        .withFailureHandler(function() {})
+        .clearPreparedDriveCleanup(documentId);
     }
 
     function resolveOutputDocumentUrl(resp) {
@@ -2464,6 +2636,162 @@
       banner.textContent = '';
     }
 
+    function showCleanupAction(message, jobId) {
+      var action = document.getElementById('cleanupAction');
+      document.getElementById('cleanupMessage').textContent = message || 'Temporary access cleanup is still pending.';
+      if (arguments.length >= 2) {
+        state.pendingCleanupJobId = jobId || null;
+      }
+      action.classList.add('visible');
+      updateTranslateButtonState();
+      updateCleanupRetryButton();
+    }
+
+    function hideCleanupAction() {
+      var action = document.getElementById('cleanupAction');
+      action.classList.remove('visible');
+      document.getElementById('cleanupMessage').textContent = '';
+      state.pendingCleanupJobId = null;
+      state.pendingPreparedCleanup = null;
+      updateTranslateButtonState();
+      updateCleanupRetryButton();
+    }
+
+    function isCleanupActionVisible() {
+      return document.getElementById('cleanupAction').classList.contains('visible');
+    }
+
+    function updateCleanupRetryButton() {
+      var btn = document.getElementById('cleanupRetryBtn');
+      if (!btn) {
+        return;
+      }
+      btn.disabled = state.cleanupRecoveryInFlight;
+      btn.textContent = state.cleanupRecoveryInFlight
+        ? 'Removing...'
+        : 'Remove temporary access';
+    }
+
+    function handleCleanupRetry() {
+      if (state.cleanupRecoveryInFlight) {
+        return;
+      }
+      if (state.pendingPreparedCleanup) {
+        runPreparedSubmissionCleanup(state.pendingPreparedCleanup, true);
+        return;
+      }
+      if (state.pendingCleanupJobId) {
+        retryJobDriveCleanupFromSidebar(state.pendingCleanupJobId, true);
+        return;
+      }
+      retryPendingDriveCleanupForDocument(true);
+    }
+
+    function retryPendingDriveCleanupOnStartup() {
+      if (state.hostType !== 'slides' || !state.documentId) {
+        return;
+      }
+      retryPendingDriveCleanupForDocument(false);
+    }
+
+    function getStartupCleanupThrottleKey() {
+      return 'translay.cleanup-pending.lastAttempt.' + state.documentId;
+    }
+
+    function isStartupCleanupThrottled() {
+      try {
+        var lastAttempt = Number(sessionStorage.getItem(getStartupCleanupThrottleKey()) || 0);
+        return lastAttempt > 0 && Date.now() - lastAttempt < CLEANUP_STARTUP_THROTTLE_MS;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    function markStartupCleanupAttempt() {
+      try {
+        sessionStorage.setItem(getStartupCleanupThrottleKey(), String(Date.now()));
+      } catch (err) {
+        // Session storage can be unavailable in some embedded contexts; cleanup still proceeds.
+      }
+    }
+
+    function retryPendingDriveCleanupForDocument(userInitiated) {
+      if (state.cleanupRecoveryInFlight || !state.documentId) {
+        return;
+      }
+      if (!userInitiated) {
+        if (isStartupCleanupThrottled()) {
+          return;
+        }
+        markStartupCleanupAttempt();
+      }
+      state.cleanupRecoveryInFlight = true;
+      updateCleanupRetryButton();
+      updateTranslateButtonState();
+
+      google.script.run
+        .withSuccessHandler(function(resp) {
+          state.cleanupRecoveryInFlight = false;
+          handleCleanupRetryResponse(resp, userInitiated);
+        })
+        .withFailureHandler(function(err) {
+          state.cleanupRecoveryInFlight = false;
+          var msg = err && err.message
+            ? err.message
+            : 'Temporary access cleanup could not be checked.';
+          showCleanupAction(msg, state.pendingCleanupJobId);
+        })
+        .retryPendingDriveCleanup(state.documentId);
+    }
+
+    function retryJobDriveCleanupFromSidebar(jobId, userInitiated) {
+      if (state.cleanupRecoveryInFlight || !jobId) {
+        return;
+      }
+      state.cleanupRecoveryInFlight = true;
+      state.pendingCleanupJobId = jobId;
+      updateCleanupRetryButton();
+      updateTranslateButtonState();
+
+      google.script.run
+        .withSuccessHandler(function(resp) {
+          state.cleanupRecoveryInFlight = false;
+          handleCleanupRetryResponse(resp, userInitiated);
+        })
+        .withFailureHandler(function(err) {
+          state.cleanupRecoveryInFlight = false;
+          var msg = err && err.message
+            ? err.message
+            : 'Temporary access cleanup could not be completed.';
+          showCleanupAction(msg, jobId);
+        })
+        .retryJobDriveCleanup(jobId);
+    }
+
+    function handleCleanupRetryResponse(resp, userInitiated) {
+      if (resp && resp.drive_cleanup_status === 'failed') {
+        showCleanupAction(
+          resp.message || 'Temporary access cleanup is still pending. Please retry or contact support with the task ID.',
+          resp.job_id || state.pendingCleanupJobId
+        );
+        return;
+      }
+      hideCleanupAction();
+      if (userInitiated && resp && resp.drive_cleanup_status === 'succeeded') {
+        clearError();
+      }
+    }
+
+    function retryTerminalDriveCleanup(resp) {
+      if (!resp || !resp.job_id) {
+        return;
+      }
+      if (resp.drive_cleanup_status !== 'pending' && resp.drive_cleanup_status !== 'failed') {
+        return;
+      }
+      retryJobDriveCleanupFromSidebar(resp.job_id, false);
+    }
+
     function showDuplicateAction(message, duplicateSubmission) {
       document.getElementById('duplicateMessage').textContent = message;
       state.pendingDuplicateSubmission = duplicateSubmission || null;
@@ -2484,10 +2812,15 @@
 
     function updateTranslateButtonState() {
       var btn = document.getElementById('translateBtn');
-      btn.disabled = state.isTranslating || state.isPreparingSubmission || isDuplicateActionVisible();
+      btn.disabled =
+        state.isTranslating ||
+        state.isPreparingSubmission ||
+        state.cleanupRecoveryInFlight ||
+        isDuplicateActionVisible() ||
+        isCleanupActionVisible();
       btn.textContent = state.isTranslating
         ? 'Translating...'
-        : (state.isPreparingSubmission ? 'Preparing...' : 'Translate');
+        : (state.isPreparingSubmission || state.cleanupRecoveryInFlight ? 'Preparing...' : 'Translate');
     }
 
     function setPreparingSubmission(active) {

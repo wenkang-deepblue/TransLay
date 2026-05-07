@@ -23,10 +23,10 @@
     "slides": {
       "homepageTrigger": {
         "enabled": true,
-        "runFunction": "buildPhase1DriveFileScopeProbeHomepage"
+        "runFunction": "buildTransLaySlidesHomepage"
       },
       "onFileScopeGrantedTrigger": {
-        "runFunction": "onPhase1DriveFileScopeGranted"
+        "runFunction": "onTransLayFileScopeGranted"
       }
     }
   },

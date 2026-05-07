@@ -27,10 +27,14 @@ import {
 } from "./modules/session/handler";
 import {
   cancelJobHandler,
+  clearPreparedDriveCleanupHandler,
   createJobHandler,
   getJobHandler,
   pauseJobHandler,
   previewJobHandler,
+  registerPreparedDriveCleanupHandler,
+  retryJobDriveCleanupHandler,
+  retryPendingDriveCleanupHandler,
   resumeJobHandler,
   sweepHostOauthTokensHandler,
 } from "./modules/jobs/handler";
@@ -183,7 +187,25 @@ app.post(
   "/api/jobs/preview",
   googleAuth,
   userWriteRateLimit,
-  asyncHandler(previewJobHandler(pool))
+  asyncHandler(previewJobHandler(pool, redis))
+);
+app.post(
+  "/api/jobs/prepared-cleanup",
+  googleAuth,
+  userWriteRateLimit,
+  asyncHandler(registerPreparedDriveCleanupHandler(redis))
+);
+app.post(
+  "/api/jobs/prepared-cleanup/clear",
+  googleAuth,
+  userWriteRateLimit,
+  asyncHandler(clearPreparedDriveCleanupHandler(redis))
+);
+app.post(
+  "/api/jobs/cleanup-pending",
+  googleAuth,
+  userWriteRateLimit,
+  asyncHandler(retryPendingDriveCleanupHandler(pool, redis))
 );
 app.post(
   "/api/jobs",
@@ -196,6 +218,12 @@ app.get(
   googleAuth,
   userReadRateLimit,
   asyncHandler(getJobHandler(pool, redis))
+);
+app.post(
+  "/api/jobs/:jobId/drive-cleanup",
+  googleAuth,
+  userWriteRateLimit,
+  asyncHandler(retryJobDriveCleanupHandler(pool))
 );
 app.post(
   "/api/jobs/:jobId/pause",

@@ -56,7 +56,7 @@ function parseDriveApiResponse(response, operation) {
 function buildDriveApiError(operation, httpStatus, error) {
   var reason = extractDriveApiReason(error);
   var message = error.message || 'Unknown Drive API error';
-  var err = new Error(operation + ' failed (HTTP ' + httpStatus + ' / ' + reason + '): ' + message);
+  var err = new Error('[DRIVE_REASON:' + reason + '] ' + operation + ' failed (HTTP ' + httpStatus + '): ' + message);
   err.driveOperation = operation;
   err.driveStatus = httpStatus;
   err.driveReason = reason;

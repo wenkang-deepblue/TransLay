@@ -51,7 +51,7 @@ function createRawResponse(code, text) {
   };
 }
 
-test("phase 1 preflight records successful Drive REST access to the active deck", async () => {
+test("Drive file-scope preflight records successful Drive REST access to the active deck", async () => {
   const context = await loadProbeContext();
   const fetches = [];
   context.UrlFetchApp = {
@@ -69,7 +69,7 @@ test("phase 1 preflight records successful Drive REST access to the active deck"
     },
   };
 
-  const result = context.runPhase1DriveFileScopePreflight_({
+  const result = context.runTransLayDriveFileScopePreflight_({
     slides: {
       id: "active-deck",
       title: "Golden Gate Bridge",
@@ -98,7 +98,7 @@ test("phase 1 preflight records successful Drive REST access to the active deck"
   ]);
 });
 
-test("phase 1 preflight preserves Drive API failure status and reason", async () => {
+test("Drive file-scope preflight preserves Drive API failure status and reason", async () => {
   const context = await loadProbeContext();
   context.UrlFetchApp = {
     fetch() {
@@ -112,7 +112,7 @@ test("phase 1 preflight preserves Drive API failure status and reason", async ()
     },
   };
 
-  const result = context.runPhase1DriveFileScopePreflight_({
+  const result = context.runTransLayDriveFileScopePreflight_({
     slides: {
       id: "active-deck",
       addonHasFileScopePermission: true,
@@ -129,7 +129,7 @@ test("phase 1 preflight preserves Drive API failure status and reason", async ()
   assert.equal(result.message, "The user does not have sufficient permissions.");
 });
 
-test("phase 1 preflight preserves Drive API 404 notFound failure", async () => {
+test("Drive file-scope preflight preserves Drive API 404 notFound failure", async () => {
   const context = await loadProbeContext();
   context.UrlFetchApp = {
     fetch() {
@@ -143,7 +143,7 @@ test("phase 1 preflight preserves Drive API 404 notFound failure", async () => {
     },
   };
 
-  const result = context.runPhase1DriveFileScopePreflight_({
+  const result = context.runTransLayDriveFileScopePreflight_({
     slides: {
       id: "missing-deck",
       addonHasFileScopePermission: true,
@@ -158,7 +158,7 @@ test("phase 1 preflight preserves Drive API 404 notFound failure", async () => {
   assert.equal(result.message, "File not found.");
 });
 
-test("phase 1 preflight reports invalid Drive API JSON as a normalized failure", async () => {
+test("Drive file-scope preflight reports invalid Drive API JSON as a normalized failure", async () => {
   const context = await loadProbeContext();
   context.UrlFetchApp = {
     fetch() {
@@ -166,7 +166,7 @@ test("phase 1 preflight reports invalid Drive API JSON as a normalized failure",
     },
   };
 
-  const result = context.runPhase1DriveFileScopePreflight_({
+  const result = context.runTransLayDriveFileScopePreflight_({
     slides: {
       id: "active-deck",
       addonHasFileScopePermission: true,
@@ -181,7 +181,7 @@ test("phase 1 preflight reports invalid Drive API JSON as a normalized failure",
   assert.equal(result.message, "Drive API response was not valid JSON.");
 });
 
-test("phase 1 preflight reports UrlFetch failures before receiving an HTTP response", async () => {
+test("Drive file-scope preflight reports UrlFetch failures before receiving an HTTP response", async () => {
   const context = await loadProbeContext();
   context.UrlFetchApp = {
     fetch() {
@@ -189,7 +189,7 @@ test("phase 1 preflight reports UrlFetch failures before receiving an HTTP respo
     },
   };
 
-  const result = context.runPhase1DriveFileScopePreflight_({
+  const result = context.runTransLayDriveFileScopePreflight_({
     slides: {
       id: "active-deck",
       addonHasFileScopePermission: true,
@@ -203,7 +203,7 @@ test("phase 1 preflight reports UrlFetch failures before receiving an HTTP respo
   assert.equal(result.message, "No permission to call UrlFetchApp.fetch");
 });
 
-test("phase 1 preflight reports missing event file scope before using Drive REST", async () => {
+test("Drive file-scope preflight reports missing event file scope before using Drive REST", async () => {
   const context = await loadProbeContext();
   context.UrlFetchApp = {
     fetch() {
@@ -211,7 +211,7 @@ test("phase 1 preflight reports missing event file scope before using Drive REST
     },
   };
 
-  const result = context.runPhase1DriveFileScopePreflight_({
+  const result = context.runTransLayDriveFileScopePreflight_({
     slides: {
       addonHasFileScopePermission: false,
     },
@@ -224,7 +224,7 @@ test("phase 1 preflight reports missing event file scope before using Drive REST
   assert.match(result.message, /not been granted file access/);
 });
 
-test("phase 1 preflight refuses to pass without a Slides event ID", async () => {
+test("Drive file-scope preflight refuses to pass without a Slides event ID", async () => {
   const context = await loadProbeContext();
   context.UrlFetchApp = {
     fetch() {
@@ -232,7 +232,7 @@ test("phase 1 preflight refuses to pass without a Slides event ID", async () => 
     },
   };
 
-  const result = context.runPhase1DriveFileScopePreflight_({});
+  const result = context.runTransLayDriveFileScopePreflight_({});
 
   assert.equal(result.ok, false);
   assert.equal(result.activeDocumentId, null);
@@ -241,7 +241,7 @@ test("phase 1 preflight refuses to pass without a Slides event ID", async () => 
   assert.match(result.message, /did not include Slides context/);
 });
 
-test("phase 1 request action uses CardService active-file scope builder", async () => {
+test("Drive file-scope request action uses CardService active-file scope builder", async () => {
   const context = await loadProbeContext();
   const calls = [];
   context.CardService = {
@@ -260,7 +260,7 @@ test("phase 1 request action uses CardService active-file scope builder", async 
     },
   };
 
-  const response = context.requestPhase1DriveFileScopeForActiveDocument({});
+  const response = context.requestTransLayFileScopeForActiveDocument({});
 
   assert.deepEqual(calls, ["builder", "request", "build"]);
   assert.deepEqual(response, { type: "editor-file-scope-response" });

@@ -8,10 +8,25 @@ import type { JobId, JobSlideResult, JobWarning, UserId } from "@translay/shared
 import {
   __buildJobStatusResponseForTests,
   __extractBearerTokenForTests,
+  __resetDriveCleanupRetryHooksForTests,
   __resolveHostOauthPersistenceForTests,
+  __setDriveCleanupRetryHooksForTests,
   createJobHandler,
   previewJobHandler,
+  registerPreparedDriveCleanupHandler,
+  clearPreparedDriveCleanupHandler,
+  retryJobDriveCleanupHandler,
+  retryPendingDriveCleanupHandler,
 } from "./handler";
+
+function createRedisMock(overrides: Record<string, unknown> = {}): Redis {
+  return {
+    get: async () => null,
+    set: async () => "OK",
+    del: async () => 1,
+    ...overrides,
+  } as unknown as Redis;
+}
 
 function createBaseJob() {
   return {
@@ -23,8 +38,8 @@ function createBaseJob() {
     target_doc_id: "target-doc",
     source_worker_permission_id: "source-permission",
     target_worker_permission_id: "target-permission",
-    drive_cleanup_status: "pending" as const,
-    drive_cleanup_attempts: 0,
+    drive_cleanup_status: "succeeded" as const,
+    drive_cleanup_attempts: 1,
     drive_cleanup_last_error_code: null,
     drive_cleanup_last_attempt_at: null,
     drive_cleanup_completed_at: null,
@@ -810,7 +825,7 @@ test("createJobHandler does not delete an idempotency record while Drive cleanup
 
   await createJobHandler(
     pool,
-    {} as Redis,
+    createRedisMock(),
     { jobs: { maxGlobalInFlightJobs: 50 } } as AppConfig
   )(
     {
@@ -885,7 +900,7 @@ test("createJobHandler blocks unresolved Drive cleanup even without an idempoten
 
   await createJobHandler(
     pool,
-    {} as Redis,
+    createRedisMock(),
     { jobs: { maxGlobalInFlightJobs: 50 } } as AppConfig
   )(
     {
@@ -958,7 +973,7 @@ test("createJobHandler does not treat resubmit as cleanup recovery", async () =>
 
   await createJobHandler(
     pool,
-    {} as Redis,
+    createRedisMock(),
     { jobs: { maxGlobalInFlightJobs: 50 } } as AppConfig
   )(
     {
@@ -987,6 +1002,475 @@ test("createJobHandler does not treat resubmit as cleanup recovery", async () =>
   assert.deepEqual(payload, {
     error: "DRIVE_CLEANUP_REQUIRED",
     message: "A previous request for this presentation still has pending temporary access cleanup.",
+  });
+});
+
+test("retryJobDriveCleanupHandler revokes stored permissions and marks cleanup succeeded", async () => {
+  const fetchCalls: Array<{ url: string; method: string | undefined; authorization: string | undefined }> = [];
+  __setDriveCleanupRetryHooksForTests({
+    fetch: (async (input, init) => {
+      fetchCalls.push({
+        url: String(input),
+        method: init?.method,
+        authorization: (init?.headers as Record<string, string> | undefined)?.Authorization,
+      });
+      return { ok: true, status: 204 } as Response;
+    }) as typeof fetch,
+    sleep: async () => {},
+  });
+
+  try {
+    const pool = {
+      query: async (sql: string, params?: unknown[]) => {
+        if (sql.includes("FROM translation_jobs WHERE id = $1 AND user_id = $2")) {
+          return {
+            rows: [{
+              ...createBaseJob(),
+              drive_cleanup_status: "failed",
+              drive_cleanup_attempts: 1,
+            }],
+          };
+        }
+        if (sql.includes("UPDATE translation_jobs")) {
+          assert.deepEqual(params, [
+            "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+            "succeeded",
+            null,
+            "a8b96255-d4ef-47ee-bf43-b53fdc318c9d",
+          ]);
+          return {
+            rows: [{
+              ...createBaseJob(),
+              drive_cleanup_status: "succeeded",
+              drive_cleanup_attempts: 2,
+              drive_cleanup_last_error_code: null,
+            }],
+          };
+        }
+        throw new Error(`Unexpected pool query: ${sql}`);
+      },
+    } as unknown as Pool;
+
+    let statusCode = 200;
+    let payload: Record<string, unknown> | null = null;
+    const res = {
+      status(code: number) {
+        statusCode = code;
+        return this;
+      },
+      json(body: Record<string, unknown>) {
+        payload = body;
+        return this;
+      },
+    } as never;
+
+    await retryJobDriveCleanupHandler(pool)(
+      {
+        authContext: { user_id: "a8b96255-d4ef-47ee-bf43-b53fdc318c9d" as UserId },
+        headers: { authorization: "Bearer fresh-host-token" },
+        params: { jobId: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8" },
+      } as never,
+      res
+    );
+
+    assert.equal(statusCode, 200);
+    assert.deepEqual(payload, {
+      job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+      drive_cleanup_status: "succeeded",
+      drive_cleanup_attempts: 2,
+      message: "Temporary access cleanup succeeded.",
+    });
+    assert.deepEqual(fetchCalls, [
+      {
+        url: "https://www.googleapis.com/drive/v3/files/source-doc/permissions/source-permission?supportsAllDrives=true",
+        method: "DELETE",
+        authorization: "Bearer fresh-host-token",
+      },
+      {
+        url: "https://www.googleapis.com/drive/v3/files/target-doc/permissions/target-permission?supportsAllDrives=true",
+        method: "DELETE",
+        authorization: "Bearer fresh-host-token",
+      },
+    ]);
+  } finally {
+    __resetDriveCleanupRetryHooksForTests();
+  }
+});
+
+test("retryJobDriveCleanupHandler cleans distinct permissions on the same Drive file", async () => {
+  const fetchCalls: string[] = [];
+  __setDriveCleanupRetryHooksForTests({
+    fetch: (async (input) => {
+      fetchCalls.push(String(input));
+      return { ok: true, status: 204 } as Response;
+    }) as typeof fetch,
+    sleep: async () => {},
+  });
+
+  try {
+    const pool = {
+      query: async (sql: string) => {
+        if (sql.includes("FROM translation_jobs WHERE id = $1 AND user_id = $2")) {
+          return {
+            rows: [{
+              ...createBaseJob(),
+              target_doc_id: "source-doc",
+              source_worker_permission_id: "source-permission",
+              target_worker_permission_id: "target-permission",
+              drive_cleanup_status: "failed",
+            }],
+          };
+        }
+        if (sql.includes("UPDATE translation_jobs")) {
+          return {
+            rows: [{
+              ...createBaseJob(),
+              drive_cleanup_status: "succeeded",
+              drive_cleanup_attempts: 1,
+            }],
+          };
+        }
+        throw new Error(`Unexpected pool query: ${sql}`);
+      },
+    } as unknown as Pool;
+
+    await retryJobDriveCleanupHandler(pool)(
+      {
+        authContext: { user_id: "a8b96255-d4ef-47ee-bf43-b53fdc318c9d" as UserId },
+        headers: { authorization: "Bearer fresh-host-token" },
+        params: { jobId: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8" },
+      } as never,
+      { status() { return this; }, json() { return this; } } as never
+    );
+
+    assert.deepEqual(fetchCalls, [
+      "https://www.googleapis.com/drive/v3/files/source-doc/permissions/source-permission?supportsAllDrives=true",
+      "https://www.googleapis.com/drive/v3/files/source-doc/permissions/target-permission?supportsAllDrives=true",
+    ]);
+  } finally {
+    __resetDriveCleanupRetryHooksForTests();
+  }
+});
+
+test("retryJobDriveCleanupHandler retries transient Drive cleanup failures", async () => {
+  const sleepCalls: number[] = [];
+  let attempts = 0;
+  __setDriveCleanupRetryHooksForTests({
+    fetch: (async () => {
+      attempts += 1;
+      return attempts === 1
+        ? ({ ok: false, status: 429 } as Response)
+        : ({ ok: true, status: 204 } as Response);
+    }) as typeof fetch,
+    sleep: async (ms) => {
+      sleepCalls.push(ms);
+    },
+  });
+
+  try {
+    const pool = {
+      query: async (sql: string) => {
+        if (sql.includes("FROM translation_jobs WHERE id = $1 AND user_id = $2")) {
+          return {
+            rows: [{
+              ...createBaseJob(),
+              target_worker_permission_id: null,
+              drive_cleanup_status: "failed",
+            }],
+          };
+        }
+        if (sql.includes("UPDATE translation_jobs")) {
+          return {
+            rows: [{
+              ...createBaseJob(),
+              drive_cleanup_status: "succeeded",
+              drive_cleanup_attempts: 1,
+            }],
+          };
+        }
+        throw new Error(`Unexpected pool query: ${sql}`);
+      },
+    } as unknown as Pool;
+
+    await retryJobDriveCleanupHandler(pool)(
+      {
+        authContext: { user_id: "a8b96255-d4ef-47ee-bf43-b53fdc318c9d" as UserId },
+        headers: { authorization: "Bearer fresh-host-token" },
+        params: { jobId: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8" },
+      } as never,
+      { status() { return this; }, json() { return this; } } as never
+    );
+
+    assert.equal(attempts, 2);
+    assert.deepEqual(sleepCalls, [500]);
+  } finally {
+    __resetDriveCleanupRetryHooksForTests();
+  }
+});
+
+test("retryPendingDriveCleanupHandler records failed cleanup when Drive refuses deletion", async () => {
+  __setDriveCleanupRetryHooksForTests({
+    fetch: (async () => ({ ok: false, status: 403 }) as Response) as typeof fetch,
+    sleep: async () => {},
+  });
+
+  try {
+    const pool = {
+      query: async (sql: string, params?: unknown[]) => {
+        if (sql.includes("FROM translation_jobs") && sql.includes("ORDER BY started_at")) {
+          assert.deepEqual(params, [
+            "a8b96255-d4ef-47ee-bf43-b53fdc318c9d",
+            "source-doc",
+          ]);
+          return {
+            rows: [{
+              ...createBaseJob(),
+              status: "completed",
+              drive_cleanup_status: "failed",
+              drive_cleanup_attempts: 2,
+            }],
+          };
+        }
+        if (sql.includes("UPDATE translation_jobs")) {
+          assert.deepEqual(params, [
+            "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+            "failed",
+            "drive_cleanup_forbidden",
+            "a8b96255-d4ef-47ee-bf43-b53fdc318c9d",
+          ]);
+          return {
+            rows: [{
+              ...createBaseJob(),
+              drive_cleanup_status: "failed",
+              drive_cleanup_attempts: 3,
+              drive_cleanup_last_error_code: "drive_cleanup_forbidden",
+            }],
+          };
+        }
+        throw new Error(`Unexpected pool query: ${sql}`);
+      },
+    } as unknown as Pool;
+
+    let statusCode = 200;
+    let payload: Record<string, unknown> | null = null;
+    const res = {
+      status(code: number) {
+        statusCode = code;
+        return this;
+      },
+      json(body: Record<string, unknown>) {
+        payload = body;
+        return this;
+      },
+    } as never;
+
+    await retryPendingDriveCleanupHandler(pool, createRedisMock())(
+      {
+        authContext: { user_id: "a8b96255-d4ef-47ee-bf43-b53fdc318c9d" as UserId },
+        headers: { authorization: "Bearer fresh-host-token" },
+        body: { document_id: "source-doc" },
+      } as never,
+      res
+    );
+
+    assert.equal(statusCode, 200);
+    assert.deepEqual(payload, {
+      job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+      drive_cleanup_status: "failed",
+      drive_cleanup_attempts: 3,
+      drive_cleanup_last_error_code: "drive_cleanup_forbidden",
+      message: "Temporary access cleanup is still pending. Please retry or contact support with the task ID.",
+    });
+  } finally {
+    __resetDriveCleanupRetryHooksForTests();
+  }
+});
+
+test("retryPendingDriveCleanupHandler cleans prepared metadata when no job row exists", async () => {
+  const fetchCalls: Array<{ url: string; method: string | undefined; body?: unknown }> = [];
+  __setDriveCleanupRetryHooksForTests({
+    fetch: (async (input, init) => {
+      fetchCalls.push({
+        url: String(input),
+        method: init?.method,
+        body: init?.body,
+      });
+      return { ok: true, status: 204 } as Response;
+    }) as typeof fetch,
+    sleep: async () => {},
+  });
+
+  try {
+    let deletedKey: string | null = null;
+    const redis = createRedisMock({
+      get: async () => JSON.stringify({
+        source_doc_id: "source-doc",
+        source_worker_permission_id: "source-permission",
+        target_doc_id: "target-doc",
+        target_worker_permission_id: "target-permission",
+        target_was_copied_by_addon: true,
+        drive_cleanup_attempts: 0,
+        drive_cleanup_last_error_code: null,
+        registered_at: "2026-05-07T00:00:00.000Z",
+      }),
+      del: async (key: string) => {
+        deletedKey = key;
+        return 1;
+      },
+    });
+    const pool = {
+      query: async (sql: string) => {
+        if (sql.includes("drive_cleanup_status IN")) {
+          return { rows: [] };
+        }
+        throw new Error(`Unexpected pool query: ${sql}`);
+      },
+    } as unknown as Pool;
+
+    let payload: Record<string, unknown> | null = null;
+    const res = {
+      status() { return this; },
+      json(body: Record<string, unknown>) {
+        payload = body;
+        return this;
+      },
+    } as never;
+
+    await retryPendingDriveCleanupHandler(pool, redis)(
+      {
+        authContext: { user_id: "a8b96255-d4ef-47ee-bf43-b53fdc318c9d" as UserId },
+        headers: { authorization: "Bearer fresh-host-token" },
+        body: { document_id: "source-doc" },
+      } as never,
+      res
+    );
+
+    assert.deepEqual(payload, {
+      job_id: null,
+      drive_cleanup_status: "succeeded",
+      drive_cleanup_attempts: 1,
+      message: "Temporary access cleanup succeeded.",
+    });
+    assert.equal(deletedKey, "jobs:prepared-drive-cleanup:a8b96255-d4ef-47ee-bf43-b53fdc318c9d:source-doc");
+    assert.deepEqual(fetchCalls, [
+      {
+        url: "https://www.googleapis.com/drive/v3/files/source-doc/permissions/source-permission?supportsAllDrives=true",
+        method: "DELETE",
+        body: undefined,
+      },
+      {
+        url: "https://www.googleapis.com/drive/v3/files/target-doc/permissions/target-permission?supportsAllDrives=true",
+        method: "DELETE",
+        body: undefined,
+      },
+      {
+        url: "https://www.googleapis.com/drive/v3/files/target-doc?supportsAllDrives=true",
+        method: "PATCH",
+        body: JSON.stringify({ trashed: true }),
+      },
+    ]);
+  } finally {
+    __resetDriveCleanupRetryHooksForTests();
+  }
+});
+
+test("registerPreparedDriveCleanupHandler stores bounded cleanup metadata", async () => {
+  let storedKey: string | null = null;
+  let storedValue: string | null = null;
+  let storedTtl: number | null = null;
+  const redis = createRedisMock({
+    set: async (key: string, value: string, mode: string, ttl: number) => {
+      storedKey = key;
+      storedValue = value;
+      storedTtl = mode === "EX" ? ttl : null;
+      return "OK";
+    },
+  });
+
+  await registerPreparedDriveCleanupHandler(redis)(
+    {
+      authContext: { user_id: "user-1" as UserId },
+      body: {
+        document_id: "source-doc",
+        source_worker_permission_id: "source-permission",
+        target_document_id: "target-doc",
+        target_worker_permission_id: "target-permission",
+        target_was_copied_by_addon: true,
+      },
+    } as never,
+    { status() { return this; }, json() { return this; } } as never
+  );
+
+  assert.equal(storedKey, "jobs:prepared-drive-cleanup:user-1:source-doc");
+  assert.equal(storedTtl, 24 * 60 * 60);
+  assert.equal(JSON.parse(storedValue!).source_doc_id, "source-doc");
+  assert.equal(JSON.parse(storedValue!).target_was_copied_by_addon, true);
+});
+
+test("clearPreparedDriveCleanupHandler deletes prepared cleanup metadata", async () => {
+  let deletedKey: string | null = null;
+  const redis = createRedisMock({
+    del: async (key: string) => {
+      deletedKey = key;
+      return 1;
+    },
+  });
+
+  await clearPreparedDriveCleanupHandler(redis)(
+    {
+      authContext: { user_id: "user-1" as UserId },
+      body: { document_id: "source-doc" },
+    } as never,
+    { status() { return this; }, json() { return this; } } as never
+  );
+
+  assert.equal(deletedKey, "jobs:prepared-drive-cleanup:user-1:source-doc");
+});
+
+test("retryJobDriveCleanupHandler rejects ID tokens before attempting Drive cleanup", async () => {
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("FROM translation_jobs WHERE id = $1 AND user_id = $2")) {
+        return {
+          rows: [{
+            ...createBaseJob(),
+            drive_cleanup_status: "failed",
+          }],
+        };
+      }
+      if (sql.includes("UPDATE translation_jobs")) {
+        throw new Error("cleanup attempts should not be recorded for ID tokens");
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    },
+  } as unknown as Pool;
+
+  let statusCode = 200;
+  let payload: Record<string, unknown> | null = null;
+  const res = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    json(body: Record<string, unknown>) {
+      payload = body;
+      return this;
+    },
+  } as never;
+
+  await retryJobDriveCleanupHandler(pool)(
+    {
+      authContext: { user_id: "a8b96255-d4ef-47ee-bf43-b53fdc318c9d" as UserId },
+      headers: { authorization: "Bearer header.payload.signature" },
+      params: { jobId: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8" },
+    } as never,
+    res
+  );
+
+  assert.equal(statusCode, 401);
+  assert.deepEqual(payload, {
+    error: "INVALID_TOKEN",
+    message: "Token verification failed",
   });
 });
 
@@ -1076,7 +1560,7 @@ test("createJobHandler preserves cleanup metadata and idempotency when enqueue f
     }),
   } as unknown as Pool;
 
-  const redis = {
+  const redis = createRedisMock({
     multi: () => ({
       hset() {
         return this;
@@ -1086,7 +1570,7 @@ test("createJobHandler preserves cleanup metadata and idempotency when enqueue f
       },
       exec: async () => [[null, 1], [null, 1]],
     }),
-  } as unknown as Redis;
+  });
 
   let statusCode = 200;
   let payload: Record<string, unknown> | null = null;
@@ -1239,7 +1723,7 @@ test("createJobHandler returns a partial quota option when selected slides excee
 
   await createJobHandler(
     pool,
-    {} as Redis,
+    createRedisMock(),
     { jobs: { maxGlobalInFlightJobs: 50 } } as AppConfig
   )(req, res);
 
@@ -1262,6 +1746,9 @@ test("createJobHandler returns a partial quota option when selected slides excee
 test("previewJobHandler returns allowed and excluded ranges for partial quota continuation", async () => {
   const pool = {
     query: async (sql: string) => {
+      if (sql.includes("drive_cleanup_status IN")) {
+        return { rows: [] };
+      }
       if (sql.includes("FROM subscriptions")) {
         return {
           rows: [{
@@ -1315,11 +1802,12 @@ test("previewJobHandler returns allowed and excluded ranges for partial quota co
     },
   } as never;
 
-  await previewJobHandler(pool)(
+  await previewJobHandler(pool, createRedisMock())(
     {
       authContext: { user_id: "user-1" as UserId },
       body: {
         host_type: "slides",
+        document_id: "source-doc",
         range_mode: "custom",
         range_expression: "2~5, 8, 9~15, 20~22",
       },
@@ -1343,9 +1831,63 @@ test("previewJobHandler returns allowed and excluded ranges for partial quota co
   });
 });
 
+test("previewJobHandler blocks unresolved Drive cleanup before quota preview", async () => {
+  const pool = {
+    query: async (sql: string, params?: unknown[]) => {
+      if (sql.includes("drive_cleanup_status IN")) {
+        assert.deepEqual(params, ["user-1", "source-doc"]);
+        return {
+          rows: [{
+            ...createBaseJob(),
+            user_id: "user-1",
+            source_doc_id: "source-doc",
+            drive_cleanup_status: "failed",
+          }],
+        };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    },
+  } as unknown as Pool;
+
+  let statusCode = 200;
+  let payload: Record<string, unknown> | null = null;
+  const res = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    json(body: Record<string, unknown>) {
+      payload = body;
+      return this;
+    },
+  } as never;
+
+  await previewJobHandler(pool, createRedisMock())(
+    {
+      authContext: { user_id: "user-1" as UserId },
+      body: {
+        host_type: "slides",
+        document_id: "source-doc",
+        range_mode: "custom",
+        range_expression: "1~3",
+      },
+    } as never,
+    res
+  );
+
+  assert.equal(statusCode, 409);
+  assert.deepEqual(payload, {
+    error: "DRIVE_CLEANUP_REQUIRED",
+    message: "A previous request for this presentation still has pending temporary access cleanup.",
+  });
+});
+
 test("previewJobHandler truncates sparse custom Slides ranges to the remaining quota", async () => {
   const pool = {
     query: async (sql: string) => {
+      if (sql.includes("drive_cleanup_status IN")) {
+        return { rows: [] };
+      }
       if (sql.includes("FROM subscriptions")) {
         return {
           rows: [{
@@ -1399,11 +1941,12 @@ test("previewJobHandler truncates sparse custom Slides ranges to the remaining q
     },
   } as never;
 
-  await previewJobHandler(pool)(
+  await previewJobHandler(pool, createRedisMock())(
     {
       authContext: { user_id: "user-1" as UserId },
       body: {
         host_type: "slides",
+        document_id: "source-doc",
         range_mode: "custom",
         range_expression: "2, 5-7, 9-11, 14, 18-22",
       },
@@ -1500,7 +2043,7 @@ test("createJobHandler returns JOB_QUEUE_BUSY when the global in-flight gate is 
     }),
   } as unknown as Pool;
 
-  const redis = {} as Redis;
+  const redis = createRedisMock();
   const config: AppConfig = {
     port: 8080,
     nodeEnv: "test",
@@ -1694,7 +2237,7 @@ test("createJobHandler returns CONCURRENT_JOB_RUNNING when atomic admission sees
     }),
   } as unknown as Pool;
 
-  const redis = {} as Redis;
+  const redis = createRedisMock();
   const config: AppConfig = {
     port: 8080,
     nodeEnv: "test",

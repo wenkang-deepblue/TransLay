@@ -37,7 +37,7 @@ test("buildDriveCleanupTargets includes source and distinct create-new-file targ
   );
 });
 
-test("buildDriveCleanupTargets does not duplicate in-file source and target permissions", () => {
+test("buildDriveCleanupTargets keeps distinct in-file source and target permissions", () => {
   assert.deepEqual(
     buildDriveCleanupTargets({
       id: "job-same-file",
@@ -51,6 +51,30 @@ test("buildDriveCleanupTargets does not duplicate in-file source and target perm
         kind: "source",
         fileId: "source-doc",
         permissionId: "source-permission",
+      },
+      {
+        kind: "target",
+        fileId: "source-doc",
+        permissionId: "target-permission",
+      },
+    ]
+  );
+});
+
+test("buildDriveCleanupTargets deduplicates repeated in-file permission ids", () => {
+  assert.deepEqual(
+    buildDriveCleanupTargets({
+      id: "job-same-permission",
+      source_doc_id: "source-doc",
+      target_doc_id: "source-doc",
+      source_worker_permission_id: "same-permission",
+      target_worker_permission_id: "same-permission",
+    }),
+    [
+      {
+        kind: "source",
+        fileId: "source-doc",
+        permissionId: "same-permission",
       },
     ]
   );

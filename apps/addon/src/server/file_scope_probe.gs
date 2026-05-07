@@ -1,37 +1,36 @@
-var PHASE1_DRIVE_FILE_SCOPE_PROBE_NAME = 'Phase 1 Drive file-scope probe';
-var PHASE1_DRIVE_FILE_SCOPE_PROBE_LOG_PREFIX = '[phase1-drive-file-scope]';
+var TRANSLAY_DRIVE_FILE_SCOPE_LOG_PREFIX = '[translay-drive-file-scope]';
 
-function buildPhase1DriveFileScopeProbeHomepage(e) {
-  return [buildPhase1DriveFileScopeProbeCard_(null)];
+function buildTransLaySlidesHomepage(e) {
+  return [buildTransLaySlidesEntryCard_(null)];
 }
 
-function requestPhase1DriveFileScopeForActiveDocument(e) {
-  console.info(PHASE1_DRIVE_FILE_SCOPE_PROBE_LOG_PREFIX + ' requesting active-file drive.file scope');
+function requestTransLayFileScopeForActiveDocument(e) {
+  console.info(TRANSLAY_DRIVE_FILE_SCOPE_LOG_PREFIX + ' requesting active-file drive.file scope');
   return CardService.newEditorFileScopeActionResponseBuilder()
     .requestFileScopeForActiveDocument()
     .build();
 }
 
-function onPhase1DriveFileScopeGranted(e) {
-  var result = runPhase1DriveFileScopePreflight_(e);
-  logPhase1DriveFileScopeProbeResult_(result);
-  return [buildPhase1DriveFileScopeProbeCard_(result)];
+function onTransLayFileScopeGranted(e) {
+  var result = runTransLayDriveFileScopePreflight_(e);
+  logTransLayDriveFileScopeResult_(result);
+  return [buildTransLaySlidesEntryCard_(result)];
 }
 
-function runPhase1DriveFileScopePreflightAction(e) {
-  var result = runPhase1DriveFileScopePreflight_(e);
-  logPhase1DriveFileScopeProbeResult_(result);
-  var card = buildPhase1DriveFileScopeProbeCard_(result);
+function runTransLayDriveAccessCheckAction(e) {
+  var result = runTransLayDriveFileScopePreflight_(e);
+  logTransLayDriveFileScopeResult_(result);
+  var card = buildTransLaySlidesEntryCard_(result);
   return CardService.newActionResponseBuilder()
     .setNavigation(CardService.newNavigation().updateCard(card))
     .setNotification(CardService.newNotification().setText(
-      result.ok ? 'Drive REST preflight succeeded.' : 'Drive REST preflight failed.'
+      result.ok ? 'Presentation access is ready.' : 'Presentation access needs attention.'
     ))
     .build();
 }
 
-function runPhase1DriveFileScopePreflight_(e) {
-  var activeFile = getPhase1ActiveSlidesFileFromEvent_(e);
+function runTransLayDriveFileScopePreflight_(e) {
+  var activeFile = getTransLayActiveSlidesFileFromEvent_(e);
   if (!activeFile.id) {
     return {
       ok: false,
@@ -50,7 +49,7 @@ function runPhase1DriveFileScopePreflight_(e) {
 
   var path = '/files/' + encodeURIComponent(activeFile.id) +
     '?supportsAllDrives=true&fields=id,mimeType,capabilities(canEdit,canCopy,canShare)';
-  var response = phase1DriveApiRequest_(path, {
+  var response = transLayDriveApiRequest_(path, {
     method: 'get',
     operation: 'Drive active file access check'
   });
@@ -62,7 +61,7 @@ function runPhase1DriveFileScopePreflight_(e) {
   return response;
 }
 
-function getPhase1ActiveSlidesFileFromEvent_(e) {
+function getTransLayActiveSlidesFileFromEvent_(e) {
   if (e && e.slides) {
     return {
       id: e.slides.id || null,
@@ -86,7 +85,7 @@ function getPhase1ActiveSlidesFileFromEvent_(e) {
   };
 }
 
-function phase1DriveApiRequest_(path, options) {
+function transLayDriveApiRequest_(path, options) {
   var response;
   try {
     response = UrlFetchApp.fetch(DRIVE_API_BASE_URL + path, {
@@ -108,7 +107,7 @@ function phase1DriveApiRequest_(path, options) {
   }
 
   var code = response.getResponseCode();
-  var body = parsePhase1DriveApiJson_(response.getContentText());
+  var body = parseTransLayDriveApiJson_(response.getContentText());
   if (code >= 200 && code < 300) {
     return {
       ok: true,
@@ -132,12 +131,12 @@ function phase1DriveApiRequest_(path, options) {
     returnedDocumentId: null,
     httpStatus: code,
     driveStatus: error.status || null,
-    driveReason: extractPhase1DriveApiReason_(error),
+    driveReason: extractTransLayDriveApiReason_(error),
     message: error.message || 'Unknown Drive API error.'
   };
 }
 
-function parsePhase1DriveApiJson_(text) {
+function parseTransLayDriveApiJson_(text) {
   if (!text) return {};
   try {
     return JSON.parse(text);
@@ -151,7 +150,7 @@ function parsePhase1DriveApiJson_(text) {
   }
 }
 
-function extractPhase1DriveApiReason_(error) {
+function extractTransLayDriveApiReason_(error) {
   if (error && error.errors && error.errors.length && error.errors[0].reason) {
     return error.errors[0].reason;
   }
@@ -161,53 +160,8 @@ function extractPhase1DriveApiReason_(error) {
   return 'unknown';
 }
 
-function buildPhase1DriveFileScopeProbeCard_(result) {
-  var builder = CardService.newCardBuilder()
-    .setHeader(CardService.newCardHeader().setTitle('TransLay').setSubtitle(PHASE1_DRIVE_FILE_SCOPE_PROBE_NAME));
-
-  var intro = CardService.newCardSection()
-    .addWidget(CardService.newTextParagraph().setText(
-      'Use this internal probe to validate active-file Drive access for the open Google Slides™ presentation.'
-    ))
-    .addWidget(CardService.newTextButton()
-      .setText('Request active file access')
-      .setOnClickAction(CardService.newAction().setFunctionName('requestPhase1DriveFileScopeForActiveDocument')))
-    .addWidget(CardService.newTextButton()
-      .setText('Run REST preflight')
-      .setOnClickAction(CardService.newAction().setFunctionName('runPhase1DriveFileScopePreflightAction')));
-  builder.addSection(intro);
-
-  if (result) {
-    builder.addSection(buildPhase1DriveFileScopeProbeResultSection_(result));
-  }
-
-  return builder.build();
-}
-
-function buildPhase1DriveFileScopeProbeResultSection_(result) {
-  var statusText = result.ok ? 'PASS' : 'FAIL';
-  var section = CardService.newCardSection()
-    .setHeader('Latest REST preflight')
-    .addWidget(CardService.newKeyValue().setTopLabel('Status').setContent(statusText))
-    .addWidget(CardService.newKeyValue().setTopLabel('HTTP status').setContent(String(result.httpStatus || 'n/a')))
-    .addWidget(CardService.newKeyValue().setTopLabel('Drive reason').setContent(String(result.driveReason || 'n/a')))
-    .addWidget(CardService.newKeyValue().setTopLabel('Active ID source').setContent(String(result.activeDocumentIdSource || 'n/a')))
-    .addWidget(CardService.newKeyValue().setTopLabel('Active ID matched').setContent(result.idMatchesActive ? 'yes' : 'no'));
-
-  if (result.ok) {
-    section
-      .addWidget(CardService.newKeyValue().setTopLabel('Can edit').setContent(result.canEdit ? 'yes' : 'no'))
-      .addWidget(CardService.newKeyValue().setTopLabel('Can copy').setContent(result.canCopy ? 'yes' : 'no'))
-      .addWidget(CardService.newKeyValue().setTopLabel('Can share').setContent(result.canShare ? 'yes' : 'no'));
-  } else {
-    section.addWidget(CardService.newTextParagraph().setText(result.message || 'Drive REST preflight failed.'));
-  }
-
-  return section;
-}
-
-function logPhase1DriveFileScopeProbeResult_(result) {
-  console.info(PHASE1_DRIVE_FILE_SCOPE_PROBE_LOG_PREFIX + ' ' + JSON.stringify({
+function logTransLayDriveFileScopeResult_(result) {
+  console.info(TRANSLAY_DRIVE_FILE_SCOPE_LOG_PREFIX + ' ' + JSON.stringify({
     ok: result.ok,
     operation: result.operation,
     active_document_id: result.activeDocumentId,
@@ -226,4 +180,55 @@ function logPhase1DriveFileScopeProbeResult_(result) {
     can_share: result.canShare === undefined ? null : result.canShare,
     message: result.message
   }));
+}
+
+function buildTransLaySlidesEntryCard_(result) {
+  var builder = CardService.newCardBuilder()
+    .setHeader(CardService.newCardHeader().setTitle('TransLay'));
+  var section = CardService.newCardSection();
+
+  if (!result) {
+    section
+      .addWidget(CardService.newTextParagraph().setText(
+        'Authorize this presentation, then open TransLay from the editor menu.'
+      ))
+      .addWidget(CardService.newTextButton()
+        .setText('Authorize this presentation')
+        .setOnClickAction(CardService.newAction().setFunctionName('requestTransLayFileScopeForActiveDocument')))
+      .addWidget(CardService.newTextButton()
+        .setText('Check access')
+        .setOnClickAction(CardService.newAction().setFunctionName('runTransLayDriveAccessCheckAction')));
+    builder.addSection(section);
+    return builder.build();
+  }
+
+  if (result.ok && result.idMatchesActive && result.canEdit && result.canCopy && result.canShare) {
+    section
+      .addWidget(CardService.newTextParagraph().setText(
+        'Presentation access is ready. Open TransLay from Extensions > TransLay > Open TransLay.'
+      ))
+      .addWidget(CardService.newTextButton()
+        .setText('Check again')
+        .setOnClickAction(CardService.newAction().setFunctionName('runTransLayDriveAccessCheckAction')));
+    builder.addSection(section);
+    return builder.build();
+  }
+
+  var message = result.message || 'Presentation access needs attention.';
+  if (result.driveReason === 'missing_file_scope') {
+    message = 'Authorize this presentation to continue.';
+  } else if (result.ok && result.canShare === false) {
+    message = 'This file cannot be shared with TransLay worker access. Ask the owner to allow sharing or make a copy you own.';
+  }
+
+  section
+    .addWidget(CardService.newTextParagraph().setText(message))
+    .addWidget(CardService.newTextButton()
+      .setText('Authorize this presentation')
+      .setOnClickAction(CardService.newAction().setFunctionName('requestTransLayFileScopeForActiveDocument')))
+    .addWidget(CardService.newTextButton()
+      .setText('Check again')
+      .setOnClickAction(CardService.newAction().setFunctionName('runTransLayDriveAccessCheckAction')));
+  builder.addSection(section);
+  return builder.build();
 }

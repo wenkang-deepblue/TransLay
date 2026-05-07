@@ -162,6 +162,41 @@ export async function findUnresolvedDriveCleanupJobForSource(
   return normalizeJobRow(result.rows[0]);
 }
 
+export async function recordDriveCleanupRetryResult(
+  pool: Pool,
+  params: {
+    readonly jobId: JobId | string;
+    readonly userId: UserId;
+    readonly status: Extract<DriveCleanupStatus, "not_required" | "succeeded" | "failed">;
+    readonly errorCode: string | null;
+  }
+): Promise<JobRow | null> {
+  const result = await pool.query(
+    `WITH updated AS (
+       UPDATE translation_jobs
+          SET drive_cleanup_status = $2,
+              drive_cleanup_attempts = drive_cleanup_attempts + 1,
+              drive_cleanup_last_attempt_at = NOW(),
+              drive_cleanup_last_error_code = CASE WHEN $2 IN ('not_required', 'succeeded') THEN NULL ELSE $3 END,
+              drive_cleanup_completed_at = CASE WHEN $2 IN ('not_required', 'succeeded') THEN NOW() ELSE NULL END
+        WHERE id = $1
+          AND user_id = $4
+          AND drive_cleanup_status IN ('pending', 'failed')
+        RETURNING ${JOB_COLUMNS}
+     )
+     SELECT ${JOB_COLUMNS} FROM updated
+     UNION ALL
+     SELECT ${JOB_COLUMNS}
+       FROM translation_jobs
+      WHERE id = $1
+        AND user_id = $4
+        AND NOT EXISTS (SELECT 1 FROM updated)
+      LIMIT 1`,
+    [params.jobId, params.status, params.errorCode, params.userId]
+  );
+  return normalizeJobRow(result.rows[0]);
+}
+
 export async function hasRunningJob(
   pool: Pool | PoolClient,
   userId: UserId

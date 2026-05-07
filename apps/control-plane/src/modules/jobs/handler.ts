@@ -25,9 +25,11 @@ import type {
   JobWarning,
   JobQuotaPartialOption,
   JobQuotaPreviewResponse,
+  JobDriveCleanupSnapshot,
   RangeMode,
   UserId,
   DriveCleanupStatus,
+  DriveCleanupRetryResponse,
 } from "@translay/shared-contracts";
 import {
   validateCreateJobRequest,
@@ -50,6 +52,7 @@ import {
   findUnresolvedDriveCleanupJobForSource,
   getJobById,
   hasRunningJob,
+  recordDriveCleanupRetryResult,
   hasCompletedEquivalentJob,
   sweepExpiredHostOauthTokens,
   type JobRow,
@@ -72,14 +75,33 @@ const HOST_OAUTH_TOKEN_LIFETIME_MS = 55 * 60 * 1000;
 const MAX_HOST_OAUTH_TOKEN_BYTES = 8 * 1024;
 const HOST_OAUTH_SWEEP_GRACE_PERIOD_MINUTES = 60;
 const HOST_OAUTH_SWEEP_BATCH_LIMIT = 500;
+const PREPARED_DRIVE_CLEANUP_TTL_SECONDS = 24 * 60 * 60;
 const UNRESOLVED_DRIVE_CLEANUP_MESSAGE =
   "A previous request for this presentation still has pending temporary access cleanup.";
+const DRIVE_API_BASE_URL = "https://www.googleapis.com/drive/v3";
+const DRIVE_PERMISSION_DELETE_TIMEOUT_MS = 10_000;
+const DRIVE_PERMISSION_DELETE_RETRY_DELAYS_MS = [500, 1_000] as const;
 
 type ResolvedHostOauthPersistence = {
   readonly encryptedHostOauthToken: Buffer | null;
   readonly hostOauthTokenExpiresAt: Date | null;
   readonly hostOauthSource: "addon" | "sa_fallback";
 };
+
+type PreparedDriveCleanupRecord = {
+  readonly source_doc_id: string;
+  readonly source_worker_permission_id: string | null;
+  readonly target_doc_id: string | null;
+  readonly target_worker_permission_id: string | null;
+  readonly target_was_copied_by_addon: boolean;
+  readonly drive_cleanup_attempts: number;
+  readonly drive_cleanup_last_error_code: string | null;
+  readonly registered_at: string;
+};
+
+function isLikelyJwt(token: string): boolean {
+  return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token);
+}
 
 function extractBearerToken(authorizationHeader: string | undefined): string | null {
   if (!authorizationHeader?.startsWith("Bearer ")) {
@@ -93,6 +115,14 @@ function extractBearerToken(authorizationHeader: string | undefined): string | n
   return token;
 }
 
+function extractDriveAccessToken(authorizationHeader: string | undefined): string | null {
+  const token = extractBearerToken(authorizationHeader);
+  if (!token || isLikelyJwt(token)) {
+    return null;
+  }
+  return token;
+}
+
 async function resolveHostOauthPersistence(
   authorizationHeader: string | undefined,
   options: {
@@ -101,7 +131,7 @@ async function resolveHostOauthPersistence(
     readonly onEncryptError?: (error: unknown) => void;
   } = {}
 ): Promise<ResolvedHostOauthPersistence | null> {
-  const rawHostOauthToken = extractBearerToken(authorizationHeader);
+  const rawHostOauthToken = extractDriveAccessToken(authorizationHeader);
   if (!rawHostOauthToken) {
     return null;
   }
@@ -187,6 +217,523 @@ function hasUnresolvedDriveCleanup(job: JobRow): boolean {
     (job.source_worker_permission_id !== null || job.target_worker_permission_id !== null) &&
     (job.drive_cleanup_status === "pending" || job.drive_cleanup_status === "failed")
   );
+}
+
+type DriveCleanupRetryStatus = DriveCleanupRetryResponse["drive_cleanup_status"];
+
+type DriveCleanupTarget = {
+  readonly fileId: string;
+  readonly permissionId: string;
+};
+
+type DriveCleanupFileTrashTarget = {
+  readonly fileId: string;
+};
+
+type FetchLike = typeof fetch;
+
+type DriveCleanupRetryHooks = {
+  readonly fetch?: FetchLike;
+  readonly sleep?: (ms: number) => Promise<void>;
+};
+
+const DEFAULT_SLEEP = async (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+let driveCleanupFetch: FetchLike = fetch;
+let driveCleanupSleep = DEFAULT_SLEEP;
+
+function buildDriveCleanupTargets(job: JobRow): DriveCleanupTarget[] {
+  const targets: DriveCleanupTarget[] = [];
+  const seen = new Set<string>();
+  const addTarget = (fileId: string | null, permissionId: string | null) => {
+    if (!fileId || !permissionId) {
+      return;
+    }
+    const key = `${fileId}:${permissionId}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    targets.push({ fileId, permissionId });
+  };
+
+  if (job.source_worker_permission_id) {
+    addTarget(job.source_doc_id, job.source_worker_permission_id);
+  }
+  addTarget(job.target_doc_id, job.target_worker_permission_id);
+  return targets;
+}
+
+function buildPreparedDriveCleanupTargets(record: PreparedDriveCleanupRecord): DriveCleanupTarget[] {
+  const targets: DriveCleanupTarget[] = [];
+  const seen = new Set<string>();
+  const addTarget = (fileId: string | null, permissionId: string | null) => {
+    if (!fileId || !permissionId) {
+      return;
+    }
+    const key = `${fileId}:${permissionId}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    targets.push({ fileId, permissionId });
+  };
+
+  addTarget(record.source_doc_id, record.source_worker_permission_id);
+  addTarget(record.target_doc_id, record.target_worker_permission_id);
+  return targets;
+}
+
+function buildPreparedDriveTrashTarget(record: PreparedDriveCleanupRecord): DriveCleanupFileTrashTarget | null {
+  if (!record.target_doc_id || !record.target_was_copied_by_addon) {
+    return null;
+  }
+  return { fileId: record.target_doc_id };
+}
+
+function isTerminalJobStatus(status: JobStatus): boolean {
+  return (
+    status === "completed" ||
+    status === "completed_with_warnings" ||
+    status === "failed" ||
+    status === "canceled" ||
+    status === "rolled_back"
+  );
+}
+
+function buildDriveCleanupRetryResponse(
+  job: JobRow | null,
+  message: string
+): DriveCleanupRetryResponse {
+  const status = normalizeDriveCleanupRetryStatus(job?.drive_cleanup_status ?? null);
+  return {
+    job_id: job?.id ?? null,
+    drive_cleanup_status: status,
+    drive_cleanup_attempts: job?.drive_cleanup_attempts ?? 0,
+    ...(job?.drive_cleanup_last_error_code
+      ? { drive_cleanup_last_error_code: job.drive_cleanup_last_error_code }
+      : {}),
+    message,
+  };
+}
+
+function buildPreparedDriveCleanupKey(userId: UserId, sourceDocId: string): string {
+  return `jobs:prepared-drive-cleanup:${userId}:${sourceDocId}`;
+}
+
+function parsePreparedDriveCleanupRecord(raw: string | null): PreparedDriveCleanupRecord | null {
+  if (!raw) {
+    return null;
+  }
+  try {
+    const value = JSON.parse(raw) as Partial<PreparedDriveCleanupRecord>;
+    if (typeof value.source_doc_id !== "string" || value.source_doc_id.trim().length === 0) {
+      return null;
+    }
+    return {
+      source_doc_id: value.source_doc_id.trim(),
+      source_worker_permission_id:
+        typeof value.source_worker_permission_id === "string" && value.source_worker_permission_id.trim().length > 0
+          ? value.source_worker_permission_id.trim()
+          : null,
+      target_doc_id:
+        typeof value.target_doc_id === "string" && value.target_doc_id.trim().length > 0
+          ? value.target_doc_id.trim()
+          : null,
+      target_worker_permission_id:
+        typeof value.target_worker_permission_id === "string" && value.target_worker_permission_id.trim().length > 0
+          ? value.target_worker_permission_id.trim()
+          : null,
+      target_was_copied_by_addon: value.target_was_copied_by_addon === true,
+      drive_cleanup_attempts:
+        typeof value.drive_cleanup_attempts === "number" && value.drive_cleanup_attempts >= 0
+          ? Math.floor(value.drive_cleanup_attempts)
+          : 0,
+      drive_cleanup_last_error_code:
+        typeof value.drive_cleanup_last_error_code === "string" && value.drive_cleanup_last_error_code.length > 0
+          ? value.drive_cleanup_last_error_code
+          : null,
+      registered_at:
+        typeof value.registered_at === "string" && value.registered_at.length > 0
+          ? value.registered_at
+          : new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function getPreparedDriveCleanupRecord(
+  redis: Redis,
+  userId: UserId,
+  sourceDocId: string
+): Promise<PreparedDriveCleanupRecord | null> {
+  return parsePreparedDriveCleanupRecord(
+    await redis.get(buildPreparedDriveCleanupKey(userId, sourceDocId))
+  );
+}
+
+async function deletePreparedDriveCleanupRecord(
+  redis: Redis,
+  userId: UserId,
+  sourceDocId: string
+): Promise<void> {
+  await redis.del(buildPreparedDriveCleanupKey(userId, sourceDocId));
+}
+
+async function setPreparedDriveCleanupRecord(
+  redis: Redis,
+  userId: UserId,
+  record: PreparedDriveCleanupRecord
+): Promise<void> {
+  await redis.set(
+    buildPreparedDriveCleanupKey(userId, record.source_doc_id),
+    JSON.stringify(record),
+    "EX",
+    PREPARED_DRIVE_CLEANUP_TTL_SECONDS
+  );
+}
+
+function buildDriveCleanupSnapshot(job: JobRow): JobDriveCleanupSnapshot {
+  if (job.drive_cleanup_status !== "pending" && job.drive_cleanup_status !== "failed") {
+    return {};
+  }
+  return {
+    drive_cleanup_status: job.drive_cleanup_status,
+    drive_cleanup_attempts: job.drive_cleanup_attempts,
+    ...(job.drive_cleanup_last_error_code
+      ? { drive_cleanup_last_error_code: job.drive_cleanup_last_error_code }
+      : {}),
+  };
+}
+
+function preparedCleanupMatchesCreateJob(
+  record: PreparedDriveCleanupRecord,
+  body: CreateJobRequest
+): boolean {
+  return (
+    record.source_doc_id === body.document_id &&
+    record.source_worker_permission_id === (body.drive_access?.source_worker_permission_id ?? null) &&
+    record.target_doc_id === (body.target_document_id ?? null) &&
+    record.target_worker_permission_id === (body.drive_access?.target_worker_permission_id ?? null)
+  );
+}
+
+function normalizeDriveCleanupRetryStatus(
+  status: DriveCleanupStatus | null
+): DriveCleanupRetryStatus {
+  if (status === "succeeded" || status === "not_required") {
+    return status;
+  }
+  if (status === "pending" || status === "failed") {
+    return "failed";
+  }
+  return "not_required";
+}
+
+function createDriveCleanupHttpError(status: number): Error {
+  const error = new Error(`Drive permission cleanup failed with HTTP ${status}`);
+  (error as { status?: number }).status = status;
+  return error;
+}
+
+async function fetchDrivePermissionDelete(
+  accessToken: string,
+  target: DriveCleanupTarget
+): Promise<void> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DRIVE_PERMISSION_DELETE_TIMEOUT_MS);
+  try {
+    const response = await driveCleanupFetch(
+      `${DRIVE_API_BASE_URL}/files/${encodeURIComponent(target.fileId)}` +
+        `/permissions/${encodeURIComponent(target.permissionId)}?supportsAllDrives=true`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        signal: controller.signal,
+      }
+    );
+    if (response.status === 404) {
+      return;
+    }
+    if (!response.ok) {
+      throw createDriveCleanupHttpError(response.status);
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchDriveFileTrash(
+  accessToken: string,
+  target: DriveCleanupFileTrashTarget
+): Promise<void> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DRIVE_PERMISSION_DELETE_TIMEOUT_MS);
+  try {
+    const response = await driveCleanupFetch(
+      `${DRIVE_API_BASE_URL}/files/${encodeURIComponent(target.fileId)}?supportsAllDrives=true`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ trashed: true }),
+        signal: controller.signal,
+      }
+    );
+    if (response.status === 404) {
+      return;
+    }
+    if (!response.ok) {
+      throw createDriveCleanupHttpError(response.status);
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function deleteDrivePermissionWithRetry(
+  accessToken: string,
+  target: DriveCleanupTarget
+): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= DRIVE_PERMISSION_DELETE_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      await fetchDrivePermissionDelete(accessToken, target);
+      return;
+    } catch (error) {
+      if (extractDriveCleanupErrorStatus(error) === 404) {
+        return;
+      }
+      lastError = error;
+      const retryDelayMs = DRIVE_PERMISSION_DELETE_RETRY_DELAYS_MS[attempt];
+      if (retryDelayMs === undefined || !isRetryableDriveCleanupError(error)) {
+        break;
+      }
+      await driveCleanupSleep(retryDelayMs);
+    }
+  }
+  throw lastError;
+}
+
+async function trashDriveFileWithRetry(
+  accessToken: string,
+  target: DriveCleanupFileTrashTarget
+): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= DRIVE_PERMISSION_DELETE_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      await fetchDriveFileTrash(accessToken, target);
+      return;
+    } catch (error) {
+      if (extractDriveCleanupErrorStatus(error) === 404) {
+        return;
+      }
+      lastError = error;
+      const retryDelayMs = DRIVE_PERMISSION_DELETE_RETRY_DELAYS_MS[attempt];
+      if (retryDelayMs === undefined || !isRetryableDriveCleanupError(error)) {
+        break;
+      }
+      await driveCleanupSleep(retryDelayMs);
+    }
+  }
+  throw lastError;
+}
+
+async function retryDriveCleanupWithFreshToken(
+  pool: Pool,
+  job: JobRow,
+  accessToken: string
+): Promise<DriveCleanupRetryResponse> {
+  if (job.drive_cleanup_status === "succeeded") {
+    return buildDriveCleanupRetryResponse(job, "Temporary access cleanup already succeeded.");
+  }
+  if (job.drive_cleanup_status === "not_required") {
+    return buildDriveCleanupRetryResponse(job, "No temporary access cleanup is required.");
+  }
+
+  const targets = buildDriveCleanupTargets(job);
+  if (targets.length === 0) {
+    const updated = await recordDriveCleanupRetryResult(pool, {
+      jobId: job.id,
+      userId: job.user_id as UserId,
+      status: "not_required",
+      errorCode: null,
+    });
+    return buildDriveCleanupRetryResponse(
+      updated,
+      "No temporary access cleanup is required."
+    );
+  }
+
+  let firstErrorCode: string | null = null;
+  for (const target of targets) {
+    try {
+      await deleteDrivePermissionWithRetry(accessToken, target);
+    } catch (error) {
+      firstErrorCode ??= normalizeDriveCleanupErrorCode(error);
+    }
+  }
+
+  const status: DriveCleanupRetryStatus = firstErrorCode ? "failed" : "succeeded";
+  const updated = await recordDriveCleanupRetryResult(pool, {
+    jobId: job.id,
+    userId: job.user_id as UserId,
+    status,
+    errorCode: firstErrorCode,
+  });
+
+  return buildDriveCleanupRetryResponse(
+    updated,
+    status === "succeeded"
+      ? "Temporary access cleanup succeeded."
+      : "Temporary access cleanup is still pending. Please retry or contact support with the task ID."
+  );
+}
+
+async function retryPreparedDriveCleanupWithFreshToken(
+  redis: Redis,
+  userId: UserId,
+  record: PreparedDriveCleanupRecord,
+  accessToken: string
+): Promise<DriveCleanupRetryResponse> {
+  const permissionTargets = buildPreparedDriveCleanupTargets(record);
+  const trashTarget = buildPreparedDriveTrashTarget(record);
+
+  if (permissionTargets.length === 0 && !trashTarget) {
+    await deletePreparedDriveCleanupRecord(redis, userId, record.source_doc_id);
+    return {
+      job_id: null,
+      drive_cleanup_status: "not_required",
+      drive_cleanup_attempts: record.drive_cleanup_attempts,
+      message: "No temporary access cleanup is required.",
+    };
+  }
+
+  let firstErrorCode: string | null = null;
+  for (const target of permissionTargets) {
+    try {
+      await deleteDrivePermissionWithRetry(accessToken, target);
+    } catch (error) {
+      firstErrorCode ??= normalizeDriveCleanupErrorCode(error);
+    }
+  }
+
+  if (trashTarget) {
+    try {
+      await trashDriveFileWithRetry(accessToken, trashTarget);
+    } catch (error) {
+      firstErrorCode ??= normalizeDriveCleanupErrorCode(error);
+    }
+  }
+
+  const attempts = record.drive_cleanup_attempts + 1;
+  if (!firstErrorCode) {
+    await deletePreparedDriveCleanupRecord(redis, userId, record.source_doc_id);
+    return {
+      job_id: null,
+      drive_cleanup_status: "succeeded",
+      drive_cleanup_attempts: attempts,
+      message: "Temporary access cleanup succeeded.",
+    };
+  }
+
+  await setPreparedDriveCleanupRecord(redis, userId, {
+    ...record,
+    drive_cleanup_attempts: attempts,
+    drive_cleanup_last_error_code: firstErrorCode,
+  });
+  return {
+    job_id: null,
+    drive_cleanup_status: "failed",
+    drive_cleanup_attempts: attempts,
+    drive_cleanup_last_error_code: firstErrorCode,
+    message: "Temporary access cleanup is still pending. Please retry or contact support.",
+  };
+}
+
+function normalizeDriveCleanupErrorCode(error: unknown): string {
+  const status = extractDriveCleanupErrorStatus(error);
+  if (status === 401) {
+    return "drive_cleanup_unauthorized";
+  }
+  if (status === 403) {
+    return "drive_cleanup_forbidden";
+  }
+  if (status === 404) {
+    return "drive_permission_not_found";
+  }
+  if (status === 429) {
+    return "drive_cleanup_rate_limited";
+  }
+  if (status !== null && status >= 500) {
+    return "drive_cleanup_api_unavailable";
+  }
+  const transportCode = extractDriveCleanupTransportCode(error);
+  if (transportCode && /ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|ECONNREFUSED|EPIPE/i.test(transportCode)) {
+    return "drive_cleanup_network_error";
+  }
+  if (error instanceof Error && error.name === "AbortError") {
+    return "drive_cleanup_network_error";
+  }
+  return "drive_permission_delete_failed";
+}
+
+function isRetryableDriveCleanupError(error: unknown): boolean {
+  if (error instanceof Error && error.name === "AbortError") {
+    return true;
+  }
+  const status = extractDriveCleanupErrorStatus(error);
+  if (status !== null) {
+    return status === 429 || status >= 500;
+  }
+  const transportCode = extractDriveCleanupTransportCode(error);
+  return Boolean(
+    transportCode &&
+      /ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|ECONNREFUSED|EPIPE/i.test(transportCode)
+  );
+}
+
+function extractDriveCleanupErrorStatus(error: unknown): number | null {
+  if (typeof error !== "object" || error === null) {
+    return null;
+  }
+  const candidate = error as {
+    status?: unknown;
+    response?: {
+      status?: unknown;
+      data?: {
+        error?: {
+          code?: unknown;
+        };
+      };
+    };
+  };
+  for (const value of [
+    candidate.status,
+    candidate.response?.status,
+    candidate.response?.data?.error?.code,
+  ]) {
+    if (typeof value === "number") {
+      return value;
+    }
+    if (typeof value === "string" && /^\d+$/.test(value)) {
+      return Number(value);
+    }
+  }
+  return null;
+}
+
+function extractDriveCleanupTransportCode(error: unknown): string | null {
+  if (typeof error !== "object" || error === null) {
+    return null;
+  }
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : null;
 }
 
 function isPauseStatus(status: string | undefined): status is JobPauseStatus {
@@ -473,8 +1020,7 @@ function buildSlideDeliveryFailureMessage(
 
 function buildCompletedMessage(
   warnings: readonly JobWarning[],
-  slideSummary: TerminalSlideSummary
-  ,
+  slideSummary: TerminalSlideSummary,
   slideResults: readonly JobSlideResult[]
 ): string {
   const excludedSlides = listExcludedSlides(warnings);
@@ -722,6 +1268,7 @@ function buildJobStatusResponse(
         gross_billed_slides: job.gross_billed_slides,
         refunded_slides: job.refunded_slides,
         net_billed_slides: job.net_billed_slides,
+        ...buildDriveCleanupSnapshot(job),
       };
       return response;
     }
@@ -750,6 +1297,7 @@ function buildJobStatusResponse(
       gross_billed_slides: job.gross_billed_slides,
       refunded_slides: job.refunded_slides,
       net_billed_slides: job.net_billed_slides,
+      ...buildDriveCleanupSnapshot(job),
       ...(normalizedWarnings.length > 0 ? { warnings: normalizedWarnings } : {}),
     };
     return response;
@@ -779,6 +1327,7 @@ function buildJobStatusResponse(
       gross_billed_slides: job.gross_billed_slides,
       refunded_slides: job.refunded_slides,
       net_billed_slides: job.net_billed_slides,
+      ...buildDriveCleanupSnapshot(job),
       ...(slideSummary.fully_delivered_body_slide_indices.length > 0
         ? { fully_delivered_body_slide_indices: slideSummary.fully_delivered_body_slide_indices }
         : {}),
@@ -810,6 +1359,7 @@ function buildJobStatusResponse(
       total_units_billed: job.net_billed_slides,
       output_mode: job.output_mode,
       output_document_url: job.output_document_url ?? undefined,
+      ...buildDriveCleanupSnapshot(job),
     };
     return response;
   }
@@ -874,6 +1424,7 @@ function getHostUsed(
 
 type SlidesQuotaRequest = {
   readonly host_type: HostType;
+  readonly document_id: string;
   readonly range_mode: RangeMode;
   readonly range_expression?: string | null;
 };
@@ -951,6 +1502,9 @@ function validateJobPreviewRequest(body: unknown): string | null {
   if (req.host_type !== "slides") {
     return "quota partial preview is currently supported for Slides only";
   }
+  if (typeof req.document_id !== "string" || req.document_id.trim().length === 0) {
+    return "document_id is required";
+  }
   if (req.range_mode !== "custom" && req.range_mode !== "current") {
     return "Slides quota preview requires an explicit range";
   }
@@ -986,7 +1540,7 @@ async function getEntitledUsageSnapshot(pool: Pool, userId: string) {
   return { sub, usage, credits };
 }
 
-export function previewJobHandler(pool: Pool) {
+export function previewJobHandler(pool: Pool, redis: Redis) {
   return async (req: Request, res: Response) => {
     const auth = req.authContext;
     if (!auth) {
@@ -997,6 +1551,31 @@ export function previewJobHandler(pool: Pool) {
     const validationError = validateJobPreviewRequest(req.body);
     if (validationError) {
       sendError(res, "VALIDATION_ERROR", validationError);
+      return;
+    }
+
+    const body = req.body as SlidesQuotaRequest;
+    const unresolvedCleanupJob = await findUnresolvedDriveCleanupJobForSource(pool, {
+      userId: auth.user_id,
+      sourceDocId: body.document_id.trim(),
+    });
+    if (unresolvedCleanupJob && hasUnresolvedDriveCleanup(unresolvedCleanupJob)) {
+      res.status(409).json({
+        error: "DRIVE_CLEANUP_REQUIRED",
+        message: UNRESOLVED_DRIVE_CLEANUP_MESSAGE,
+      });
+      return;
+    }
+    const preparedCleanup = await getPreparedDriveCleanupRecord(
+      redis,
+      auth.user_id,
+      body.document_id.trim()
+    );
+    if (preparedCleanup) {
+      res.status(409).json({
+        error: "DRIVE_CLEANUP_REQUIRED",
+        message: UNRESOLVED_DRIVE_CLEANUP_MESSAGE,
+      });
       return;
     }
 
@@ -1031,7 +1610,7 @@ export function previewJobHandler(pool: Pool) {
       return;
     }
 
-    const preview = previewSlidesQuota(req.body as SlidesQuotaRequest, remaining);
+    const preview = previewSlidesQuota(body, remaining);
     if (!preview) {
       sendError(res, "VALIDATION_ERROR", "Invalid range expression");
       return;
@@ -1095,6 +1674,15 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
       sourceDocId: body.document_id,
     });
     if (unresolvedCleanupJob) {
+      sendError(res, "DRIVE_CLEANUP_REQUIRED", UNRESOLVED_DRIVE_CLEANUP_MESSAGE);
+      return;
+    }
+    const preparedCleanup = await getPreparedDriveCleanupRecord(
+      redis,
+      auth.user_id,
+      body.document_id
+    );
+    if (preparedCleanup && !preparedCleanupMatchesCreateJob(preparedCleanup, body)) {
       sendError(res, "DRIVE_CLEANUP_REQUIRED", UNRESOLVED_DRIVE_CLEANUP_MESSAGE);
       return;
     }
@@ -1278,6 +1866,7 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
       .exec();
 
     assertMultiOk(results, "jobs/create progress init");
+    await deletePreparedDriveCleanupRecord(redis, auth.user_id, body.document_id);
 
     const response: CreateJobResponse = {
       status: "accepted",
@@ -1296,6 +1885,168 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
     );
 
     res.status(201).json(response);
+  };
+}
+
+export function registerPreparedDriveCleanupHandler(redis: Redis) {
+  return async (req: Request, res: Response) => {
+    const auth = req.authContext;
+    if (!auth) {
+      sendError(res, "UNAUTHORIZED");
+      return;
+    }
+
+    const body = req.body as {
+      document_id?: unknown;
+      source_worker_permission_id?: unknown;
+      target_document_id?: unknown;
+      target_worker_permission_id?: unknown;
+      target_was_copied_by_addon?: unknown;
+    };
+    if (!body || typeof body.document_id !== "string" || body.document_id.trim().length === 0) {
+      sendError(res, "VALIDATION_ERROR", "document_id is required");
+      return;
+    }
+
+    const record: PreparedDriveCleanupRecord = {
+      source_doc_id: body.document_id.trim(),
+      source_worker_permission_id:
+        typeof body.source_worker_permission_id === "string" && body.source_worker_permission_id.trim().length > 0
+          ? body.source_worker_permission_id.trim()
+          : null,
+      target_doc_id:
+        typeof body.target_document_id === "string" && body.target_document_id.trim().length > 0
+          ? body.target_document_id.trim()
+          : null,
+      target_worker_permission_id:
+        typeof body.target_worker_permission_id === "string" && body.target_worker_permission_id.trim().length > 0
+          ? body.target_worker_permission_id.trim()
+          : null,
+      target_was_copied_by_addon: body.target_was_copied_by_addon === true,
+      drive_cleanup_attempts: 0,
+      drive_cleanup_last_error_code: null,
+      registered_at: new Date().toISOString(),
+    };
+
+    if (
+      !record.source_worker_permission_id &&
+      !record.target_worker_permission_id &&
+      !record.target_doc_id
+    ) {
+      sendError(res, "VALIDATION_ERROR", "cleanup metadata is required");
+      return;
+    }
+
+    await setPreparedDriveCleanupRecord(redis, auth.user_id, record);
+    res.json({ status: "ok" });
+  };
+}
+
+export function clearPreparedDriveCleanupHandler(redis: Redis) {
+  return async (req: Request, res: Response) => {
+    const auth = req.authContext;
+    if (!auth) {
+      sendError(res, "UNAUTHORIZED");
+      return;
+    }
+
+    const body = req.body as { document_id?: unknown };
+    if (!body || typeof body.document_id !== "string" || body.document_id.trim().length === 0) {
+      sendError(res, "VALIDATION_ERROR", "document_id is required");
+      return;
+    }
+
+    await deletePreparedDriveCleanupRecord(redis, auth.user_id, body.document_id.trim());
+    res.json({ status: "ok" });
+  };
+}
+
+export function retryPendingDriveCleanupHandler(pool: Pool, redis: Redis) {
+  return async (req: Request, res: Response) => {
+    const auth = req.authContext;
+    if (!auth) {
+      sendError(res, "UNAUTHORIZED");
+      return;
+    }
+
+    const body = req.body as { document_id?: unknown };
+    if (!body || typeof body.document_id !== "string" || body.document_id.trim().length === 0) {
+      sendError(res, "VALIDATION_ERROR", "document_id is required");
+      return;
+    }
+
+    const job = await findUnresolvedDriveCleanupJobForSource(pool, {
+      userId: auth.user_id,
+      sourceDocId: body.document_id.trim(),
+    });
+    const token = extractDriveAccessToken(req.headers.authorization);
+    if (!token) {
+      sendError(res, "INVALID_TOKEN");
+      return;
+    }
+
+    if (!job) {
+      const prepared = await getPreparedDriveCleanupRecord(redis, auth.user_id, body.document_id.trim());
+      if (!prepared) {
+        res.json({
+          job_id: null,
+          drive_cleanup_status: "not_required",
+          drive_cleanup_attempts: 0,
+          message: "No temporary access cleanup is pending for this presentation.",
+        } satisfies DriveCleanupRetryResponse);
+        return;
+      }
+
+      const preparedResponse = await retryPreparedDriveCleanupWithFreshToken(
+        redis,
+        auth.user_id,
+        prepared,
+        token
+      );
+      res.json(preparedResponse);
+      return;
+    }
+
+    const response = await retryDriveCleanupWithFreshToken(pool, job, token);
+    if (response.drive_cleanup_status === "succeeded" || response.drive_cleanup_status === "not_required") {
+      await deletePreparedDriveCleanupRecord(redis, auth.user_id, body.document_id.trim());
+    }
+    res.json(response);
+  };
+}
+
+export function retryJobDriveCleanupHandler(pool: Pool) {
+  return async (req: Request, res: Response) => {
+    const auth = req.authContext;
+    if (!auth) {
+      sendError(res, "UNAUTHORIZED");
+      return;
+    }
+
+    const jobId = req.params.jobId as string;
+    if (!jobId || !UUID_RE.test(jobId)) {
+      sendError(res, "VALIDATION_ERROR", "Invalid job ID format");
+      return;
+    }
+
+    const job = await getJobById(pool, jobId, auth.user_id);
+    if (!job) {
+      sendError(res, "NOT_FOUND", "Job not found");
+      return;
+    }
+    if (!isTerminalJobStatus(job.status)) {
+      sendError(res, "VALIDATION_ERROR", "Temporary access cleanup can only be retried after a job reaches a terminal state.");
+      return;
+    }
+
+    const token = extractDriveAccessToken(req.headers.authorization);
+    if (!token) {
+      sendError(res, "INVALID_TOKEN");
+      return;
+    }
+
+    const response = await retryDriveCleanupWithFreshToken(pool, job, token);
+    res.json(response);
   };
 }
 
@@ -1342,6 +2093,30 @@ export async function __resolveHostOauthPersistenceForTests(
   }
 ): Promise<ResolvedHostOauthPersistence | null> {
   return resolveHostOauthPersistence(authorizationHeader, options);
+}
+
+export function __setDriveCleanupRetryHooksForTests(hooks: DriveCleanupRetryHooks): void {
+  if (isProductionLikeNodeEnv()) {
+    throw new Error("Drive cleanup retry test hooks are disabled in production-like environments");
+  }
+  if (hooks.fetch) {
+    driveCleanupFetch = hooks.fetch;
+  }
+  if (hooks.sleep) {
+    driveCleanupSleep = hooks.sleep;
+  }
+}
+
+export function __resetDriveCleanupRetryHooksForTests(): void {
+  if (isProductionLikeNodeEnv()) {
+    throw new Error("Drive cleanup retry test hooks are disabled in production-like environments");
+  }
+  driveCleanupFetch = fetch;
+  driveCleanupSleep = DEFAULT_SLEEP;
+}
+
+function isProductionLikeNodeEnv(): boolean {
+  return process.env.NODE_ENV === "production" || process.env.NODE_ENV === "staging";
 }
 
 // S1: UUID v4 format validation
@@ -1669,6 +2444,7 @@ export function cancelJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
         job_id: job.id,
         status: "already_completed",
         message: "This translation job has already completed.",
+        ...buildDriveCleanupSnapshot(job),
       };
       res.json(response);
       return;
@@ -1682,6 +2458,7 @@ export function cancelJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
           job.status === "rolled_back"
             ? "This translation job has already been rolled back."
             : "This translation job has already failed.",
+        ...buildDriveCleanupSnapshot(job),
       };
       res.json(response);
       return;
@@ -1692,6 +2469,7 @@ export function cancelJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
         job_id: job.id,
         status: "already_canceled",
         message: buildCanceledMessage(job),
+        ...buildDriveCleanupSnapshot(job),
       };
       res.json(response);
       return;
@@ -1730,6 +2508,7 @@ export function cancelJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
         job_id: job.id,
         status: "canceled",
         message: "Translation canceled before processing started.",
+        ...buildDriveCleanupSnapshot(job),
       };
       res.json(response);
       return;

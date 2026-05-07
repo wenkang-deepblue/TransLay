@@ -7,6 +7,7 @@ import {
   countGlobalInFlightJobs,
   createJob,
   findUnresolvedDriveCleanupJobForSource,
+  recordDriveCleanupRetryResult,
   sweepExpiredHostOauthTokens,
   updateJobStatus,
 } from "./job-repo";
@@ -178,6 +179,33 @@ test("findUnresolvedDriveCleanupJobForSource uses translation_jobs cleanup truth
   assert.match(calls[0]!.sql, /drive_cleanup_status IN \('pending', 'failed'\)/);
   assert.match(calls[0]!.sql, /source_worker_permission_id IS NOT NULL/);
   assert.deepEqual(calls[0]!.params, ["user-1", "source-doc"]);
+});
+
+test("recordDriveCleanupRetryResult is scoped by job id and user id", async () => {
+  const calls: Array<{ sql: string; params: unknown[] | undefined }> = [];
+  const pool = {
+    query: async (sql: string, params?: unknown[]) => {
+      calls.push({ sql, params });
+      return { rows: [], rowCount: 0 };
+    },
+  } as unknown as Pool;
+
+  await recordDriveCleanupRetryResult(pool, {
+    jobId: "job-1" as JobId,
+    userId: "user-1" as UserId,
+    status: "failed",
+    errorCode: "drive_cleanup_forbidden",
+  });
+
+  assert.equal(calls.length, 1);
+  assert.match(calls[0]!.sql, /WHERE id = \$1\s+AND user_id = \$4/);
+  assert.match(calls[0]!.sql, /drive_cleanup_status IN \('pending', 'failed'\)/);
+  assert.deepEqual(calls[0]!.params, [
+    "job-1",
+    "failed",
+    "drive_cleanup_forbidden",
+    "user-1",
+  ]);
 });
 
 test("sweepExpiredHostOauthTokens clears stale encrypted tokens in bounded batches", async () => {

@@ -218,8 +218,14 @@ export type JobQuotaPreviewResponse =
   | JobQuotaPreviewAccepted
   | JobQuotaPartialOption;
 
+export interface JobDriveCleanupSnapshot {
+  readonly drive_cleanup_status?: DriveCleanupStatus;
+  readonly drive_cleanup_attempts?: number;
+  readonly drive_cleanup_last_error_code?: string;
+}
+
 /** GET /api/jobs/:jobId — in-progress response (status is NOT completed or failed). */
-export interface JobProgressResponse {
+export interface JobProgressResponse extends JobDriveCleanupSnapshot {
   readonly job_id: string;
   readonly status: JobLiveStatus;
   readonly progress_percent: number;
@@ -232,7 +238,7 @@ export interface JobProgressResponse {
 }
 
 /** GET /api/jobs/:jobId — completed response. */
-export interface JobCompletedResponse {
+export interface JobCompletedResponse extends JobDriveCleanupSnapshot {
   readonly job_id: string;
   readonly status: "completed" | "completed_with_warnings";
   readonly completion_code?: JobCompletionCode;
@@ -253,7 +259,7 @@ export interface JobCompletedResponse {
 }
 
 /** GET /api/jobs/:jobId — canceled response. */
-export interface JobCanceledResponse {
+export interface JobCanceledResponse extends JobDriveCleanupSnapshot {
   readonly job_id: string;
   readonly status: "canceled";
   readonly message: string;
@@ -263,7 +269,7 @@ export interface JobCanceledResponse {
 }
 
 /** GET /api/jobs/:jobId — failed response. */
-export interface JobFailedResponse {
+export interface JobFailedResponse extends JobDriveCleanupSnapshot {
   readonly job_id: string;
   readonly status: "failed";
   readonly error: string;
@@ -288,8 +294,17 @@ export type JobStatusResponse =
   | JobCanceledResponse
   | JobFailedResponse;
 
+/** POST /api/jobs/:jobId/drive-cleanup and /api/jobs/cleanup-pending response. */
+export interface DriveCleanupRetryResponse {
+  readonly job_id: string | null;
+  readonly drive_cleanup_status: Extract<DriveCleanupStatus, "not_required" | "succeeded" | "failed">;
+  readonly drive_cleanup_attempts: number;
+  readonly drive_cleanup_last_error_code?: string;
+  readonly message: string;
+}
+
 /** POST /api/jobs/:jobId/cancel response. */
-export interface CancelJobResponse {
+export interface CancelJobResponse extends JobDriveCleanupSnapshot {
   readonly job_id: string;
   readonly status: "cancel_requested" | "canceled" | "already_completed" | "already_failed" | "already_canceled";
   readonly message: string;
