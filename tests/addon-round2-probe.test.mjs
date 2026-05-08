@@ -272,7 +272,7 @@ test("Round 2 user OAuth failure probe sends an invalid user token and omits dri
   assert.equal(Object.hasOwn(fetches[0].payload, "drive_access"), false);
 });
 
-test("Round 2 probe manifest has no Drive scopes or Drive REST whitelist", async () => {
+test("Round 2 manifest has no Drive scopes or file-scope entry surface", async () => {
   const manifest = JSON.parse(
     await readFile(new URL("../apps/addon/appsscript.json", import.meta.url), "utf8")
   );
@@ -282,6 +282,7 @@ test("Round 2 probe manifest has no Drive scopes or Drive REST whitelist", async
     manifest.oauthScopes.some((scope) => scope === "https://www.googleapis.com/auth/drive" || scope === "https://www.googleapis.com/auth/drive.file"),
     false
   );
+  assert.equal(Object.hasOwn(manifest, "addOns"), false);
 });
 
 test("Round 2 probe UI exposes exactly the temporary probe actions", async () => {
@@ -318,4 +319,14 @@ test("Round 2 probe server source does not call Drive or worker sharing helpers"
   assert.doesNotMatch(source, /DriveApp/);
   assert.doesNotMatch(source, /driveApiRequest|grantWorkerAccess|revokeWorkerPermission|WORKER_SERVICE_ACCOUNT_EMAIL/);
   assert.doesNotMatch(source, /google\.picker|PickerBuilder|requestFileScopeForActiveDocument|CardService/);
+});
+
+test("Sidebar production surface has no Google Picker dependency", async () => {
+  const html = await readFile(
+    new URL("../apps/addon/src/sidebar/index.html", import.meta.url),
+    "utf8"
+  );
+
+  assert.doesNotMatch(html, /google\.picker|PickerBuilder|getPresentationPickerConfig|openPresentationAccessPicker/);
+  assert.doesNotMatch(html, /requestFileScopeForActiveDocument|onFileScopeGrantedTrigger/);
 });

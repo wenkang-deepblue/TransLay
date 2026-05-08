@@ -66,7 +66,8 @@ test("driveApiRequest normalizes Drive REST failure status and reason", async ()
       assert.equal(err.driveOperation, "Drive active file access check");
       assert.equal(err.driveStatus, 403);
       assert.equal(err.driveReason, "insufficientFilePermissions");
-      assert.match(err.message, /HTTP 403 \/ insufficientFilePermissions/);
+      assert.match(err.message, /\[DRIVE_REASON:insufficientFilePermissions\]/);
+      assert.match(err.message, /HTTP 403/);
       return true;
     }
   );
