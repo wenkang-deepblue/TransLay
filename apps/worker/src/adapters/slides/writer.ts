@@ -29,6 +29,13 @@ interface SlideDuplicatePlan {
   readonly objectIds: Record<string, string>;
 }
 
+interface WriteAuthOptions {
+  readonly pool?: Pool;
+  readonly jobId?: string;
+  readonly sourcePresentationId?: string;
+  readonly requireTargetObjectMap?: boolean;
+}
+
 interface NodeWriteRequestParams {
   readonly sourceNode: SlideTextNode;
   readonly translatedNode: TranslatedNode;
@@ -64,9 +71,34 @@ export interface ExistingSlideWriteTarget {
   readonly object_id_map?: Readonly<Record<string, string>>;
 }
 
-interface ReplacePlan {
-  readonly requests: slides_v1.Schema$Request[];
-  readonly warnings: JobWarning[];
+interface StructuralMappingFailure {
+  readonly path: string;
+  readonly reason: "missing_slide" | "length_mismatch" | "kind_mismatch";
+  readonly source_count?: number;
+  readonly target_count?: number;
+  readonly source_kind?: string;
+  readonly target_kind?: string;
+}
+
+interface ObjectIdMapBuildResult {
+  readonly objectIdMap?: Record<string, string>;
+  readonly diagnostics: {
+    readonly source_slide_object_id: string | undefined;
+    readonly target_slide_object_id: string | undefined;
+    readonly source_page_element_count: number | undefined;
+    readonly target_page_element_count: number | undefined;
+    readonly source_notes_element_count: number | undefined;
+    readonly target_notes_element_count: number | undefined;
+    readonly mapped_object_count: number;
+    readonly structural_mapping_failures: readonly StructuralMappingFailure[];
+  };
+}
+
+interface ObjectIdMapSummary {
+  mappedSlideCount: number;
+  failedMappingSlideCount: number;
+  mappedObjectCount: number;
+  structuralFailureCount: number;
 }
 
 interface NodeWriteExecutionResult {
@@ -171,10 +203,7 @@ export async function writeBackAppend(
   extractedSlides: SlideExtractionResult[],
   translatedNodes: readonly TranslatedNode[],
   onProgress?: (result: WriteBackResult) => Promise<void>,
-  authOptions?: {
-    readonly pool?: Pool;
-    readonly jobId?: string;
-  }
+  authOptions?: WriteAuthOptions
 ): Promise<WriteBackResult> {
   const authContext =
     authOptions?.pool && authOptions.jobId
@@ -376,10 +405,7 @@ export async function writeBackNewFile(
   extractedSlides: SlideExtractionResult[],
   translatedNodes: readonly TranslatedNode[],
   onProgress?: (result: WriteBackResult) => Promise<void>,
-  authOptions?: {
-    readonly pool?: Pool;
-    readonly jobId?: string;
-  }
+  authOptions?: WriteAuthOptions
 ): Promise<WriteBackResult> {
   const authContext =
     authOptions?.pool && authOptions.jobId
@@ -393,6 +419,8 @@ export async function writeBackNewFile(
   if (extractedSlides.length === 0) {
     return writeResult;
   }
+  const sourcePresentationId = authOptions?.sourcePresentationId;
+  assertDistinctSourcePresentationForNewFile(sourcePresentationId, targetPresentationId);
 
   const newPres = await budget.expensiveRead(
     () =>
@@ -406,6 +434,22 @@ export async function writeBackNewFile(
     }
   );
   const newSlides = newPres.data.slides ?? [];
+  const sourceSlides = await loadSourceSlidesForTargetMapping(
+    getSlidesApi,
+    budget,
+    sourcePresentationId,
+    authOptions,
+    authContext
+  );
+  logSourceSlidesLoadedForTargetMapping(
+    authOptions?.jobId,
+    sourcePresentationId,
+    targetPresentationId,
+    sourceSlides.length,
+    newSlides.length,
+    extractedSlides.length
+  );
+  const sourceSlideByObjectId = buildSlideByObjectId(sourceSlides);
   let breakerState: WriteCircuitBreakerState = {
     category: null,
     streak: 0,
@@ -417,10 +461,32 @@ export async function writeBackNewFile(
       consecutiveSuccessesSinceSlowMode: 0,
     },
   };
+  const objectIdMapSummary: ObjectIdMapSummary = {
+    mappedSlideCount: 0,
+    failedMappingSlideCount: 0,
+    mappedObjectCount: 0,
+    structuralFailureCount: 0,
+  };
 
   for (let index = 0; index < extractedSlides.length; index += 1) {
     const extracted = extractedSlides[index]!;
     const slide = newSlides[extracted.slide_index];
+    const sourceSlide = resolveSourceSlideForExtracted(
+      extracted,
+      sourceSlides,
+      sourceSlideByObjectId
+    );
+    const objectIdMapResult = buildSourceToTargetObjectIdMap(sourceSlide, slide);
+    const objectIdMap = objectIdMapResult.objectIdMap;
+    recordObjectIdMapSummary(objectIdMapSummary, objectIdMapResult);
+    if (shouldLogObjectIdMapDetail(objectIdMapResult)) {
+      logSourceToTargetObjectIdMap(
+        authOptions?.jobId,
+        "create_new_file",
+        extracted.slide_index,
+        objectIdMapResult
+      );
+    }
     if (!slide) {
       console.error(
         `[slides-writer] new-file slide ${extracted.slide_index + 1} cannot start because copied slide is missing`
@@ -444,7 +510,7 @@ export async function writeBackNewFile(
         slide,
         extracted.nodes,
         translationMap,
-        (sourceObjectId) => sourceObjectId,
+        (sourceObjectId) => resolveTargetObjectId(sourceObjectId, objectIdMap, true),
         writeContext,
         authContext
       );
@@ -458,7 +524,7 @@ export async function writeBackNewFile(
         extracted.slide_index,
         nodeWriteResult.warnings,
         slide.objectId ?? undefined,
-        undefined,
+        objectIdMap,
         extracted.slide_object_id,
         nodeWriteResult.committedNodeIds,
         nodeWriteResult.failedNodeIds
@@ -470,6 +536,8 @@ export async function writeBackNewFile(
       const classifiedError = classifyWriteError(err);
       logWriteFailure("create_new_file", extracted.slide_index, classifiedError, {
         target_presentation_id: targetPresentationId,
+        target_slide_object_id: slide.objectId,
+        ...buildObjectIdMapLogMetadata(objectIdMapResult),
       });
       writeResult = appendFailedSlideResult(
         writeResult,
@@ -512,6 +580,12 @@ export async function writeBackNewFile(
     }
   }
 
+  logSourceToTargetObjectIdMapSummary(
+    authOptions?.jobId,
+    "create_new_file",
+    extractedSlides.length,
+    objectIdMapSummary
+  );
   return writeResult;
 }
 
@@ -521,10 +595,7 @@ export async function writeBackExistingSlides(
   translatedNodes: readonly TranslatedNode[],
   existingTargets: readonly ExistingSlideWriteTarget[],
   onProgress?: (result: WriteBackResult) => Promise<void>,
-  authOptions?: {
-    readonly pool?: Pool;
-    readonly jobId?: string;
-  }
+  authOptions?: WriteAuthOptions
 ): Promise<WriteBackResult> {
   const authContext =
     authOptions?.pool && authOptions.jobId
@@ -555,6 +626,21 @@ export async function writeBackExistingSlides(
       .filter((slide): slide is slides_v1.Schema$Page & { objectId: string } => Boolean(slide.objectId))
       .map((slide) => [slide.objectId, slide])
   );
+  const requiresTargetObjectMap = authOptions?.requireTargetObjectMap === true;
+  const sourcePresentationId = authOptions?.sourcePresentationId;
+  const needsSourceSlides =
+    Boolean(sourcePresentationId) &&
+    anyExistingTargetMissingNodeMapping(extractedSlides, targetBySlideIndex);
+  const sourceSlides = needsSourceSlides
+    ? await loadSourceSlidesForTargetMapping(
+        getSlidesApi,
+        budget,
+        sourcePresentationId!,
+        authOptions,
+        authContext
+      )
+    : undefined;
+  const sourceSlideByObjectId = buildSlideByObjectId(sourceSlides);
   let breakerState: WriteCircuitBreakerState = {
     category: null,
     streak: 0,
@@ -574,6 +660,15 @@ export async function writeBackExistingSlides(
       target?.output_slide_object_id
         ? slideByObjectId.get(target.output_slide_object_id)
         : allSlides[extracted.slide_index];
+    const sourceSlide = resolveSourceSlideForExtracted(
+      extracted,
+      sourceSlides,
+      sourceSlideByObjectId
+    );
+    const derivedObjectIdMapResult = buildSourceToTargetObjectIdMap(sourceSlide, outputSlide);
+    const objectIdMap = mergeObjectIdMaps(target?.object_id_map, derivedObjectIdMapResult.objectIdMap);
+    const requiresObjectMapForSlide =
+      requiresTargetObjectMap || Boolean(target?.object_id_map) || Boolean(sourceSlides);
 
     if (!outputSlide?.objectId) {
       writeResult = appendFailedSlideResult(
@@ -595,7 +690,8 @@ export async function writeBackExistingSlides(
         outputSlide,
         extracted.nodes,
         translationMap,
-        (sourceObjectId) => target?.object_id_map?.[sourceObjectId] ?? sourceObjectId,
+        (sourceObjectId) =>
+          resolveTargetObjectId(sourceObjectId, objectIdMap, requiresObjectMapForSlide),
         writeContext,
         authContext
       );
@@ -609,7 +705,7 @@ export async function writeBackExistingSlides(
         extracted.slide_index,
         nodeWriteResult.warnings,
         outputSlide.objectId,
-        target?.object_id_map,
+        objectIdMap,
         extracted.slide_object_id,
         nodeWriteResult.committedNodeIds,
         nodeWriteResult.failedNodeIds
@@ -622,6 +718,8 @@ export async function writeBackExistingSlides(
       logWriteFailure("create_new_file", extracted.slide_index, classifiedError, {
         target_presentation_id: presentationId,
         existing_output_slide_object_id: outputSlide.objectId,
+        ...buildObjectIdMapLogMetadata(derivedObjectIdMapResult),
+        resolved_mapped_object_count: objectIdMap ? Object.keys(objectIdMap).length : 0,
       });
       writeResult = appendFailedSlideResult(
         writeResult,
@@ -741,7 +839,7 @@ async function executeNodeWritesForSlide(
   slide: slides_v1.Schema$Page,
   originalNodes: readonly SlideTextNode[],
   translationMap: Map<string, TranslatedNode>,
-  resolveObjectId: (sourceObjectId: string) => string,
+  resolveObjectId: (sourceObjectId: string) => string | undefined,
   context: WriteExecutionContext,
   authContext?: SlidesClientContext
 ): Promise<NodeWriteExecutionResult> {
@@ -1247,6 +1345,374 @@ function buildTranslationMap(
   return map;
 }
 
+async function loadSourceSlidesForTargetMapping(
+  slides: () => ReturnType<typeof getSlidesClient>["slides"],
+  budget: ReturnType<typeof getSlidesCallBudget>,
+  sourcePresentationId: string,
+  authOptions: WriteAuthOptions | undefined,
+  authContext: SlidesClientContext | undefined
+): Promise<readonly slides_v1.Schema$Page[]> {
+  const sourcePres = await budget.expensiveRead(
+    () =>
+      slides().presentations.get({
+        presentationId: sourcePresentationId,
+      }),
+    {
+      jobId: authOptions?.jobId,
+      opName: "slides.presentations.get",
+      authContext,
+    }
+  );
+  return sourcePres.data.slides ?? [];
+}
+
+function buildSlideByObjectId(
+  slides: readonly slides_v1.Schema$Page[] | undefined
+): Map<string, slides_v1.Schema$Page> {
+  const map = new Map<string, slides_v1.Schema$Page>();
+  for (const slide of slides ?? []) {
+    if (slide.objectId) {
+      map.set(slide.objectId, slide);
+    }
+  }
+  return map;
+}
+
+function resolveSourceSlideForExtracted(
+  extracted: SlideExtractionResult,
+  sourceSlides: readonly slides_v1.Schema$Page[] | undefined,
+  sourceSlideByObjectId: ReadonlyMap<string, slides_v1.Schema$Page>
+): slides_v1.Schema$Page | undefined {
+  return (
+    sourceSlideByObjectId.get(extracted.slide_object_id) ??
+    sourceSlides?.[extracted.slide_index]
+  );
+}
+
+function buildSourceToTargetObjectIdMap(
+  sourceSlide: slides_v1.Schema$Page | undefined,
+  targetSlide: slides_v1.Schema$Page | undefined
+): ObjectIdMapBuildResult {
+  const failures: StructuralMappingFailure[] = [];
+  const diagnosticsBase = {
+    source_slide_object_id: sourceSlide?.objectId ?? undefined,
+    target_slide_object_id: targetSlide?.objectId ?? undefined,
+    source_page_element_count: sourceSlide?.pageElements?.length,
+    target_page_element_count: targetSlide?.pageElements?.length,
+    source_notes_element_count: sourceSlide?.slideProperties?.notesPage?.pageElements?.length,
+    target_notes_element_count: targetSlide?.slideProperties?.notesPage?.pageElements?.length,
+  };
+  if (!sourceSlide || !targetSlide) {
+    failures.push({
+      path: "slide",
+      reason: "missing_slide",
+    });
+    return {
+      diagnostics: {
+        ...diagnosticsBase,
+        mapped_object_count: 0,
+        structural_mapping_failures: failures,
+      },
+    };
+  }
+
+  const objectIds: Record<string, string> = {};
+  if (sourceSlide.objectId && targetSlide.objectId) {
+    objectIds[sourceSlide.objectId] = targetSlide.objectId;
+  }
+
+  tryMapPageElementObjectIdsByStructure(
+    sourceSlide.pageElements ?? [],
+    targetSlide.pageElements ?? [],
+    objectIds,
+    "pageElements",
+    failures
+  );
+  tryMapPageElementObjectIdsByStructure(
+    sourceSlide.slideProperties?.notesPage?.pageElements ?? [],
+    targetSlide.slideProperties?.notesPage?.pageElements ?? [],
+    objectIds,
+    "notesPage.pageElements",
+    failures
+  );
+  // Some SlidesApp-created decks differ in notes-page wrapper structure; this
+  // preserves speaker-notes BODY mapping when structural notes mapping cannot.
+  mapSpeakerNotesBodyObjectIdByPlaceholder(sourceSlide, targetSlide, objectIds);
+
+  const objectIdMap = Object.keys(objectIds).length > 0 ? objectIds : undefined;
+  return {
+    objectIdMap,
+    diagnostics: {
+      ...diagnosticsBase,
+      mapped_object_count: objectIdMap ? Object.keys(objectIdMap).length : 0,
+      structural_mapping_failures: failures,
+    },
+  };
+}
+
+function tryMapPageElementObjectIdsByStructure(
+  sourceElements: readonly slides_v1.Schema$PageElement[],
+  targetElements: readonly slides_v1.Schema$PageElement[],
+  objectIds: Record<string, string>,
+  path: string,
+  failures: StructuralMappingFailure[]
+): boolean {
+  if (sourceElements.length !== targetElements.length) {
+    failures.push({
+      path,
+      reason: "length_mismatch",
+      source_count: sourceElements.length,
+      target_count: targetElements.length,
+    });
+    return false;
+  }
+
+  const nextObjectIds: Record<string, string> = {};
+  for (let index = 0; index < sourceElements.length; index += 1) {
+    const sourceElement = sourceElements[index]!;
+    const targetElement = targetElements[index]!;
+    if (
+      !tryMapPageElementObjectIdByStructure(
+        sourceElement,
+        targetElement,
+        nextObjectIds,
+        `${path}[${index}]`,
+        failures
+      )
+    ) {
+      return false;
+    }
+  }
+
+  Object.assign(objectIds, nextObjectIds);
+  return true;
+}
+
+function tryMapPageElementObjectIdByStructure(
+  sourceElement: slides_v1.Schema$PageElement,
+  targetElement: slides_v1.Schema$PageElement,
+  objectIds: Record<string, string>,
+  path: string,
+  failures: StructuralMappingFailure[]
+): boolean {
+  const sourceKind = getPageElementKind(sourceElement);
+  const targetKind = getPageElementKind(targetElement);
+  if (sourceKind === "unknown" || targetKind === "unknown" || sourceKind !== targetKind) {
+    failures.push({
+      path,
+      reason: "kind_mismatch",
+      source_kind: sourceKind,
+      target_kind: targetKind,
+    });
+    return false;
+  }
+
+  if (sourceElement.objectId && targetElement.objectId) {
+    objectIds[sourceElement.objectId] = targetElement.objectId;
+  }
+
+  if (sourceElement.elementGroup || targetElement.elementGroup) {
+    return tryMapPageElementObjectIdsByStructure(
+      sourceElement.elementGroup?.children ?? [],
+      targetElement.elementGroup?.children ?? [],
+      objectIds,
+      `${path}.children`,
+      failures
+    );
+  }
+
+  return true;
+}
+
+function getPageElementKind(element: slides_v1.Schema$PageElement): string {
+  if (element.elementGroup) {
+    return "group";
+  }
+  if (element.table) {
+    return "table";
+  }
+  if (element.shape) {
+    const placeholderType = element.shape.placeholder?.type ?? "";
+    return `shape:${placeholderType}`;
+  }
+  if (element.image) {
+    return "image";
+  }
+  if (element.line) {
+    return "line";
+  }
+  if (element.sheetsChart) {
+    return "sheets_chart";
+  }
+  if (element.video) {
+    return "video";
+  }
+  if (element.wordArt) {
+    return "word_art";
+  }
+  return "unknown";
+}
+
+function mapSpeakerNotesBodyObjectIdByPlaceholder(
+  sourceSlide: slides_v1.Schema$Page,
+  targetSlide: slides_v1.Schema$Page,
+  objectIds: Record<string, string>
+): void {
+  const sourceBody = findSpeakerNotesBodyElement(sourceSlide);
+  const targetBody = findSpeakerNotesBodyElement(targetSlide);
+  if (
+    sourceBody?.objectId &&
+    targetBody?.objectId &&
+    !objectIds[sourceBody.objectId]
+  ) {
+    objectIds[sourceBody.objectId] = targetBody.objectId;
+  }
+}
+
+function resolveTargetObjectId(
+  sourceObjectId: string,
+  objectIdMap: Readonly<Record<string, string>> | undefined,
+  requireObjectMap = false
+): string | undefined {
+  if (!objectIdMap) {
+    return requireObjectMap ? undefined : sourceObjectId;
+  }
+  return objectIdMap[sourceObjectId];
+}
+
+function assertDistinctSourcePresentationForNewFile(
+  sourcePresentationId: string | undefined,
+  targetPresentationId: string
+): asserts sourcePresentationId is string {
+  if (!sourcePresentationId || sourcePresentationId === targetPresentationId) {
+    throw new Error("HOST_ADAPTER_ERROR");
+  }
+}
+
+function anyExistingTargetMissingNodeMapping(
+  extractedSlides: readonly SlideExtractionResult[],
+  targetBySlideIndex: ReadonlyMap<number, ExistingSlideWriteTarget>
+): boolean {
+  for (const extracted of extractedSlides) {
+    const target = targetBySlideIndex.get(extracted.slide_index);
+    if (!target?.object_id_map) {
+      return true;
+    }
+    for (const node of extracted.nodes) {
+      if (!target.object_id_map[node.object_id]) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function mergeObjectIdMaps(
+  preferred: Readonly<Record<string, string>> | undefined,
+  fallback: Readonly<Record<string, string>> | undefined
+): Record<string, string> | undefined {
+  if (!preferred && !fallback) {
+    return undefined;
+  }
+  return { ...(fallback ?? {}), ...(preferred ?? {}) };
+}
+
+function logSourceSlidesLoadedForTargetMapping(
+  jobId: string | undefined,
+  sourcePresentationId: string,
+  targetPresentationId: string,
+  sourceSlideCount: number,
+  targetSlideCount: number,
+  requestedSlideCount: number
+): void {
+  console.log(
+    "[slides-writer] source presentation loaded for create_new_file object-id mapping",
+    JSON.stringify({
+      job_id: jobId,
+      source_presentation_id: sourcePresentationId,
+      target_presentation_id: targetPresentationId,
+      source_slide_count: sourceSlideCount,
+      target_slide_count: targetSlideCount,
+      requested_slide_count: requestedSlideCount,
+    })
+  );
+}
+
+function logSourceToTargetObjectIdMap(
+  jobId: string | undefined,
+  outputMode: "create_new_file",
+  slideIndex: number,
+  result: ObjectIdMapBuildResult
+): void {
+  console.log(
+    "[slides-writer] source-to-target object-id map built",
+    JSON.stringify({
+      job_id: jobId,
+      output_mode: outputMode,
+      slide_index: slideIndex,
+      ...buildObjectIdMapLogMetadata(result),
+    })
+  );
+}
+
+function shouldLogObjectIdMapDetail(result: ObjectIdMapBuildResult): boolean {
+  return (
+    result.diagnostics.mapped_object_count === 0 ||
+    result.diagnostics.structural_mapping_failures.length > 0
+  );
+}
+
+function recordObjectIdMapSummary(
+  summary: ObjectIdMapSummary,
+  result: ObjectIdMapBuildResult
+): void {
+  summary.mappedObjectCount += result.diagnostics.mapped_object_count;
+  summary.structuralFailureCount += result.diagnostics.structural_mapping_failures.length;
+  if (
+    result.diagnostics.mapped_object_count > 0 &&
+    result.diagnostics.structural_mapping_failures.length === 0
+  ) {
+    summary.mappedSlideCount += 1;
+    return;
+  }
+  summary.failedMappingSlideCount += 1;
+}
+
+function logSourceToTargetObjectIdMapSummary(
+  jobId: string | undefined,
+  outputMode: "create_new_file",
+  requestedSlideCount: number,
+  summary: ObjectIdMapSummary
+): void {
+  console.log(
+    "[slides-writer] source-to-target object-id map summary",
+    JSON.stringify({
+      job_id: jobId,
+      output_mode: outputMode,
+      requested_slide_count: requestedSlideCount,
+      mapped_slide_count: summary.mappedSlideCount,
+      failed_mapping_slide_count: summary.failedMappingSlideCount,
+      mapped_object_count: summary.mappedObjectCount,
+      structural_failure_count: summary.structuralFailureCount,
+    })
+  );
+}
+
+function buildObjectIdMapLogMetadata(
+  result: ObjectIdMapBuildResult
+): Record<string, unknown> {
+  return {
+    source_slide_object_id: result.diagnostics.source_slide_object_id,
+    target_slide_object_id: result.diagnostics.target_slide_object_id,
+    source_page_element_count: result.diagnostics.source_page_element_count,
+    target_page_element_count: result.diagnostics.target_page_element_count,
+    source_notes_element_count: result.diagnostics.source_notes_element_count,
+    target_notes_element_count: result.diagnostics.target_notes_element_count,
+    mapped_object_count: result.diagnostics.mapped_object_count,
+    structural_mapping_failures: result.diagnostics.structural_mapping_failures,
+  };
+}
+
 function buildDuplicateObjectIds(
   slide: slides_v1.Schema$Page,
   slideIndex: number,
@@ -1310,92 +1776,6 @@ function buildDuplicateId(
 
 function buildExecutionPrefix(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function buildReplacePlan(
-  slide: slides_v1.Schema$Page,
-  originalNodes: SlideTextNode[],
-  translationMap: Map<string, TranslatedNode>,
-  resolveObjectId: (sourceObjectId: string) => string
-): ReplacePlan {
-  const requests: slides_v1.Schema$Request[] = [];
-  const warnings: JobWarning[] = [];
-  const fitByNodeId = resolveSlideNodeFits(
-    originalNodes,
-    originalNodes
-      .map((node) => translationMap.get(node.node_id))
-      .filter((translatedNode): translatedNode is TranslatedNode => Boolean(translatedNode))
-  );
-
-  for (const node of originalNodes) {
-    const translated = translationMap.get(node.node_id);
-    if (translated === undefined) {
-      continue;
-    }
-
-    const resolvedObjectId = resolveObjectId(node.object_id);
-    if (!resolvedObjectId) {
-      continue;
-    }
-
-    if (node.element_type === "speaker_notes") {
-      const notesShape = findSpeakerNotesBody(slide, node.object_id);
-      if (!notesShape?.shape?.text) {
-        continue;
-      }
-
-      const artifacts = buildNodeWriteArtifacts({
-        sourceNode: node,
-        translatedNode: translated,
-        objectId: resolvedObjectId,
-        fit: fitByNodeId.get(node.node_id),
-      });
-      requests.push(...artifacts.requests);
-      warnings.push(...artifacts.warnings);
-      continue;
-    }
-
-    if (node.element_type === "table_cell") {
-      const tableElement = findElement(slide, node.object_id);
-      const tableCell =
-        tableElement?.table?.tableRows?.[node.row_index ?? 0]?.tableCells?.[
-          node.col_index ?? 0
-        ];
-      if (!tableCell?.text) {
-        continue;
-      }
-
-      const artifacts = buildNodeWriteArtifacts({
-        sourceNode: node,
-        translatedNode: translated,
-        objectId: resolvedObjectId,
-        cellLocation: {
-          rowIndex: node.row_index ?? 0,
-          columnIndex: node.col_index ?? 0,
-        },
-        fit: fitByNodeId.get(node.node_id),
-      });
-      requests.push(...artifacts.requests);
-      warnings.push(...artifacts.warnings);
-      continue;
-    }
-
-    const element = findElement(slide, node.object_id);
-    if (!element?.shape?.text) {
-      continue;
-    }
-
-    const artifacts = buildNodeWriteArtifacts({
-      sourceNode: node,
-      translatedNode: translated,
-      objectId: resolvedObjectId,
-      fit: fitByNodeId.get(node.node_id),
-    });
-    requests.push(...artifacts.requests);
-    warnings.push(...artifacts.warnings);
-  }
-
-  return { requests, warnings };
 }
 
 function buildNodeWriteRequests(
@@ -1824,6 +2204,24 @@ function findSpeakerNotesBody(
   }
 
   return null;
+}
+
+function findSpeakerNotesBodyElement(
+  slide: slides_v1.Schema$Page
+): slides_v1.Schema$PageElement | null {
+  const notesPage = slide.slideProperties?.notesPage;
+  if (!notesPage) {
+    return null;
+  }
+
+  return (
+    (notesPage.pageElements ?? []).find(
+      (element) =>
+        Boolean(element.objectId) &&
+        Boolean(element.shape?.text) &&
+        element.shape?.placeholder?.type === "BODY"
+    ) ?? null
+  );
 }
 
 async function cleanupDuplicatedSlides(

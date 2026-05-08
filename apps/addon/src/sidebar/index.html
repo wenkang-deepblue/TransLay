@@ -432,20 +432,6 @@
     .duplicate-actions .btn {
       margin-top: 0;
     }
-    .cleanup-action {
-      display: none;
-      margin-bottom: 12px;
-      padding: 10px 12px;
-      border-radius: 6px;
-      background: #e8f0fe;
-      color: #174ea6;
-      font-size: 12px;
-      text-align: center;
-    }
-    .cleanup-action.visible { display: block; }
-    .cleanup-action .btn {
-      margin-top: 10px;
-    }
     .round2-probe-panel {
       display: none;
       margin-bottom: 14px;
@@ -668,13 +654,6 @@
         </button>
       </div>
     </div>
-    <div class="cleanup-action" id="cleanupAction">
-      <div id="cleanupMessage"></div>
-      <button class="btn btn-secondary btn-inline" id="cleanupRetryBtn" onclick="handleCleanupRetry()" type="button">
-        Remove temporary access
-      </button>
-    </div>
-
     <div class="round2-probe-panel" id="round2ProbePanel">
       <div class="round2-probe-title">Round 2 Probe: temporary feasibility actions</div>
       <button class="btn btn-secondary round2-probe-btn" onclick="runRound2ProbeActiveSlidesContext()" type="button">
@@ -831,9 +810,6 @@
       awaitingCancelDecision: false,
       cancelRequested: false,
       cancelRequestInFlight: false,
-      cleanupRecoveryInFlight: false,
-      pendingCleanupJobId: null,
-      pendingPreparedCleanup: null,
       isTranslating: false,
       isPreparingSubmission: false,
       activeSubmission: null,
@@ -907,7 +883,6 @@
         onSettled: function() {
           showMainView();
           refreshRound2ProbeAvailability();
-          retryPendingDriveCleanupOnStartup();
         }
       });
     }
@@ -1498,12 +1473,26 @@
                 return;
               }
 
+              if (outputMode === 'create_new_file' && jobRequest.target_document_id) {
+                state.currentOutputDocumentId = jobRequest.target_document_id;
+                submitJob(jobRequest, submission.token);
+                return;
+              }
+
               if (outputMode === 'create_new_file') {
                 google.script.run
                   .withSuccessHandler(function(prepared) {
                     activeSubmission = getActiveSubmission(submission.token);
                     if (!activeSubmission) {
-                      cleanupPreparedSubmission(sourceContext, prepared, jobRequest);
+                      state.currentOutputDocumentId = prepared.documentId;
+                      if (!state.activeSubmission) {
+                        setTranslating(false);
+                        hideProgress();
+                      }
+                      showCreateNewFileSubmissionFailure(
+                        prepared.documentId,
+                        'The submission was no longer active before the job could start.'
+                      );
                       return;
                     }
 
@@ -1513,8 +1502,7 @@
                     state.currentOutputDocumentId = prepared.documentId;
 
                     if (activeSubmission.cancelRequested) {
-                      cleanupPreparedSubmission(activeSubmission || sourceContext, prepared, jobRequest);
-                      finishSubmissionCanceled(jobRequest.output_mode);
+                      finishSubmissionCanceled(jobRequest.output_mode, prepared.documentId);
                       return;
                     }
 
@@ -1621,13 +1609,13 @@
           clearActiveSubmission();
           setTranslating(false);
           hideProgress();
-          cleanupPreparedSubmission(activeSubmission, null, jobRequest);
           var msg = err.message || 'Failed to create translation job.';
           if (msg.indexOf('[UNSUPPORTED_LANGUAGE]') !== -1) {
-            showError('Language not recognized. Please try again.');
+            showSubmissionError(jobRequest, 'Language not recognized. Please try again.');
           } else if (msg.indexOf('[QUOTA_INSUFFICIENT_WITH_PARTIAL_OPTION]') !== -1) {
             var partial = parseQuotaPartialError(msg);
             if (partial) {
+              showSubmissionError(jobRequest, 'Usage quota is insufficient for the full selection.');
               showQuotaPartialDialog({
                 jobRequest: cloneJobRequest(jobRequest),
                 targetLang: jobRequest.target_language_input,
@@ -1636,29 +1624,29 @@
                 submissionNonce: 'partial_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
               }, partial);
             } else {
-              showError('Usage quota is insufficient for the full selection.');
+              showSubmissionError(jobRequest, 'Usage quota is insufficient for the full selection.');
             }
           } else if (msg.indexOf('[QUOTA_EXCEEDED]') !== -1) {
-            showError('Usage quota exceeded. Upgrade your subscription or buy credits for more capacity.');
+            showSubmissionError(jobRequest, 'Usage quota exceeded. Upgrade your subscription or buy credits for more capacity.');
           } else if (msg.indexOf('[JOB_QUEUE_BUSY') !== -1) {
-            showError('The system is currently busy. Please try again in a few minutes.');
+            showSubmissionError(jobRequest, 'The system is currently busy. Please try again in a few minutes.');
           } else if (msg.indexOf('[RATE_LIMITED') !== -1) {
             var rlMatch = /\[RATE_LIMITED(?::retry=(\d+))?\]/.exec(msg);
             var waitSec = rlMatch && rlMatch[1] ? parseInt(rlMatch[1], 10) : 0;
             if (waitSec > 0) {
-              showError('Too many requests right now. Please wait about ' + waitSec + ' second' + (waitSec === 1 ? '' : 's') + ' and try again.');
+              showSubmissionError(jobRequest, 'Too many requests right now. Please wait about ' + waitSec + ' second' + (waitSec === 1 ? '' : 's') + ' and try again.');
             } else {
-              showError('Too many requests right now. Please wait a moment and try again.');
+              showSubmissionError(jobRequest, 'Too many requests right now. Please wait a moment and try again.');
             }
           } else if (msg.indexOf('[CONCURRENT_JOB_RUNNING]') !== -1) {
-            showError('A translation job is already in progress. Please wait for it to finish.');
+            showSubmissionError(jobRequest, 'A translation job is already in progress. Please wait for it to finish.');
           } else if (msg.indexOf('[DRIVE_CLEANUP_REQUIRED]') !== -1) {
-            showCleanupAction(
-              'Temporary access cleanup is still pending for this presentation.',
-              state.pendingCleanupJobId
-            );
-            retryPendingDriveCleanupForDocument(false);
+            showSubmissionError(jobRequest, 'A previous temporary access cleanup is still pending for this presentation. Please contact support if it keeps blocking new translations.');
           } else if (msg.indexOf('[IDEMPOTENT_REPLAY]') !== -1) {
+            showSubmissionError(
+              jobRequest,
+              'This translation has already been submitted. You can resubmit it, but resubmitting will consume your usage quota.'
+            );
             showDuplicateAction(
               'This translation has already been submitted. You can also submit it again, but resubmitting will consume your usage quota.',
               {
@@ -1669,7 +1657,7 @@
               }
             );
           } else {
-            showError(msg);
+            showSubmissionError(jobRequest, sanitizeSubmissionFailureMessage(msg));
           }
         })
         .createJob(jobRequest);
@@ -1707,7 +1695,6 @@
     var POLL_IDLE_TIMEOUT_MS = 20 * 60 * 1000;
     var POLL_MAX_BACKOFF_MS = 60 * 1000;
     var POLL_RETRY_AFTER_RE = /\[(?:RATE_LIMITED|JOB_QUEUE_BUSY)(?::retry=(\d+))?\]/;
-    var CLEANUP_STARTUP_THROTTLE_MS = 60 * 1000;
 
     function _scheduleNextPoll(jobId, delayMs) {
       if (state.pollTimer) {
@@ -1824,7 +1811,6 @@
               resp.warnings || [],
               resp
             );
-            retryTerminalDriveCleanup(resp);
             refreshEntitlement(true);
             return;
           } else if (resp.status === 'canceled') {
@@ -1832,7 +1818,6 @@
             setTranslating(false);
             hideProgress();
             showCanceledResult(resp);
-            retryTerminalDriveCleanup(resp);
             refreshEntitlement(true);
             return;
           } else if (resp.status === 'failed') {
@@ -1846,7 +1831,6 @@
               resp.warnings || [],
               resp
             );
-            retryTerminalDriveCleanup(resp);
             return;
           }
           // In progress — render and schedule next poll at the steady cadence.
@@ -2042,7 +2026,6 @@
               output_mode: outputMode,
               output_document_url: resp.output_document_url || null
             });
-            retryTerminalDriveCleanup(resp);
             refreshEntitlement(true);
           } else if (
             resp.status === 'already_completed' ||
@@ -2359,9 +2342,11 @@
     function showCanceledResult(resp) {
       var message = resp.message || 'Translation canceled.';
       if (resp.output_mode === 'create_new_file') {
-        message += ' Temporary file moved to Trash.';
+        // Keep this conservative because canceled backend paths can have
+        // different guarantees about whether a prepared target survived.
+        message += ' The created presentation may remain in your Drive.';
       }
-      showResult(false, message, null, [], resp);
+      showResult(false, message, resolveOutputDocumentUrl(resp), [], resp);
     }
 
     function shouldDisplayCompletedWithoutWarnings(resultMeta) {
@@ -2609,131 +2594,6 @@
       done(copied);
     }
 
-    function cleanupPreparedSubmission(submissionLike, preparedTarget, jobRequest) {
-      var sourceDocumentId = (submissionLike && (
-        submissionLike.sourceDocumentId ||
-        submissionLike.documentId
-      )) || state.documentId || '';
-      var sourcePermissionId = (submissionLike && (
-        submissionLike.sourceWorkerPermissionId ||
-        submissionLike.source_worker_permission_id
-      )) || '';
-      var targetDocumentId = (preparedTarget && preparedTarget.documentId) ||
-        (submissionLike && submissionLike.targetCopyWasCreated && submissionLike.targetDocumentId) ||
-        '';
-      var targetPermissionId = (preparedTarget && preparedTarget.targetWorkerPermissionId) ||
-        (submissionLike && submissionLike.targetWorkerPermissionId) ||
-        '';
-      var targetWasCopiedByAddon = Boolean(
-        (preparedTarget && preparedTarget.documentId) ||
-        (submissionLike && submissionLike.targetCopyWasCreated)
-      );
-
-      if (!sourcePermissionId && !targetDocumentId && !targetPermissionId) {
-        return;
-      }
-
-      runPreparedSubmissionCleanup({
-        sourceDocumentId: sourceDocumentId,
-        sourcePermissionId: sourcePermissionId,
-        targetDocumentId: targetDocumentId,
-        targetPermissionId: targetPermissionId,
-        targetWasCopiedByAddon: targetWasCopiedByAddon
-      }, false);
-    }
-
-    function buildPreparedCleanupRequest(submissionLike, preparedTarget, jobRequest) {
-      var sourceDocumentId = (submissionLike && (
-        submissionLike.sourceDocumentId ||
-        submissionLike.documentId
-      )) || state.documentId || '';
-      var sourcePermissionId = (submissionLike && (
-        submissionLike.sourceWorkerPermissionId ||
-        submissionLike.source_worker_permission_id
-      )) || '';
-      var targetDocumentId = (preparedTarget && preparedTarget.documentId) ||
-        (submissionLike && submissionLike.targetCopyWasCreated && submissionLike.targetDocumentId) ||
-        (jobRequest && jobRequest.target_document_id) ||
-        '';
-      var targetPermissionId = (preparedTarget && preparedTarget.targetWorkerPermissionId) ||
-        (submissionLike && submissionLike.targetWorkerPermissionId) ||
-        '';
-      var targetWasCopiedByAddon = Boolean(
-        (preparedTarget && preparedTarget.documentId) ||
-        (submissionLike && submissionLike.targetCopyWasCreated)
-      );
-
-      return {
-        document_id: sourceDocumentId,
-        source_worker_permission_id: sourcePermissionId,
-        target_document_id: targetDocumentId,
-        target_worker_permission_id: targetPermissionId,
-        target_was_copied_by_addon: targetWasCopiedByAddon
-      };
-    }
-
-    function registerPreparedCleanupForSubmission(submissionLike, preparedTarget, jobRequest, onSuccess, onFailure) {
-      var request = buildPreparedCleanupRequest(submissionLike, preparedTarget, jobRequest);
-      if (!request.document_id || (
-        !request.source_worker_permission_id &&
-        !request.target_document_id &&
-        !request.target_worker_permission_id
-      )) {
-        if (onSuccess) onSuccess();
-        return;
-      }
-
-      google.script.run
-        .withSuccessHandler(function() {
-          if (onSuccess) onSuccess();
-        })
-        .withFailureHandler(function() {
-          if (onFailure) onFailure();
-        })
-        .registerPreparedDriveCleanup(request);
-    }
-
-    function runPreparedSubmissionCleanup(cleanup, userInitiated) {
-      if (!cleanup || state.cleanupRecoveryInFlight) {
-        return;
-      }
-      state.pendingPreparedCleanup = cleanup;
-      state.cleanupRecoveryInFlight = true;
-      updateCleanupRetryButton();
-      updateTranslateButtonState();
-
-      google.script.run
-        .withSuccessHandler(function() {
-          state.cleanupRecoveryInFlight = false;
-          state.pendingPreparedCleanup = null;
-          clearPreparedCleanupRecordBestEffort(cleanup.sourceDocumentId);
-          if (userInitiated) {
-            clearError();
-          }
-          hideCleanupAction();
-        })
-        .withFailureHandler(function(err) {
-          state.cleanupRecoveryInFlight = false;
-          showCleanupAction('Temporary access cleanup could not be completed. Please retry.', null);
-        })
-        .cleanupPreparedTranslationSubmission(
-          cleanup.sourceDocumentId,
-          cleanup.sourcePermissionId,
-          cleanup.targetDocumentId,
-          cleanup.targetPermissionId,
-          cleanup.targetWasCopiedByAddon
-        );
-    }
-
-    function clearPreparedCleanupRecordBestEffort(documentId) {
-      if (!documentId) {
-        return;
-      }
-      google.script.run
-        .withFailureHandler(function() {})
-        .clearPreparedDriveCleanup(documentId);
-    }
-
     function resolveOutputDocumentUrl(resp) {
       if (resp && resp.output_document_url) {
         return resp.output_document_url;
@@ -2741,7 +2601,57 @@
       if (!state.currentOutputDocumentId || state.hostType !== 'slides') {
         return null;
       }
-      return 'https://docs.google.com/presentation/d/' + state.currentOutputDocumentId + '/edit';
+      return buildPresentationUrl(state.currentOutputDocumentId);
+    }
+
+    function buildPresentationUrl(documentId) {
+      if (!documentId) {
+        return null;
+      }
+      return 'https://docs.google.com/presentation/d/' + encodeURIComponent(documentId) + '/edit';
+    }
+
+    function hasCreatedTargetForSubmission(jobRequest) {
+      return Boolean(
+        jobRequest &&
+        jobRequest.output_mode === 'create_new_file' &&
+        jobRequest.target_document_id
+      );
+    }
+
+    function sanitizeSubmissionFailureMessage(message) {
+      var text = String(message || 'The translation job could not be started.')
+        .replace(/\[[A-Z_]+(?::[^\]]+)?\]\s*/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!text) {
+        return 'The translation job could not be started.';
+      }
+      return text.length > 180 ? text.slice(0, 177) + '...' : text;
+    }
+
+    function showSubmissionError(jobRequest, message) {
+      if (hasCreatedTargetForSubmission(jobRequest)) {
+        showCreateNewFileSubmissionFailure(jobRequest.target_document_id, message);
+        return;
+      }
+      showError(message);
+    }
+
+    function showCreateNewFileSubmissionFailure(targetDocumentId, reason) {
+      var targetUrl = buildPresentationUrl(targetDocumentId);
+      var message = 'The new presentation was created, but the translation job was not started.';
+      if (reason) {
+        message += ' Reason: ' + sanitizeSubmissionFailureMessage(reason);
+      }
+      message += ' You can open the created presentation below.';
+      showResult(
+        false,
+        message,
+        targetUrl,
+        [],
+        null
+      );
     }
 
     function showError(msg) {
@@ -2754,162 +2664,6 @@
       var banner = document.getElementById('errorBanner');
       banner.classList.remove('visible');
       banner.textContent = '';
-    }
-
-    function showCleanupAction(message, jobId) {
-      var action = document.getElementById('cleanupAction');
-      document.getElementById('cleanupMessage').textContent = message || 'Temporary access cleanup is still pending.';
-      if (arguments.length >= 2) {
-        state.pendingCleanupJobId = jobId || null;
-      }
-      action.classList.add('visible');
-      updateTranslateButtonState();
-      updateCleanupRetryButton();
-    }
-
-    function hideCleanupAction() {
-      var action = document.getElementById('cleanupAction');
-      action.classList.remove('visible');
-      document.getElementById('cleanupMessage').textContent = '';
-      state.pendingCleanupJobId = null;
-      state.pendingPreparedCleanup = null;
-      updateTranslateButtonState();
-      updateCleanupRetryButton();
-    }
-
-    function isCleanupActionVisible() {
-      return document.getElementById('cleanupAction').classList.contains('visible');
-    }
-
-    function updateCleanupRetryButton() {
-      var btn = document.getElementById('cleanupRetryBtn');
-      if (!btn) {
-        return;
-      }
-      btn.disabled = state.cleanupRecoveryInFlight;
-      btn.textContent = state.cleanupRecoveryInFlight
-        ? 'Removing...'
-        : 'Remove temporary access';
-    }
-
-    function handleCleanupRetry() {
-      if (state.cleanupRecoveryInFlight) {
-        return;
-      }
-      if (state.pendingPreparedCleanup) {
-        runPreparedSubmissionCleanup(state.pendingPreparedCleanup, true);
-        return;
-      }
-      if (state.pendingCleanupJobId) {
-        retryJobDriveCleanupFromSidebar(state.pendingCleanupJobId, true);
-        return;
-      }
-      retryPendingDriveCleanupForDocument(true);
-    }
-
-    function retryPendingDriveCleanupOnStartup() {
-      if (state.hostType !== 'slides' || !state.documentId) {
-        return;
-      }
-      retryPendingDriveCleanupForDocument(false);
-    }
-
-    function getStartupCleanupThrottleKey() {
-      return 'translay.cleanup-pending.lastAttempt.' + state.documentId;
-    }
-
-    function isStartupCleanupThrottled() {
-      try {
-        var lastAttempt = Number(sessionStorage.getItem(getStartupCleanupThrottleKey()) || 0);
-        return lastAttempt > 0 && Date.now() - lastAttempt < CLEANUP_STARTUP_THROTTLE_MS;
-      } catch (err) {
-        return false;
-      }
-    }
-
-    function markStartupCleanupAttempt() {
-      try {
-        sessionStorage.setItem(getStartupCleanupThrottleKey(), String(Date.now()));
-      } catch (err) {
-        // Session storage can be unavailable in some embedded contexts; cleanup still proceeds.
-      }
-    }
-
-    function retryPendingDriveCleanupForDocument(userInitiated) {
-      if (state.cleanupRecoveryInFlight || !state.documentId) {
-        return;
-      }
-      if (!userInitiated) {
-        if (isStartupCleanupThrottled()) {
-          return;
-        }
-        markStartupCleanupAttempt();
-      }
-      state.cleanupRecoveryInFlight = true;
-      updateCleanupRetryButton();
-      updateTranslateButtonState();
-
-      google.script.run
-        .withSuccessHandler(function(resp) {
-          state.cleanupRecoveryInFlight = false;
-          handleCleanupRetryResponse(resp, userInitiated);
-        })
-        .withFailureHandler(function(err) {
-          state.cleanupRecoveryInFlight = false;
-          var msg = err && err.message
-            ? err.message
-            : 'Temporary access cleanup could not be checked.';
-          showCleanupAction(msg, state.pendingCleanupJobId);
-        })
-        .retryPendingDriveCleanup(state.documentId);
-    }
-
-    function retryJobDriveCleanupFromSidebar(jobId, userInitiated) {
-      if (state.cleanupRecoveryInFlight || !jobId) {
-        return;
-      }
-      state.cleanupRecoveryInFlight = true;
-      state.pendingCleanupJobId = jobId;
-      updateCleanupRetryButton();
-      updateTranslateButtonState();
-
-      google.script.run
-        .withSuccessHandler(function(resp) {
-          state.cleanupRecoveryInFlight = false;
-          handleCleanupRetryResponse(resp, userInitiated);
-        })
-        .withFailureHandler(function(err) {
-          state.cleanupRecoveryInFlight = false;
-          var msg = err && err.message
-            ? err.message
-            : 'Temporary access cleanup could not be completed.';
-          showCleanupAction(msg, jobId);
-        })
-        .retryJobDriveCleanup(jobId);
-    }
-
-    function handleCleanupRetryResponse(resp, userInitiated) {
-      if (resp && resp.drive_cleanup_status === 'failed') {
-        showCleanupAction(
-          resp.message || 'Temporary access cleanup is still pending. Please retry or contact support with the task ID.',
-          resp.job_id || state.pendingCleanupJobId
-        );
-        return;
-      }
-      hideCleanupAction();
-      if (userInitiated && resp && resp.drive_cleanup_status === 'succeeded') {
-        clearError();
-      }
-    }
-
-    function retryTerminalDriveCleanup(resp) {
-      if (!resp || !resp.job_id) {
-        return;
-      }
-      if (resp.drive_cleanup_status !== 'pending' && resp.drive_cleanup_status !== 'failed') {
-        return;
-      }
-      retryJobDriveCleanupFromSidebar(resp.job_id, false);
     }
 
     function showDuplicateAction(message, duplicateSubmission) {
@@ -2935,12 +2689,10 @@
       btn.disabled =
         state.isTranslating ||
         state.isPreparingSubmission ||
-        state.cleanupRecoveryInFlight ||
-        isDuplicateActionVisible() ||
-        isCleanupActionVisible();
+        isDuplicateActionVisible();
       btn.textContent = state.isTranslating
         ? 'Translating...'
-        : (state.isPreparingSubmission || state.cleanupRecoveryInFlight ? 'Preparing...' : 'Translate');
+        : (state.isPreparingSubmission ? 'Preparing...' : 'Translate');
     }
 
     function setPreparingSubmission(active) {
@@ -3024,7 +2776,7 @@
       updateCancelButton();
     }
 
-    function finishSubmissionCanceled(outputMode) {
+    function finishSubmissionCanceled(outputMode, targetDocumentId) {
       clearActiveSubmission();
       state.pauseRequested = false;
       state.pauseRequestInFlight = false;
@@ -3034,6 +2786,16 @@
       state.cancelRequestInFlight = false;
       setTranslating(false);
       hideProgress();
+      if (outputMode === 'create_new_file' && targetDocumentId) {
+        showResult(
+          false,
+          'Translation canceled before submission completed. No translation job was started. The new presentation was already created and remains in your Drive.',
+          buildPresentationUrl(targetDocumentId),
+          [],
+          null
+        );
+        return;
+      }
       showCanceledResult({
         status: 'canceled',
         message: 'Translation canceled before submission completed.',

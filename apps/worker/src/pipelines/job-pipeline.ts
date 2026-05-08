@@ -1349,7 +1349,7 @@ async function runAuthorityStage(
             writableSlides,
             translationResult.nodes,
             onContentWriteProgress,
-            { pool, jobId: job_id }
+            { pool, jobId: job_id, sourcePresentationId: job.source_doc_id }
           );
         } else {
           writeResult = await writeBackAppend(
@@ -1432,6 +1432,7 @@ async function runAuthorityStage(
     }
 
     const existingSlideTargets = collectExistingSlideWriteTargets(writeResult.slide_results);
+    const bodyFailedSlideIndices = new Set(writeResult.failed_slide_indexes);
     const notesExistingSlides: Array<{ slide_index: number; slide_object_id: string; nodes: SlideTextNode[] }> = [];
     const notesAppendOnlySlides: Array<{ slide_index: number; slide_object_id: string; nodes: SlideTextNode[] }> = [];
     const successfulNotesOutcomes = notesOutcomes.filter(
@@ -1451,6 +1452,19 @@ async function runAuthorityStage(
     for (const outcome of successfulNotesOutcomes) {
       const sourceSlide = extractionSlideByIndex.get(outcome.slide_index);
       if (!sourceSlide) {
+        for (const noteNode of outcome.prepared_slide.note_nodes) {
+          markNodeWriteFailed(nodeResults!, noteNode.node_id, "HOST_ADAPTER_ERROR");
+        }
+        markNotesFailure(
+          slideResults,
+          outcome.slide_index,
+          "slide_notes_write_failed"
+        );
+        continue;
+      }
+      // New-file notes depend on the copied target slide map from body write;
+      // append mode can still write notes directly to the original deck.
+      if (job.output_mode === "create_new_file" && bodyFailedSlideIndices.has(outcome.slide_index)) {
         for (const noteNode of outcome.prepared_slide.note_nodes) {
           markNodeWriteFailed(nodeResults!, noteNode.node_id, "HOST_ADAPTER_ERROR");
         }
@@ -1503,7 +1517,10 @@ async function runAuthorityStage(
       }
       const notesExistingTargets =
         job.output_mode === "create_new_file"
-          ? notesExistingSlides.map((slide) => ({ slide_index: slide.slide_index }))
+          ? notesExistingSlides.map(
+              (slide) =>
+                existingSlideTargets.get(slide.slide_index) ?? { slide_index: slide.slide_index }
+            )
           : notesExistingSlides
               .map((slide) => existingSlideTargets.get(slide.slide_index))
               .filter((target): target is ExistingSlideWriteTarget => Boolean(target));
@@ -1514,7 +1531,13 @@ async function runAuthorityStage(
         noteTranslatedNodes,
         notesExistingTargets,
         onNotesWriteProgress,
-        { pool, jobId: job_id }
+        {
+          pool,
+          jobId: job_id,
+          sourcePresentationId:
+            job.output_mode === "create_new_file" ? job.source_doc_id : undefined,
+          requireTargetObjectMap: job.output_mode === "create_new_file",
+        }
       );
       applyNotesWriteResultToSlideResults(
         slideResults,

@@ -87,6 +87,14 @@ function createResponse(code, body) {
   };
 }
 
+function extractFunctionBody(source, functionName, nextFunctionName) {
+  const start = source.indexOf(`function ${functionName}`);
+  const end = source.indexOf(`function ${nextFunctionName}`, start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  return source.slice(start, end);
+}
+
 function createSlide(objectId) {
   return {
     getObjectId() {
@@ -336,18 +344,52 @@ test("Sidebar production submission uses user OAuth readiness and omits drive_ac
     new URL("../apps/addon/src/sidebar/index.html", import.meta.url),
     "utf8"
   );
-  const start = html.indexOf("function executeTranslateSubmission");
-  const end = html.indexOf("function handleResubmit", start);
-  assert.notEqual(start, -1);
-  assert.notEqual(end, -1);
+  const executeTranslateSubmission = extractFunctionBody(
+    html,
+    "executeTranslateSubmission",
+    "handleResubmit"
+  );
 
-  const executeTranslateSubmission = html.slice(start, end);
   assert.match(executeTranslateSubmission, /\.ensureCurrentPresentationReadyForUserOauthJob\(\)/);
   assert.doesNotMatch(executeTranslateSubmission, /ensureCurrentPresentationWorkerAccess/);
   assert.doesNotMatch(executeTranslateSubmission, /jobRequest\.drive_access/);
   assert.doesNotMatch(executeTranslateSubmission, /sourceWorkerPermissionId|targetWorkerPermissionId/);
   assert.doesNotMatch(executeTranslateSubmission, /registerPreparedCleanupForSubmission/);
   assert.doesNotMatch(executeTranslateSubmission, /worker permission id/);
+});
+
+test("Sidebar no-Drive flow has no Drive cleanup UI or retry hooks", async () => {
+  const html = await readFile(
+    new URL("../apps/addon/src/sidebar/index.html", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(html, /function executeTranslateSubmission/);
+  assert.match(html, /function submitJob/);
+  assert.match(html, /function showSubmissionError/);
+  assert.match(html, /function showCreateNewFileSubmissionFailure/);
+  assert.match(html, /The new presentation was created, but the translation job was not started/);
+  assert.doesNotMatch(html, /No usage was consumed/);
+  const submitJob = extractFunctionBody(html, "submitJob", "_scheduleNextPoll");
+  assert.match(submitJob, /showSubmissionError\(jobRequest, 'Usage quota exceeded/);
+  assert.match(submitJob, /showSubmissionError\(jobRequest, 'A translation job is already in progress/);
+  assert.match(submitJob, /showSubmissionError\(\s*jobRequest,\s*'This translation has already been submitted/);
+  const executeTranslateSubmission = extractFunctionBody(
+    html,
+    "executeTranslateSubmission",
+    "handleResubmit"
+  );
+  assert.match(executeTranslateSubmission, /if \(outputMode === 'create_new_file' && jobRequest\.target_document_id\)/);
+  assert.match(executeTranslateSubmission, /The submission was no longer active before the job could start/);
+  assert.doesNotMatch(html, /cleanup-action|cleanupAction|cleanupRetryBtn|Remove temporary access/);
+  assert.doesNotMatch(html, /cleanupPreparedSubmission|registerPreparedCleanupForSubmission/);
+  assert.doesNotMatch(html, /retryPendingDriveCleanup|retryJobDriveCleanup|retryTerminalDriveCleanup/);
+  assert.doesNotMatch(html, /registerPreparedDriveCleanup|clearPreparedDriveCleanup/);
+  assert.doesNotMatch(html, /cleanupPreparedTranslationSubmission/);
+  assert.doesNotMatch(html, /cleanupRecoveryInFlight|pendingCleanupJobId|pendingPreparedCleanup/);
+  assert.doesNotMatch(html, /sourceWorkerPermissionId|targetWorkerPermissionId/);
+  assert.doesNotMatch(html, /Temporary file moved to Trash/);
+  assert.match(html, /A previous temporary access cleanup is still pending/);
 });
 
 test("Host context production target preparation uses SlidesApp instead of Drive REST copy", async () => {

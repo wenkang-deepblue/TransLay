@@ -10,6 +10,7 @@ import {
   __resetWriteRuntimeForTests,
   __setWriteRuntimeForTests,
   writeBackAppend,
+  writeBackExistingSlides,
   writeBackNewFile,
 } from "./writer";
 import {
@@ -153,6 +154,24 @@ function createShapeSlide(
       },
     ],
   };
+}
+
+function collectBatchObjectIds(
+  params: slides_v1.Params$Resource$Presentations$Batchupdate
+): string[] {
+  return [
+    ...new Set(
+      (params.requestBody?.requests ?? [])
+        .flatMap((request) => [
+          request.deleteText?.objectId,
+          request.insertText?.objectId,
+          request.createParagraphBullets?.objectId,
+          request.updateTextStyle?.objectId,
+          request.updateParagraphStyle?.objectId,
+        ])
+        .filter((value): value is string => Boolean(value))
+    ),
+  ];
 }
 
 function createAuthPoolMock(
@@ -1823,7 +1842,9 @@ test("writeBackNewFile keeps committed slides when one slide write fails", async
       [
         createValidTranslatedNode(firstNode, "Prima"),
         createValidTranslatedNode(secondNode, "Seconda"),
-      ]
+      ],
+      undefined,
+      { sourcePresentationId: "source_presentation" }
     );
 
     assert.equal(result.committedUnits, 1);
@@ -1896,12 +1917,849 @@ test("writeBackNewFile batches slide writes by default instead of issuing one AP
       [
         createValidTranslatedNode(firstNode, "Uno"),
         createValidTranslatedNode(secondNode, "Dos"),
-      ]
+      ],
+      undefined,
+      { sourcePresentationId: "source_presentation" }
     );
 
     assert.equal(result.committedUnits, 1);
     assert.equal(batchUpdateCalls.length, 1);
     assert.ok((batchUpdateCalls[0]?.requestBody?.requests?.length ?? 0) > 2);
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
+test("writeBackNewFile maps SlidesApp target object ids before writing body nodes", async () => {
+  const shapeNode = createSingleParagraphNode({
+    node_id: "shape_source",
+    text: "Shape",
+    full_text: "Shape",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "source_shape",
+  });
+  const tableNode = createSingleParagraphNode({
+    node_id: "table_source",
+    text: "Table",
+    full_text: "Table",
+    slide_index: 0,
+    element_type: "table_cell",
+    archetype: "table_cell",
+    object_id: "source_table",
+    row_index: 0,
+    col_index: 0,
+  });
+  const groupedNode = createSingleParagraphNode({
+    node_id: "grouped_source",
+    text: "Grouped",
+    full_text: "Grouped",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "source_group_child",
+  });
+  const sourceSlide: slides_v1.Schema$Page = {
+    objectId: "source_slide",
+    pageElements: [
+      { objectId: "source_shape", shape: { text: { textElements: [] } } },
+      {
+        objectId: "source_table",
+        table: {
+          tableRows: [{ tableCells: [{ text: { textElements: [] } }] }],
+        },
+      },
+      {
+        objectId: "source_group",
+        elementGroup: {
+          children: [
+            { objectId: "source_group_child", shape: { text: { textElements: [] } } },
+          ],
+        },
+      },
+    ],
+  };
+  const targetSlide: slides_v1.Schema$Page = {
+    objectId: "target_slide",
+    pageElements: [
+      { objectId: "target_shape", shape: { text: { textElements: [] } } },
+      {
+        objectId: "target_table",
+        table: {
+          tableRows: [{ tableCells: [{ text: { textElements: [] } }] }],
+        },
+      },
+      {
+        objectId: "target_group",
+        elementGroup: {
+          children: [
+            { objectId: "target_group_child", shape: { text: { textElements: [] } } },
+          ],
+        },
+      },
+    ],
+  };
+  const batchUpdateCalls: Array<slides_v1.Params$Resource$Presentations$Batchupdate> = [];
+
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async (params: slides_v1.Params$Resource$Presentations$Get) => ({
+          data: {
+            slides:
+              params.presentationId === "source_presentation"
+                ? [sourceSlide]
+                : [targetSlide],
+          },
+        }),
+        batchUpdate: async (
+          params: slides_v1.Params$Resource$Presentations$Batchupdate
+        ) => {
+          batchUpdateCalls.push(params);
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackNewFile(
+      "target_presentation",
+      [
+        {
+          slide_index: 0,
+          slide_object_id: "source_slide",
+          nodes: [shapeNode, tableNode, groupedNode],
+        },
+      ],
+      [
+        createValidTranslatedNode(shapeNode, "Forma"),
+        createValidTranslatedNode(tableNode, "Tabla"),
+        createValidTranslatedNode(groupedNode, "Grupo"),
+      ],
+      undefined,
+      { sourcePresentationId: "source_presentation" }
+    );
+
+    assert.equal(result.committedUnits, 1);
+    assert.equal(result.slide_results[0]?.output_slide_object_id, "target_slide");
+    assert.equal(result.slide_results[0]?.object_id_map?.source_slide, "target_slide");
+    assert.equal(result.slide_results[0]?.object_id_map?.source_shape, "target_shape");
+    assert.equal(result.slide_results[0]?.object_id_map?.source_table, "target_table");
+    assert.equal(
+      result.slide_results[0]?.object_id_map?.source_group_child,
+      "target_group_child"
+    );
+    const objectIds = batchUpdateCalls.flatMap(collectBatchObjectIds);
+    assert.equal(objectIds.includes("target_shape"), true);
+    assert.equal(objectIds.includes("target_table"), true);
+    assert.equal(objectIds.includes("target_group_child"), true);
+    assert.equal(objectIds.some((objectId) => objectId.startsWith("source_")), false);
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
+test("writeBackNewFile maps multiple ordinary text boxes by stable order", async () => {
+  const firstNode = createSingleParagraphNode({
+    node_id: "plain_box_first",
+    text: "First",
+    full_text: "First",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "source_box_first",
+  });
+  const secondNode = createSingleParagraphNode({
+    node_id: "plain_box_second",
+    text: "Second",
+    full_text: "Second",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "source_box_second",
+  });
+  const sourceSlide: slides_v1.Schema$Page = {
+    objectId: "source_slide",
+    pageElements: [
+      { objectId: "source_box_first", shape: { text: { textElements: [] } } },
+      { objectId: "source_box_second", shape: { text: { textElements: [] } } },
+    ],
+  };
+  const targetSlide: slides_v1.Schema$Page = {
+    objectId: "target_slide",
+    pageElements: [
+      { objectId: "target_box_first", shape: { text: { textElements: [] } } },
+      { objectId: "target_box_second", shape: { text: { textElements: [] } } },
+    ],
+  };
+  const batchUpdateCalls: Array<slides_v1.Params$Resource$Presentations$Batchupdate> = [];
+
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async (params: slides_v1.Params$Resource$Presentations$Get) => ({
+          data: {
+            slides:
+              params.presentationId === "source_presentation"
+                ? [sourceSlide]
+                : [targetSlide],
+          },
+        }),
+        batchUpdate: async (
+          params: slides_v1.Params$Resource$Presentations$Batchupdate
+        ) => {
+          batchUpdateCalls.push(params);
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackNewFile(
+      "target_presentation",
+      [{ slide_index: 0, slide_object_id: "source_slide", nodes: [firstNode, secondNode] }],
+      [
+        createValidTranslatedNode(firstNode, "Uno"),
+        createValidTranslatedNode(secondNode, "Dos"),
+      ],
+      undefined,
+      { sourcePresentationId: "source_presentation" }
+    );
+
+    assert.equal(result.committedUnits, 1);
+    assert.equal(result.slide_results[0]?.object_id_map?.source_box_first, "target_box_first");
+    assert.equal(result.slide_results[0]?.object_id_map?.source_box_second, "target_box_second");
+    const objectIds = batchUpdateCalls.flatMap(collectBatchObjectIds);
+    assert.equal(objectIds.includes("target_box_first"), true);
+    assert.equal(objectIds.includes("target_box_second"), true);
+    assert.equal(objectIds.some((objectId) => objectId.startsWith("source_box_")), false);
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
+test("writeBackExistingSlides derives target notes ids for create-new-file notes", async () => {
+  const notesNode = createSingleParagraphNode({
+    node_id: "notes_source",
+    text: "Speaker note",
+    full_text: "Speaker note",
+    slide_index: 0,
+    element_type: "speaker_notes",
+    archetype: "speaker_notes",
+    object_id: "source_notes_body",
+  });
+  const sourceSlide: slides_v1.Schema$Page = {
+    objectId: "source_slide",
+    pageElements: [],
+    slideProperties: {
+      notesPage: {
+        pageElements: [
+          {
+            objectId: "source_notes_body",
+            shape: {
+              placeholder: { type: "BODY" },
+              text: { textElements: [] },
+            },
+          },
+        ],
+      },
+    },
+  };
+  const targetSlide: slides_v1.Schema$Page = {
+    objectId: "target_slide",
+    pageElements: [],
+    slideProperties: {
+      notesPage: {
+        pageElements: [
+          {
+            objectId: "target_notes_body",
+            shape: {
+              placeholder: { type: "BODY" },
+              text: { textElements: [] },
+            },
+          },
+        ],
+      },
+    },
+  };
+  const batchUpdateCalls: Array<slides_v1.Params$Resource$Presentations$Batchupdate> = [];
+
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async (params: slides_v1.Params$Resource$Presentations$Get) => ({
+          data: {
+            slides:
+              params.presentationId === "source_presentation"
+                ? [sourceSlide]
+                : [targetSlide],
+          },
+        }),
+        batchUpdate: async (
+          params: slides_v1.Params$Resource$Presentations$Batchupdate
+        ) => {
+          batchUpdateCalls.push(params);
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackExistingSlides(
+      "target_presentation",
+      [{ slide_index: 0, slide_object_id: "source_slide", nodes: [notesNode] }],
+      [createValidTranslatedNode(notesNode, "Nota del orador")],
+      [{ slide_index: 0 }],
+      undefined,
+      { sourcePresentationId: "source_presentation" }
+    );
+
+    assert.equal(result.committedUnits, 1);
+    assert.equal(result.slide_results[0]?.object_id_map?.source_notes_body, "target_notes_body");
+    const objectIds = batchUpdateCalls.flatMap(collectBatchObjectIds);
+    assert.deepEqual([...new Set(objectIds)], ["target_notes_body"]);
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
+test("writeBackExistingSlides derives target notes ids by slide position in multi-slide targets", async () => {
+  const notesNode = createSingleParagraphNode({
+    node_id: "notes_middle_slide",
+    text: "Speaker note",
+    full_text: "Speaker note",
+    slide_index: 1,
+    element_type: "speaker_notes",
+    archetype: "speaker_notes",
+    object_id: "source_notes_body_1",
+  });
+  const makeSlideWithNotes = (
+    slideObjectId: string,
+    notesBodyObjectId: string
+  ): slides_v1.Schema$Page => ({
+    objectId: slideObjectId,
+    pageElements: [],
+    slideProperties: {
+      notesPage: {
+        pageElements: [
+          {
+            objectId: notesBodyObjectId,
+            shape: {
+              placeholder: { type: "BODY" },
+              text: { textElements: [] },
+            },
+          },
+        ],
+      },
+    },
+  });
+  const batchUpdateCalls: Array<slides_v1.Params$Resource$Presentations$Batchupdate> = [];
+
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async (params: slides_v1.Params$Resource$Presentations$Get) => ({
+          data: {
+            slides:
+              params.presentationId === "source_presentation"
+                ? [
+                    makeSlideWithNotes("source_slide_0", "source_notes_body_0"),
+                    makeSlideWithNotes("source_slide_1", "source_notes_body_1"),
+                    makeSlideWithNotes("source_slide_2", "source_notes_body_2"),
+                  ]
+                : [
+                    makeSlideWithNotes("target_slide_0", "target_notes_body_0"),
+                    makeSlideWithNotes("target_slide_1", "target_notes_body_1"),
+                    makeSlideWithNotes("target_slide_2", "target_notes_body_2"),
+                  ],
+          },
+        }),
+        batchUpdate: async (
+          params: slides_v1.Params$Resource$Presentations$Batchupdate
+        ) => {
+          batchUpdateCalls.push(params);
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackExistingSlides(
+      "target_presentation",
+      [{ slide_index: 1, slide_object_id: "source_slide_1", nodes: [notesNode] }],
+      [createValidTranslatedNode(notesNode, "Nota del orador")],
+      [{ slide_index: 1 }],
+      undefined,
+      {
+        sourcePresentationId: "source_presentation",
+        requireTargetObjectMap: true,
+      }
+    );
+
+    assert.equal(result.committedUnits, 1);
+    assert.equal(result.slide_results[0]?.output_slide_object_id, "target_slide_1");
+    assert.equal(result.slide_results[0]?.object_id_map?.source_notes_body_1, "target_notes_body_1");
+    assert.deepEqual(batchUpdateCalls.flatMap(collectBatchObjectIds), ["target_notes_body_1"]);
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
+test("writeBackNewFile rejects missing source presentation mapping contract", async () => {
+  const sourceNode = createSingleParagraphNode({
+    node_id: "shape_missing_source_contract",
+    text: "First",
+    full_text: "First",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "shape_missing_source_contract",
+  });
+
+  await assert.rejects(
+    () =>
+      writeBackNewFile(
+        "target_presentation",
+        [{ slide_index: 0, slide_object_id: "source_slide", nodes: [sourceNode] }],
+        [createValidTranslatedNode(sourceNode, "Uno")]
+      ),
+    /HOST_ADAPTER_ERROR/
+  );
+  await assert.rejects(
+    () =>
+      writeBackNewFile(
+        "same_presentation",
+        [{ slide_index: 0, slide_object_id: "source_slide", nodes: [sourceNode] }],
+        [createValidTranslatedNode(sourceNode, "Uno")],
+        undefined,
+        { sourcePresentationId: "same_presentation" }
+      ),
+    /HOST_ADAPTER_ERROR/
+  );
+});
+
+test("writeBackNewFile fails nodes when the source slide cannot be mapped", async () => {
+  const sourceNode = createSingleParagraphNode({
+    node_id: "shape_unresolved_source_slide",
+    text: "First",
+    full_text: "First",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "source_shape",
+  });
+  let batchUpdateCalls = 0;
+
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async (params: slides_v1.Params$Resource$Presentations$Get) => ({
+          data: {
+            slides:
+              params.presentationId === "source_presentation"
+                ? []
+                : [createShapeSlide("target_slide", "target_shape")],
+          },
+        }),
+        batchUpdate: async () => {
+          batchUpdateCalls += 1;
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackNewFile(
+      "target_presentation",
+      [{ slide_index: 0, slide_object_id: "source_slide", nodes: [sourceNode] }],
+      [createValidTranslatedNode(sourceNode, "Uno")],
+      undefined,
+      { sourcePresentationId: "source_presentation" }
+    );
+
+    assert.equal(result.committedUnits, 0);
+    assert.deepEqual(result.failed_slide_indexes, [0]);
+    assert.equal(result.slide_results[0]?.error_code, "HOST_ADAPTER_ERROR");
+    assert.equal(batchUpdateCalls, 0);
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
+test("writeBackNewFile fails instead of truncating mismatched target elements", async () => {
+  const firstNode = createSingleParagraphNode({
+    node_id: "shape_mismatch_first",
+    text: "First",
+    full_text: "First",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "source_shape_first",
+  });
+  const secondNode = createSingleParagraphNode({
+    node_id: "shape_mismatch_second",
+    text: "Second",
+    full_text: "Second",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "source_shape_second",
+  });
+  const sourceSlide: slides_v1.Schema$Page = {
+    objectId: "source_slide",
+    pageElements: [
+      { objectId: "source_shape_first", shape: { text: { textElements: [] } } },
+      { objectId: "source_shape_second", shape: { text: { textElements: [] } } },
+    ],
+  };
+  const targetSlide = createShapeSlide("target_slide", "target_shape_first");
+  let batchUpdateCalls = 0;
+
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async (params: slides_v1.Params$Resource$Presentations$Get) => ({
+          data: {
+            slides:
+              params.presentationId === "source_presentation"
+                ? [sourceSlide]
+                : [targetSlide],
+          },
+        }),
+        batchUpdate: async () => {
+          batchUpdateCalls += 1;
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackNewFile(
+      "target_presentation",
+      [{ slide_index: 0, slide_object_id: "source_slide", nodes: [firstNode, secondNode] }],
+      [
+        createValidTranslatedNode(firstNode, "Uno"),
+        createValidTranslatedNode(secondNode, "Dos"),
+      ],
+      undefined,
+      { sourcePresentationId: "source_presentation" }
+    );
+
+    assert.equal(result.committedUnits, 0);
+    assert.deepEqual(result.failed_slide_indexes, [0]);
+    assert.equal(result.slide_results[0]?.error_code, "HOST_ADAPTER_ERROR");
+    assert.equal(batchUpdateCalls, 0);
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
+test("writeBackNewFile fails cleanly when matching elements have unknown kind", async () => {
+  const unknownNode = createSingleParagraphNode({
+    node_id: "unknown_kind_node",
+    text: "Unknown",
+    full_text: "Unknown",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "source_unknown",
+  });
+  const sourceSlide: slides_v1.Schema$Page = {
+    objectId: "source_slide",
+    pageElements: [{ objectId: "source_unknown" }],
+  };
+  const targetSlide: slides_v1.Schema$Page = {
+    objectId: "target_slide",
+    pageElements: [{ objectId: "target_unknown" }],
+  };
+  let batchUpdateCalls = 0;
+
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async (params: slides_v1.Params$Resource$Presentations$Get) => ({
+          data: {
+            slides:
+              params.presentationId === "source_presentation"
+                ? [sourceSlide]
+                : [targetSlide],
+          },
+        }),
+        batchUpdate: async () => {
+          batchUpdateCalls += 1;
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackNewFile(
+      "target_presentation",
+      [{ slide_index: 0, slide_object_id: "source_slide", nodes: [unknownNode] }],
+      [createValidTranslatedNode(unknownNode, "Desconocido")],
+      undefined,
+      { sourcePresentationId: "source_presentation" }
+    );
+
+    assert.equal(result.committedUnits, 0);
+    assert.deepEqual(result.failed_slide_indexes, [0]);
+    assert.equal(result.slide_results[0]?.error_code, "HOST_ADAPTER_ERROR");
+    assert.equal(batchUpdateCalls, 0);
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
+test("writeBackNewFile fails grouped nodes when target nesting differs", async () => {
+  const groupedNode = createSingleParagraphNode({
+    node_id: "group_nesting_source",
+    text: "Grouped",
+    full_text: "Grouped",
+    slide_index: 0,
+    element_type: "shape",
+    archetype: "plain_text",
+    object_id: "source_group_child",
+  });
+  const sourceSlide: slides_v1.Schema$Page = {
+    objectId: "source_slide",
+    pageElements: [
+      {
+        objectId: "source_group",
+        elementGroup: {
+          children: [
+            { objectId: "source_group_child", shape: { text: { textElements: [] } } },
+          ],
+        },
+      },
+    ],
+  };
+  const targetSlide = createShapeSlide("target_slide", "target_group_child");
+  let batchUpdateCalls = 0;
+
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async (params: slides_v1.Params$Resource$Presentations$Get) => ({
+          data: {
+            slides:
+              params.presentationId === "source_presentation"
+                ? [sourceSlide]
+                : [targetSlide],
+          },
+        }),
+        batchUpdate: async () => {
+          batchUpdateCalls += 1;
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackNewFile(
+      "target_presentation",
+      [{ slide_index: 0, slide_object_id: "source_slide", nodes: [groupedNode] }],
+      [createValidTranslatedNode(groupedNode, "Grupo")],
+      undefined,
+      { sourcePresentationId: "source_presentation" }
+    );
+
+    assert.equal(result.committedUnits, 0);
+    assert.deepEqual(result.failed_slide_indexes, [0]);
+    assert.equal(result.slide_results[0]?.error_code, "HOST_ADAPTER_ERROR");
+    assert.equal(batchUpdateCalls, 0);
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
+test("writeBackExistingSlides reuses body object map for notes without reloading source", async () => {
+  const notesNode = createSingleParagraphNode({
+    node_id: "notes_reuse_body_map",
+    text: "Speaker note",
+    full_text: "Speaker note",
+    slide_index: 0,
+    element_type: "speaker_notes",
+    archetype: "speaker_notes",
+    object_id: "source_notes_body",
+  });
+  const targetSlide: slides_v1.Schema$Page = {
+    objectId: "target_slide",
+    pageElements: [],
+    slideProperties: {
+      notesPage: {
+        pageElements: [
+          {
+            objectId: "target_notes_body",
+            shape: {
+              placeholder: { type: "BODY" },
+              text: { textElements: [] },
+            },
+          },
+        ],
+      },
+    },
+  };
+  const getPresentationIds: string[] = [];
+  const batchUpdateCalls: Array<slides_v1.Params$Resource$Presentations$Batchupdate> = [];
+
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async (params: slides_v1.Params$Resource$Presentations$Get) => {
+          getPresentationIds.push(params.presentationId ?? "");
+          return { data: { slides: [targetSlide] } };
+        },
+        batchUpdate: async (
+          params: slides_v1.Params$Resource$Presentations$Batchupdate
+        ) => {
+          batchUpdateCalls.push(params);
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackExistingSlides(
+      "target_presentation",
+      [{ slide_index: 0, slide_object_id: "source_slide", nodes: [notesNode] }],
+      [createValidTranslatedNode(notesNode, "Nota")],
+      [
+        {
+          slide_index: 0,
+          output_slide_object_id: "target_slide",
+          object_id_map: { source_notes_body: "target_notes_body" },
+        },
+      ],
+      undefined,
+      {
+        sourcePresentationId: "source_presentation",
+        requireTargetObjectMap: true,
+      }
+    );
+
+    assert.equal(result.committedUnits, 1);
+    assert.deepEqual(getPresentationIds, ["target_presentation"]);
+    assert.deepEqual(batchUpdateCalls.flatMap(collectBatchObjectIds), ["target_notes_body"]);
+  } finally {
+    __resetSlidesClientForTests();
+  }
+});
+
+test("writeBackExistingSlides loads source when an existing object map is incomplete", async () => {
+  const notesNode = createSingleParagraphNode({
+    node_id: "notes_incomplete_body_map",
+    text: "Speaker note",
+    full_text: "Speaker note",
+    slide_index: 0,
+    element_type: "speaker_notes",
+    archetype: "speaker_notes",
+    object_id: "source_notes_body",
+  });
+  const sourceSlide: slides_v1.Schema$Page = {
+    objectId: "source_slide",
+    pageElements: [{ objectId: "source_shape", shape: { text: { textElements: [] } } }],
+    slideProperties: {
+      notesPage: {
+        pageElements: [
+          {
+            objectId: "source_notes_body",
+            shape: {
+              placeholder: { type: "BODY" },
+              text: { textElements: [] },
+            },
+          },
+        ],
+      },
+    },
+  };
+  const targetSlide: slides_v1.Schema$Page = {
+    objectId: "target_slide",
+    pageElements: [{ objectId: "target_shape", shape: { text: { textElements: [] } } }],
+    slideProperties: {
+      notesPage: {
+        pageElements: [
+          {
+            objectId: "target_notes_body",
+            shape: {
+              placeholder: { type: "BODY" },
+              text: { textElements: [] },
+            },
+          },
+        ],
+      },
+    },
+  };
+  const getPresentationIds: string[] = [];
+  const batchUpdateCalls: Array<slides_v1.Params$Resource$Presentations$Batchupdate> = [];
+
+  __setSlidesClientForTests({
+    auth: {} as never,
+    slides: {
+      presentations: {
+        get: async (params: slides_v1.Params$Resource$Presentations$Get) => {
+          getPresentationIds.push(params.presentationId ?? "");
+          return {
+            data: {
+              slides:
+                params.presentationId === "source_presentation"
+                  ? [sourceSlide]
+                  : [targetSlide],
+            },
+          };
+        },
+        batchUpdate: async (
+          params: slides_v1.Params$Resource$Presentations$Batchupdate
+        ) => {
+          batchUpdateCalls.push(params);
+          return { data: {} };
+        },
+      },
+    } as never,
+  });
+
+  try {
+    const result = await writeBackExistingSlides(
+      "target_presentation",
+      [{ slide_index: 0, slide_object_id: "source_slide", nodes: [notesNode] }],
+      [createValidTranslatedNode(notesNode, "Nota")],
+      [
+        {
+          slide_index: 0,
+          output_slide_object_id: "target_slide",
+          object_id_map: { source_shape: "target_shape" },
+        },
+      ],
+      undefined,
+      {
+        sourcePresentationId: "source_presentation",
+        requireTargetObjectMap: true,
+      }
+    );
+
+    assert.equal(result.committedUnits, 1);
+    assert.deepEqual(getPresentationIds, ["target_presentation", "source_presentation"]);
+    assert.equal(result.slide_results[0]?.object_id_map?.source_shape, "target_shape");
+    assert.equal(result.slide_results[0]?.object_id_map?.source_notes_body, "target_notes_body");
+    assert.deepEqual(batchUpdateCalls.flatMap(collectBatchObjectIds), ["target_notes_body"]);
   } finally {
     __resetSlidesClientForTests();
   }
@@ -1981,7 +2839,9 @@ test("writeBackNewFile retries rate-limited slide writes and enables slow mode f
       [
         createValidTranslatedNode(firstNode, "Uno"),
         createValidTranslatedNode(secondNode, "Dos"),
-      ]
+      ],
+      undefined,
+      { sourcePresentationId: "source_presentation" }
     );
 
     assert.equal(result.committedUnits, 2);
@@ -2063,7 +2923,9 @@ test("writeBackNewFile disables slow mode after enough successful writes", async
     const result = await writeBackNewFile(
       "presentation_recover",
       slides.map(({ extracted }) => extracted),
-      slides.map(({ translated }) => translated)
+      slides.map(({ translated }) => translated),
+      undefined,
+      { sourcePresentationId: "source_presentation" }
     );
 
     assert.equal(result.committedUnits, 7);
@@ -2249,7 +3111,9 @@ test("writeBackNewFile degrades structural batch failures into smaller groups be
         createValidTranslatedNode(firstNode, "Uno"),
         createValidTranslatedNode(secondNode, "Dos"),
         createValidTranslatedNode(failingNode, "Tres"),
-      ]
+      ],
+      undefined,
+      { sourcePresentationId: "source_presentation" }
     );
 
     assert.equal(result.committedUnits, 1);
@@ -2435,6 +3299,7 @@ test("writeBackNewFile falls back to service account after user OAuth write gets
       undefined,
       {
         jobId: "job-user-403",
+        sourcePresentationId: "source_presentation",
         pool: createAuthPoolMock(
           {
             user_id: "user-1",
