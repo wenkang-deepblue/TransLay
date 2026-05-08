@@ -161,7 +161,7 @@ test("validateCreateJobRequest surfaces detailed page-range validation for slide
   );
 });
 
-test("validateCreateJobRequest requires Drive worker permission ids for Slides jobs", () => {
+test("validateCreateJobRequest accepts user-OAuth-only Slides jobs without drive_access", () => {
   assert.equal(
     validateCreateJobRequest({
       host_type: "slides",
@@ -174,7 +174,105 @@ test("validateCreateJobRequest requires Drive worker permission ids for Slides j
       range_expression: "1",
       idempotency_key: "job-key",
     }),
-    "drive_access is required for Slides jobs"
+    null
+  );
+
+  assert.equal(
+    validateCreateJobRequest({
+      host_type: "slides",
+      document_id: "doc_123",
+      document_name: "Deck",
+      target_document_id: "target_123",
+      source_language_mode: "auto",
+      target_language_input: "French",
+      output_mode: "create_new_file",
+      range_mode: "custom",
+      range_expression: "1",
+      idempotency_key: "job-key",
+    }),
+    null
+  );
+
+  assert.equal(
+    validateCreateJobRequest({
+      host_type: "slides",
+      document_id: "doc_123",
+      document_name: "Deck",
+      source_language_mode: "auto",
+      target_language_input: "French",
+      output_mode: "append_in_file",
+      range_mode: "custom",
+      range_expression: "1",
+      idempotency_key: "job-key",
+      drive_access: null,
+    }),
+    null
+  );
+});
+
+test("validateCreateJobRequest preserves Drive permission validation when drive_access is provided", () => {
+  assert.equal(
+    validateCreateJobRequest({
+      host_type: "slides",
+      document_id: "doc_123",
+      document_name: "Deck",
+      source_language_mode: "auto",
+      target_language_input: "French",
+      output_mode: "append_in_file",
+      range_mode: "custom",
+      range_expression: "1",
+      idempotency_key: "job-key",
+      drive_access: true,
+    }),
+    "drive_access must be an object when provided"
+  );
+
+  assert.equal(
+    validateCreateJobRequest({
+      host_type: "slides",
+      document_id: "doc_123",
+      document_name: "Deck",
+      source_language_mode: "auto",
+      target_language_input: "French",
+      output_mode: "append_in_file",
+      range_mode: "custom",
+      range_expression: "1",
+      idempotency_key: "job-key",
+      drive_access: new Date("2026-05-08T00:00:00Z"),
+    }),
+    "drive_access must be an object when provided"
+  );
+
+  assert.equal(
+    validateCreateJobRequest({
+      host_type: "slides",
+      document_id: "doc_123",
+      document_name: "Deck",
+      source_language_mode: "auto",
+      target_language_input: "French",
+      output_mode: "append_in_file",
+      range_mode: "custom",
+      range_expression: "1",
+      idempotency_key: "job-key",
+      drive_access: [],
+    }),
+    "drive_access must be an object when provided"
+  );
+
+  assert.equal(
+    validateCreateJobRequest({
+      host_type: "slides",
+      document_id: "doc_123",
+      document_name: "Deck",
+      source_language_mode: "auto",
+      target_language_input: "French",
+      output_mode: "append_in_file",
+      range_mode: "custom",
+      range_expression: "1",
+      idempotency_key: "job-key",
+      drive_access: {},
+    }),
+    "drive_access.source_worker_permission_id is required for Slides jobs"
   );
 
   assert.equal(
@@ -215,6 +313,26 @@ test("validateCreateJobRequest rejects target permission ids for append-in-file 
       },
     }),
     "drive_access.target_worker_permission_id is only allowed when output_mode is 'create_new_file'"
+  );
+});
+
+test("validateCreateJobRequest rejects drive_access for non-Slides jobs", () => {
+  assert.equal(
+    validateCreateJobRequest({
+      host_type: "docs",
+      document_id: "doc_123",
+      document_name: "Doc",
+      source_language_mode: "auto",
+      target_language_input: "French",
+      output_mode: "append_in_file",
+      range_mode: "custom",
+      range_expression: "1",
+      idempotency_key: "job-key",
+      drive_access: {
+        source_worker_permission_id: "source-permission",
+      },
+    }),
+    "drive_access is only supported for Slides jobs"
   );
 });
 

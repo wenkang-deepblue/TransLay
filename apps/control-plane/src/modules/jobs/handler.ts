@@ -205,6 +205,10 @@ function isRunningLiveStatus(status: string | null | undefined): status is JobIn
   );
 }
 
+function hasSubmittedDriveAccess(body: CreateJobRequest): boolean {
+  return body.drive_access !== undefined && body.drive_access !== null;
+}
+
 function initialDriveCleanupStatus(body: CreateJobRequest): DriveCleanupStatus {
   return body.drive_access?.source_worker_permission_id ||
     body.drive_access?.target_worker_permission_id
@@ -1620,7 +1624,16 @@ export function previewJobHandler(pool: Pool, redis: Redis) {
   };
 }
 
-export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
+type CreateJobHandlerDeps = {
+  readonly enqueueJob?: typeof enqueueJob;
+};
+
+export function createJobHandler(
+  pool: Pool,
+  redis: Redis,
+  config: AppConfig,
+  deps: CreateJobHandlerDeps = {}
+) {
   return async (req: Request, res: Response) => {
     const auth = req.authContext;
     if (!auth) {
@@ -1636,6 +1649,7 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
 
     // S5: body is validated; cast is safe after validateCreateJobRequest returns null
     const body = req.body as CreateJobRequest;
+    const hasDriveAccess = hasSubmittedDriveAccess(body);
     const hasCompletedHistory = await hasCompletedEquivalentJob(pool, {
       userId: auth.user_id,
       hostType: body.host_type,
@@ -1658,7 +1672,7 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
         sendError(res, "CONCURRENT_JOB_RUNNING");
         return;
       }
-      if (existingJob && hasUnresolvedDriveCleanup(existingJob)) {
+      if (hasDriveAccess && existingJob && hasUnresolvedDriveCleanup(existingJob)) {
         sendError(
           res,
           "DRIVE_CLEANUP_REQUIRED",
@@ -1669,22 +1683,24 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
       await deleteIdempotencyRecord(pool, auth.user_id, body.idempotency_key);
     }
 
-    const unresolvedCleanupJob = await findUnresolvedDriveCleanupJobForSource(pool, {
-      userId: auth.user_id,
-      sourceDocId: body.document_id,
-    });
-    if (unresolvedCleanupJob) {
-      sendError(res, "DRIVE_CLEANUP_REQUIRED", UNRESOLVED_DRIVE_CLEANUP_MESSAGE);
-      return;
-    }
-    const preparedCleanup = await getPreparedDriveCleanupRecord(
-      redis,
-      auth.user_id,
-      body.document_id
-    );
-    if (preparedCleanup && !preparedCleanupMatchesCreateJob(preparedCleanup, body)) {
-      sendError(res, "DRIVE_CLEANUP_REQUIRED", UNRESOLVED_DRIVE_CLEANUP_MESSAGE);
-      return;
+    if (hasDriveAccess) {
+      const unresolvedCleanupJob = await findUnresolvedDriveCleanupJobForSource(pool, {
+        userId: auth.user_id,
+        sourceDocId: body.document_id,
+      });
+      if (unresolvedCleanupJob) {
+        sendError(res, "DRIVE_CLEANUP_REQUIRED", UNRESOLVED_DRIVE_CLEANUP_MESSAGE);
+        return;
+      }
+      const preparedCleanup = await getPreparedDriveCleanupRecord(
+        redis,
+        auth.user_id,
+        body.document_id
+      );
+      if (preparedCleanup && !preparedCleanupMatchesCreateJob(preparedCleanup, body)) {
+        sendError(res, "DRIVE_CLEANUP_REQUIRED", UNRESOLVED_DRIVE_CLEANUP_MESSAGE);
+        return;
+      }
     }
 
     const running = await hasRunningJob(pool, auth.user_id);
@@ -1824,7 +1840,7 @@ export function createJobHandler(pool: Pool, redis: Redis, config: AppConfig) {
         stageAttempt: 1,
         queuedTaskName: null,
       });
-      const queuedTaskName = await enqueueJob(config, jobId, "extract", 1);
+      const queuedTaskName = await (deps.enqueueJob ?? enqueueJob)(config, jobId, "extract", 1);
       await updateJobStatus(pool, jobId, "queued", {
         queuedTaskName,
       });

@@ -446,6 +446,52 @@
     .cleanup-action .btn {
       margin-top: 10px;
     }
+    .round2-probe-panel {
+      display: none;
+      margin-bottom: 14px;
+      padding: 10px 12px;
+      border: 1px solid #dadce0;
+      border-radius: 8px;
+      background: #f8f9fa;
+      color: #202124;
+      font-size: 12px;
+    }
+    .round2-probe-panel.visible {
+      display: block;
+    }
+    .round2-probe-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #174ea6;
+      margin-bottom: 8px;
+    }
+    .round2-probe-panel .btn {
+      margin-top: 6px;
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+    .round2-probe-output {
+      display: none;
+      margin-top: 10px;
+      padding: 8px;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #3c4043;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 10px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 220px;
+      overflow: auto;
+    }
+    .round2-probe-output.visible {
+      display: block;
+    }
+    .round2-probe-output.error {
+      background: #fce8e6;
+      color: #c5221f;
+    }
 
     /* ── Confirm dialog ── */
     .dialog-overlay {
@@ -627,6 +673,26 @@
       <button class="btn btn-secondary btn-inline" id="cleanupRetryBtn" onclick="handleCleanupRetry()" type="button">
         Remove temporary access
       </button>
+    </div>
+
+    <div class="round2-probe-panel" id="round2ProbePanel">
+      <div class="round2-probe-title">Round 2 Probe: temporary feasibility actions</div>
+      <button class="btn btn-secondary round2-probe-btn" onclick="runRound2ProbeActiveSlidesContext()" type="button">
+        Round 2 Probe: Probe active Slides context
+      </button>
+      <button class="btn btn-secondary round2-probe-btn" onclick="runRound2ProbeCreateTargetWithSlidesApp()" type="button">
+        Round 2 Probe: Probe create target with SlidesApp
+      </button>
+      <button class="btn btn-secondary round2-probe-btn" onclick="runRound2ProbeSubmitAppendJob()" type="button">
+        Round 2 Probe: Submit probe append job
+      </button>
+      <button class="btn btn-secondary round2-probe-btn" onclick="runRound2ProbeSubmitCreateNewFileJob()" type="button">
+        Round 2 Probe: Submit probe create-new-file job
+      </button>
+      <button class="btn btn-secondary round2-probe-btn" onclick="runRound2ProbeUserOauthFailureBehavior()" type="button">
+        Round 2 Probe: Probe user-OAuth failure behavior
+      </button>
+      <pre class="round2-probe-output" id="round2ProbeOutput"></pre>
     </div>
 
     <!-- Source Language -->
@@ -840,9 +906,121 @@
       refreshEntitlement(false, {
         onSettled: function() {
           showMainView();
+          refreshRound2ProbeAvailability();
           retryPendingDriveCleanupOnStartup();
         }
       });
+    }
+
+    function refreshRound2ProbeAvailability() {
+      var panel = document.getElementById('round2ProbePanel');
+      if (
+        !panel ||
+        typeof google === 'undefined' ||
+        !google.script ||
+        !google.script.run
+      ) {
+        return;
+      }
+      google.script.run
+        .withSuccessHandler(function(enabled) {
+          if (enabled) {
+            panel.classList.add('visible');
+          } else {
+            panel.classList.remove('visible');
+          }
+        })
+        .withFailureHandler(function() {
+          panel.classList.remove('visible');
+        })
+        .transLayRound2ProbeIsEnabled();
+    }
+
+    function setRound2ProbeButtonsDisabled(disabled) {
+      var buttons = document.querySelectorAll('.round2-probe-btn');
+      for (var i = 0; i < buttons.length; i++) {
+        buttons[i].disabled = disabled;
+      }
+    }
+
+    function setRound2ProbeOutput(message, payload, isError) {
+      var output = document.getElementById('round2ProbeOutput');
+      if (!output) return;
+      var lines = ['Round 2 Probe: ' + message];
+      if (payload !== undefined) {
+        lines.push(JSON.stringify(payload, null, 2));
+      }
+      output.textContent = lines.join('\n');
+      output.classList.add('visible');
+      if (isError) {
+        output.classList.add('error');
+      } else {
+        output.classList.remove('error');
+      }
+    }
+
+    function runRound2ProbeAction(actionName, serverFunctionName) {
+      setRound2ProbeButtonsDisabled(true);
+      setRound2ProbeOutput(actionName + ' running...', undefined, false);
+      var runner = google.script.run
+        .withSuccessHandler(function(result) {
+          setRound2ProbeButtonsDisabled(false);
+          setRound2ProbeOutput(actionName + ' completed.', result, false);
+        })
+        .withFailureHandler(function(err) {
+          setRound2ProbeButtonsDisabled(false);
+          setRound2ProbeOutput(actionName + ' failed: ' + (err.message || String(err)), undefined, true);
+        });
+
+      if (serverFunctionName === 'transLayRound2ProbeActiveSlidesContext') {
+        runner.transLayRound2ProbeActiveSlidesContext();
+      } else if (serverFunctionName === 'transLayRound2ProbeCreateTargetWithSlidesApp') {
+        runner.transLayRound2ProbeCreateTargetWithSlidesApp();
+      } else if (serverFunctionName === 'transLayRound2ProbeSubmitAppendJob') {
+        runner.transLayRound2ProbeSubmitAppendJob();
+      } else if (serverFunctionName === 'transLayRound2ProbeSubmitCreateNewFileJob') {
+        runner.transLayRound2ProbeSubmitCreateNewFileJob();
+      } else if (serverFunctionName === 'transLayRound2ProbeUserOauthFailureBehavior') {
+        runner.transLayRound2ProbeUserOauthFailureBehavior();
+      } else {
+        setRound2ProbeButtonsDisabled(false);
+        setRound2ProbeOutput(actionName + ' failed: unknown Round 2 Probe action.', undefined, true);
+      }
+    }
+
+    function runRound2ProbeActiveSlidesContext() {
+      runRound2ProbeAction(
+        'Round 2 Probe: Probe active Slides context',
+        'transLayRound2ProbeActiveSlidesContext'
+      );
+    }
+
+    function runRound2ProbeCreateTargetWithSlidesApp() {
+      runRound2ProbeAction(
+        'Round 2 Probe: Probe create target with SlidesApp',
+        'transLayRound2ProbeCreateTargetWithSlidesApp'
+      );
+    }
+
+    function runRound2ProbeSubmitAppendJob() {
+      runRound2ProbeAction(
+        'Round 2 Probe: Submit probe append job',
+        'transLayRound2ProbeSubmitAppendJob'
+      );
+    }
+
+    function runRound2ProbeSubmitCreateNewFileJob() {
+      runRound2ProbeAction(
+        'Round 2 Probe: Submit probe create-new-file job',
+        'transLayRound2ProbeSubmitCreateNewFileJob'
+      );
+    }
+
+    function runRound2ProbeUserOauthFailureBehavior() {
+      runRound2ProbeAction(
+        'Round 2 Probe: Probe user-OAuth failure behavior',
+        'transLayRound2ProbeUserOauthFailureBehavior'
+      );
     }
 
     // ── Language dropdown ──

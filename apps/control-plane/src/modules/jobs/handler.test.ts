@@ -782,6 +782,299 @@ test("KMS test hooks are disabled in production-like environments", () => {
   }
 });
 
+function getInsertParamByColumn(
+  insert: { sql: string; params: unknown[] | undefined },
+  columnName: string
+): unknown {
+  const match = insert.sql.match(/INSERT INTO translation_jobs\s*\(([\s\S]*?)\)\s*VALUES/i);
+  assert.ok(match, "expected explicit translation_jobs insert columns");
+  const columns = match[1]!
+    .split(",")
+    .map((column) => column.trim())
+    .filter(Boolean);
+  const index = columns.indexOf(columnName);
+  assert.notEqual(index, -1, `expected insert column ${columnName}`);
+  return insert.params?.[index];
+}
+
+async function runCreateJobUntilAccepted(
+  body: Record<string, unknown>,
+  options: {
+    readonly existingIdempotencyJob?: ReturnType<typeof createBaseJob> | {
+      readonly [key: string]: unknown;
+      readonly id: JobId | string;
+    };
+  } = {}
+) {
+  const poolCalls: Array<{ sql: string; params: unknown[] | undefined }> = [];
+  const clientCalls: Array<{ sql: string; params: unknown[] | undefined }> = [];
+  const enqueueCalls: Array<{ jobId: JobId | string; stage: string; stageAttempt: number }> = [];
+  let unresolvedCleanupCalls = 0;
+  let redisGetCalls = 0;
+  const pool = {
+    query: async (sql: string, params?: unknown[]) => {
+      poolCalls.push({ sql, params });
+      if (sql.includes("status IN ('completed', 'completed_with_warnings')")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM idempotency_records")) {
+        if (options.existingIdempotencyJob) {
+          return { rows: [{ job_id: options.existingIdempotencyJob.id }] };
+        }
+        return { rows: [] };
+      }
+      if (sql.includes("FROM translation_jobs WHERE id = $1 AND user_id = $2")) {
+        return {
+          rows: options.existingIdempotencyJob ? [options.existingIdempotencyJob] : [],
+        };
+      }
+      if (sql.includes("DELETE FROM idempotency_records")) {
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.includes("drive_cleanup_status IN")) {
+        unresolvedCleanupCalls += 1;
+        return { rows: [] };
+      }
+      if (sql.includes("status IN ('pending', 'queued', 'extracting', 'translating', 'writing')")) {
+        return { rows: [] };
+      }
+      if (sql.includes("FROM subscriptions")) {
+        return {
+          rows: [{
+            id: "sub-1",
+            user_id: "user-1",
+            plan_type: "free",
+            status: "active",
+            provider_name: "paddle",
+            provider_customer_id: null,
+            provider_subscription_id: null,
+            current_period_start: null,
+            current_period_end: null,
+            cancel_at_period_end: false,
+          }],
+        };
+      }
+      if (sql.includes("FROM usage_ledgers")) {
+        return {
+          rows: [{
+            slides_used: "0",
+            docs_pages_used: "0",
+            sheets_cells_used: "0",
+            total_jobs: 0,
+          }],
+        };
+      }
+      if (sql.includes("FROM users u")) {
+        return {
+          rows: [{
+            slides_balance: "0",
+            docs_pages_balance: "0",
+            sheets_cells_balance: "0",
+            slides_refundable_units: "0",
+          }],
+        };
+      }
+      if (sql.includes("UPDATE translation_jobs")) {
+        return { rows: [], rowCount: 1 };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    },
+    connect: async () => ({
+      query: async (sql: string, params?: unknown[]) => {
+        clientCalls.push({ sql, params });
+        if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") {
+          return { rows: [], rowCount: 1 };
+        }
+        if (sql.includes("pg_advisory_xact_lock")) {
+          return { rows: [], rowCount: 1 };
+        }
+        if (sql.includes("SELECT 1 FROM translation_jobs")) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (sql.includes("COUNT(*)::int AS n")) {
+          return { rows: [{ n: "0" }], rowCount: 1 };
+        }
+        if (sql.includes("INSERT INTO translation_jobs")) {
+          return { rows: [{ id: "job-1" }], rowCount: 1 };
+        }
+        if (sql.includes("INSERT INTO idempotency_records")) {
+          return { rows: [], rowCount: 1 };
+        }
+        throw new Error(`Unexpected client query: ${sql}`);
+      },
+      release: () => {},
+    }),
+  } as unknown as Pool;
+
+  const redis = createRedisMock({
+    get: async () => {
+      redisGetCalls += 1;
+      return null;
+    },
+    multi: () => ({
+      hset() {
+        return this;
+      },
+      expire() {
+        return this;
+      },
+      exec: async () => [[null, 1], [null, 1]],
+    }),
+  });
+
+  let statusCode = 200;
+  let payload: Record<string, unknown> | null = null;
+  const res = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    json(responseBody: Record<string, unknown>) {
+      payload = responseBody;
+      return this;
+    },
+  } as never;
+
+  await createJobHandler(
+    pool,
+    redis,
+    {
+      jobs: { maxGlobalInFlightJobs: 50 },
+      cloudTasks: {
+        workerUrl: "",
+        invokerServiceAccount: "worker-invoker@example.com",
+      },
+    } as AppConfig,
+    {
+      enqueueJob: async (_config, jobId, stage, stageAttempt) => {
+        enqueueCalls.push({
+          jobId,
+          stage: stage ?? "extract",
+          stageAttempt: stageAttempt ?? 1,
+        });
+        return `tasks/${jobId}-${stage ?? "extract"}-${stageAttempt ?? 1}`;
+      },
+    }
+  )(
+    {
+      authContext: { user_id: "user-1" as UserId },
+      headers: { authorization: "Bearer host-token" },
+      body,
+    } as never,
+    res
+  );
+
+  return {
+    statusCode,
+    payload,
+    poolCalls,
+    clientCalls,
+    enqueueCalls,
+    redisGetCalls,
+    unresolvedCleanupCalls,
+  };
+}
+
+test("createJobHandler persists null permission ids for user-OAuth-only append jobs", async () => {
+  const result = await runCreateJobUntilAccepted({
+    host_type: "slides",
+    document_id: "source-doc",
+    document_name: "Quarterly deck",
+    source_language_mode: "auto",
+    target_language_input: "French",
+    output_mode: "append_in_file",
+    range_mode: "custom",
+    range_expression: "1",
+    idempotency_key: "idem-no-drive-append",
+  });
+
+  const insert = result.clientCalls.find((call) => call.sql.includes("INSERT INTO translation_jobs"));
+  assert.ok(insert, "expected translation job insert");
+  assert.equal(getInsertParamByColumn(insert!, "target_doc_id"), null);
+  assert.equal(getInsertParamByColumn(insert!, "source_worker_permission_id"), null);
+  assert.equal(getInsertParamByColumn(insert!, "target_worker_permission_id"), null);
+  assert.equal(getInsertParamByColumn(insert!, "drive_cleanup_status"), "not_required");
+  assert.equal(result.unresolvedCleanupCalls, 0);
+  assert.equal(result.redisGetCalls, 0);
+  assert.deepEqual(result.enqueueCalls, [{ jobId: "job-1", stage: "extract", stageAttempt: 1 }]);
+  assert.equal(result.statusCode, 201);
+  assert.deepEqual(result.payload, {
+    status: "accepted",
+    job_id: "job-1",
+    queued: true,
+  });
+});
+
+test("createJobHandler persists null permission ids for user-OAuth-only create-new-file jobs", async () => {
+  const result = await runCreateJobUntilAccepted({
+    host_type: "slides",
+    document_id: "source-doc",
+    document_name: "Quarterly deck",
+    target_document_id: "target-doc",
+    source_language_mode: "auto",
+    target_language_input: "French",
+    output_mode: "create_new_file",
+    range_mode: "custom",
+    range_expression: "1",
+    idempotency_key: "idem-no-drive-new-file",
+  });
+
+  const insert = result.clientCalls.find((call) => call.sql.includes("INSERT INTO translation_jobs"));
+  assert.ok(insert, "expected translation job insert");
+  assert.equal(getInsertParamByColumn(insert!, "target_doc_id"), "target-doc");
+  assert.equal(getInsertParamByColumn(insert!, "source_worker_permission_id"), null);
+  assert.equal(getInsertParamByColumn(insert!, "target_worker_permission_id"), null);
+  assert.equal(getInsertParamByColumn(insert!, "drive_cleanup_status"), "not_required");
+  assert.equal(result.unresolvedCleanupCalls, 0);
+  assert.equal(result.redisGetCalls, 0);
+  assert.deepEqual(result.enqueueCalls, [{ jobId: "job-1", stage: "extract", stageAttempt: 1 }]);
+  assert.equal(result.statusCode, 201);
+  assert.deepEqual(result.payload, {
+    status: "accepted",
+    job_id: "job-1",
+    queued: true,
+  });
+});
+
+test("createJobHandler does not apply old cleanup blocking to user-OAuth-only idempotency reuse", async () => {
+  const result = await runCreateJobUntilAccepted(
+    {
+      host_type: "slides",
+      document_id: "source-doc",
+      document_name: "Quarterly deck",
+      source_language_mode: "auto",
+      target_language_input: "French",
+      output_mode: "append_in_file",
+      range_mode: "custom",
+      range_expression: "1",
+      idempotency_key: "idem-no-drive-after-old-cleanup",
+    },
+    {
+      existingIdempotencyJob: {
+        ...createBaseJob(),
+        id: "old-job-with-cleanup" as JobId,
+        status: "failed",
+        source_worker_permission_id: "source-permission",
+        target_worker_permission_id: null,
+        drive_cleanup_status: "pending",
+      },
+    }
+  );
+
+  assert.equal(result.statusCode, 201);
+  assert.deepEqual(result.payload, {
+    status: "accepted",
+    job_id: "job-1",
+    queued: true,
+  });
+  assert.equal(result.unresolvedCleanupCalls, 0);
+  assert.equal(result.redisGetCalls, 0);
+  assert.ok(
+    result.poolCalls.some((call) => call.sql.includes("DELETE FROM idempotency_records")),
+    "expected stale idempotency record to be removed before accepting no-Drive job"
+  );
+});
+
 test("createJobHandler does not delete an idempotency record while Drive cleanup is pending", async () => {
   const calls: string[] = [];
   const pool = {

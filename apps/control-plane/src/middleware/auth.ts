@@ -27,6 +27,16 @@ function isLikelyJwt(token: string): boolean {
   return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token);
 }
 
+export function __redactAuthTokenFromErrorForTests(error: unknown, token: string): string {
+  let message = error instanceof Error ? error.message : String(error);
+  if (token) {
+    message = message.split(token).join("[redacted-token]");
+  }
+  return message
+    .replace(/ya29\.[A-Za-z0-9._-]+/g, "ya29.[redacted]")
+    .replace(/[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[redacted-jwt]");
+}
+
 async function fetchAsAccessToken(token: string): Promise<GoogleIdentity | null> {
   const res = await fetch(GOOGLE_USERINFO_URL, {
     headers: { Authorization: `Bearer ${token}` },
@@ -85,7 +95,7 @@ async function resolveGoogleIdentity(
     try {
       return await fetchAsIdToken(token, options);
     } catch (err) {
-      console.error("Google ID Token verification failed:", (err as Error).message);
+      console.error("Google ID Token verification failed:", __redactAuthTokenFromErrorForTests(err, token));
       return null;
     }
   }
@@ -105,7 +115,7 @@ async function resolveGoogleIdentity(
     identity = await fetchAsIdToken(token, options);
   } catch (err) {
     // C4: Both verification paths failed — log at error level
-    console.error("Google ID Token verification also failed:", (err as Error).message);
+    console.error("Google ID Token verification also failed:", __redactAuthTokenFromErrorForTests(err, token));
   }
 
   return identity;

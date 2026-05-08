@@ -123,8 +123,16 @@ function validateCreateJobDriveAccess(req: Record<string, unknown>): string | nu
       : "drive_access is only supported for Slides jobs";
   }
 
-  if (!driveAccess || typeof driveAccess !== "object" || Array.isArray(driveAccess)) {
-    return "drive_access is required for Slides jobs";
+  if (driveAccess === undefined || driveAccess === null) {
+    return null;
+  }
+
+  if (
+    typeof driveAccess !== "object" ||
+    Array.isArray(driveAccess) ||
+    Object.getPrototypeOf(driveAccess) !== Object.prototype
+  ) {
+    return "drive_access must be an object when provided";
   }
 
   const access = driveAccess as Record<string, unknown>;
