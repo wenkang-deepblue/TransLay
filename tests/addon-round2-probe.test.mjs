@@ -330,3 +330,36 @@ test("Sidebar production surface has no Google Picker dependency", async () => {
   assert.doesNotMatch(html, /google\.picker|PickerBuilder|getPresentationPickerConfig|openPresentationAccessPicker/);
   assert.doesNotMatch(html, /requestFileScopeForActiveDocument|onFileScopeGrantedTrigger/);
 });
+
+test("Sidebar production submission uses user OAuth readiness and omits drive_access", async () => {
+  const html = await readFile(
+    new URL("../apps/addon/src/sidebar/index.html", import.meta.url),
+    "utf8"
+  );
+  const start = html.indexOf("function executeTranslateSubmission");
+  const end = html.indexOf("function handleResubmit", start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+
+  const executeTranslateSubmission = html.slice(start, end);
+  assert.match(executeTranslateSubmission, /\.ensureCurrentPresentationReadyForUserOauthJob\(\)/);
+  assert.doesNotMatch(executeTranslateSubmission, /ensureCurrentPresentationWorkerAccess/);
+  assert.doesNotMatch(executeTranslateSubmission, /jobRequest\.drive_access/);
+  assert.doesNotMatch(executeTranslateSubmission, /sourceWorkerPermissionId|targetWorkerPermissionId/);
+  assert.doesNotMatch(executeTranslateSubmission, /registerPreparedCleanupForSubmission/);
+  assert.doesNotMatch(executeTranslateSubmission, /worker permission id/);
+});
+
+test("Host context production target preparation uses SlidesApp instead of Drive REST copy", async () => {
+  const source = await readFile(
+    new URL("../apps/addon/src/server/host_context.gs", import.meta.url),
+    "utf8"
+  );
+  assert.match(source, /function createPresentationCopyWithSlidesApp_/);
+  assert.match(source, /SlidesApp\.create/);
+  assert.match(source, /\.appendSlide\(/);
+  assert.match(source, /\.saveAndClose\(/);
+  assert.match(source, /SlidesApp\.openById/);
+  assert.doesNotMatch(source, /copyPresentationFile\(/);
+  assert.doesNotMatch(source, /grantWorkerAccess\(/);
+});

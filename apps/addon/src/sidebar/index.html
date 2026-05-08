@@ -1477,117 +1477,64 @@
             return;
           }
           google.script.run
-            .withSuccessHandler(function(sourceAccess) {
+            .withSuccessHandler(function(sourceContext) {
               activeSubmission = getActiveSubmission(submission.token);
               if (!activeSubmission) {
-                cleanupPreparedSubmission(sourceAccess, null, jobRequest);
                 return;
               }
 
-              var sourcePermissionId = sourceAccess && sourceAccess.sourceWorkerPermissionId;
-              if (!sourcePermissionId) {
+              var sourceDocumentId = (sourceContext && sourceContext.documentId) || state.documentId;
+              if (sourceDocumentId && sourceDocumentId !== jobRequest.document_id) {
                 clearActiveSubmission();
                 setTranslating(false);
                 hideProgress();
-                showError('Failed to authorize the current presentation for translation: worker permission id was not returned.');
+                showError('The active presentation changed. Reopen TransLay in the presentation you want to translate and try again.');
                 return;
               }
 
-              activeSubmission.sourceDocumentId = sourceAccess.documentId || state.documentId;
-              activeSubmission.sourceWorkerPermissionId = sourcePermissionId;
-              jobRequest.drive_access = {
-                source_worker_permission_id: sourcePermissionId
-              };
+              activeSubmission.sourceDocumentId = sourceDocumentId;
+              if (activeSubmission.cancelRequested) {
+                finishSubmissionCanceled(jobRequest.output_mode);
+                return;
+              }
 
-              registerPreparedCleanupForSubmission(activeSubmission, null, jobRequest, function() {
-                activeSubmission = getActiveSubmission(submission.token);
-                if (!activeSubmission) {
-                  cleanupPreparedSubmission(sourceAccess, null, jobRequest);
-                  return;
-                }
+              if (outputMode === 'create_new_file') {
+                google.script.run
+                  .withSuccessHandler(function(prepared) {
+                    activeSubmission = getActiveSubmission(submission.token);
+                    if (!activeSubmission) {
+                      cleanupPreparedSubmission(sourceContext, prepared, jobRequest);
+                      return;
+                    }
 
-                if (activeSubmission.cancelRequested) {
-                  cleanupPreparedSubmission(activeSubmission, null, jobRequest);
-                  finishSubmissionCanceled(jobRequest.output_mode);
-                  return;
-                }
+                    activeSubmission.targetDocumentId = prepared.documentId;
+                    activeSubmission.targetCopyWasCreated = true;
+                    jobRequest.target_document_id = prepared.documentId;
+                    state.currentOutputDocumentId = prepared.documentId;
 
-                if (outputMode === 'create_new_file') {
-                  google.script.run
-                    .withSuccessHandler(function(prepared) {
-                      activeSubmission = getActiveSubmission(submission.token);
-                      if (!activeSubmission) {
-                        cleanupPreparedSubmission(sourceAccess, prepared, jobRequest);
-                        return;
-                      }
+                    if (activeSubmission.cancelRequested) {
+                      cleanupPreparedSubmission(activeSubmission || sourceContext, prepared, jobRequest);
+                      finishSubmissionCanceled(jobRequest.output_mode);
+                      return;
+                    }
 
-                      if (!prepared.targetWorkerPermissionId) {
-                        cleanupPreparedSubmission(activeSubmission, prepared, jobRequest);
-                        clearActiveSubmission();
-                        setTranslating(false);
-                        hideProgress();
-                        showError('Failed to prepare the new presentation: worker permission id was not returned.');
-                        return;
-                      }
+                    submitJob(jobRequest, submission.token);
+                  })
+                  .withFailureHandler(function(err) {
+                    activeSubmission = getActiveSubmission(submission.token);
+                    if (!activeSubmission) {
+                      return;
+                    }
+                    clearActiveSubmission();
+                    setTranslating(false);
+                    hideProgress();
+                    showError(formatOutputPreparationError(err));
+                  })
+                  .prepareOutputPresentation(targetLang);
+                return;
+              }
 
-                      activeSubmission.targetDocumentId = prepared.documentId;
-                      activeSubmission.targetWorkerPermissionId = prepared.targetWorkerPermissionId;
-                      activeSubmission.targetCopyWasCreated = true;
-                      jobRequest.target_document_id = prepared.documentId;
-                      jobRequest.drive_access.target_worker_permission_id = prepared.targetWorkerPermissionId;
-                      state.currentOutputDocumentId = prepared.documentId;
-
-                      registerPreparedCleanupForSubmission(activeSubmission, prepared, jobRequest, function() {
-                        activeSubmission = getActiveSubmission(submission.token);
-                        if (!activeSubmission) {
-                          cleanupPreparedSubmission(sourceAccess, prepared, jobRequest);
-                          return;
-                        }
-                        if (activeSubmission.cancelRequested) {
-                          cleanupPreparedSubmission(activeSubmission, prepared, jobRequest);
-                          finishSubmissionCanceled(jobRequest.output_mode);
-                          return;
-                        }
-                        submitJob(jobRequest, submission.token);
-                      }, function() {
-                        activeSubmission = getActiveSubmission(submission.token);
-                        if (!activeSubmission) {
-                          return;
-                        }
-                        cleanupPreparedSubmission(activeSubmission, prepared, jobRequest);
-                        clearActiveSubmission();
-                        setTranslating(false);
-                        hideProgress();
-                        showError('Failed to register temporary access cleanup. Please try again.');
-                      });
-                    })
-                    .withFailureHandler(function(err) {
-                      activeSubmission = getActiveSubmission(submission.token);
-                      if (!activeSubmission) {
-                        return;
-                      }
-                      cleanupPreparedSubmission(activeSubmission, null, jobRequest);
-                      clearActiveSubmission();
-                      setTranslating(false);
-                      hideProgress();
-                      showError('Failed to prepare the new presentation: ' + err.message);
-                    })
-                    .prepareOutputPresentation(targetLang);
-                  return;
-                }
-
-                submitJob(jobRequest, submission.token);
-              }, function() {
-                activeSubmission = getActiveSubmission(submission.token);
-                if (!activeSubmission) {
-                  return;
-                }
-                cleanupPreparedSubmission(activeSubmission, null, jobRequest);
-                clearActiveSubmission();
-                setTranslating(false);
-                hideProgress();
-                showError('Failed to register temporary access cleanup. Please try again.');
-              });
+              submitJob(jobRequest, submission.token);
             })
             .withFailureHandler(function(err) {
               if (!getActiveSubmission(submission.token)) {
@@ -1596,9 +1543,9 @@
               clearActiveSubmission();
               setTranslating(false);
               hideProgress();
-              showError(formatDriveAccessError(err));
+              showError(formatSourcePreparationError(err));
             })
-            .ensureCurrentPresentationWorkerAccess();
+            .ensureCurrentPresentationReadyForUserOauthJob();
         })
         .withFailureHandler(function(err) {
           if (!getActiveSubmission(submission.token)) {
@@ -1740,23 +1687,20 @@
       }
     }
 
-    function formatDriveAccessError(err) {
+    function formatSourcePreparationError(err) {
       var msg = err && err.message ? err.message : String(err || '');
-      var reason = (err && err.driveReason) || '';
-      var reasonMatch = /\[DRIVE_REASON:([^\]]+)\]/.exec(msg);
-      if (!reason && reasonMatch) {
-        reason = reasonMatch[1];
+      if (msg.indexOf('No active presentation found') !== -1) {
+        return 'Open a Google Slides™ presentation, then reopen TransLay and try again.';
       }
-      if (reasonMatch) {
-        msg = msg.replace(/\[DRIVE_REASON:[^\]]+\]\s*/, '');
+      return 'Could not read the active presentation. Reopen TransLay and try again.';
+    }
+
+    function formatOutputPreparationError(err) {
+      var msg = err && err.message ? err.message : String(err || '');
+      if (msg.indexOf('No active presentation found') !== -1) {
+        return 'Open a Google Slides™ presentation, then reopen TransLay and try again.';
       }
-      if (reason === 'insufficientFilePermissions' || reason === 'notFound') {
-        return 'Authorize this presentation from the TransLay add-on card, then reopen TransLay.';
-      }
-      if (reason === 'invalidSharingRequest' || msg.indexOf('cannot be shared') !== -1 || msg.indexOf('can be shared') !== -1) {
-        return 'This file cannot be shared with TransLay worker access. Ask the owner to allow sharing or make a copy you own.';
-      }
-      return 'Failed to authorize the current presentation for translation: ' + msg;
+      return 'Could not prepare the new presentation. Please try again.';
     }
 
     // ── Job polling ──
@@ -2673,13 +2617,12 @@
       var sourcePermissionId = (submissionLike && (
         submissionLike.sourceWorkerPermissionId ||
         submissionLike.source_worker_permission_id
-      )) || (jobRequest && jobRequest.drive_access && jobRequest.drive_access.source_worker_permission_id) || '';
+      )) || '';
       var targetDocumentId = (preparedTarget && preparedTarget.documentId) ||
         (submissionLike && submissionLike.targetCopyWasCreated && submissionLike.targetDocumentId) ||
         '';
       var targetPermissionId = (preparedTarget && preparedTarget.targetWorkerPermissionId) ||
         (submissionLike && submissionLike.targetWorkerPermissionId) ||
-        (jobRequest && jobRequest.drive_access && jobRequest.drive_access.target_worker_permission_id) ||
         '';
       var targetWasCopiedByAddon = Boolean(
         (preparedTarget && preparedTarget.documentId) ||
@@ -2707,14 +2650,13 @@
       var sourcePermissionId = (submissionLike && (
         submissionLike.sourceWorkerPermissionId ||
         submissionLike.source_worker_permission_id
-      )) || (jobRequest && jobRequest.drive_access && jobRequest.drive_access.source_worker_permission_id) || '';
+      )) || '';
       var targetDocumentId = (preparedTarget && preparedTarget.documentId) ||
         (submissionLike && submissionLike.targetCopyWasCreated && submissionLike.targetDocumentId) ||
         (jobRequest && jobRequest.target_document_id) ||
         '';
       var targetPermissionId = (preparedTarget && preparedTarget.targetWorkerPermissionId) ||
         (submissionLike && submissionLike.targetWorkerPermissionId) ||
-        (jobRequest && jobRequest.drive_access && jobRequest.drive_access.target_worker_permission_id) ||
         '';
       var targetWasCopiedByAddon = Boolean(
         (preparedTarget && preparedTarget.documentId) ||
@@ -3064,8 +3006,6 @@
         outputMode: outputMode,
         cancelRequested: false,
         sourceDocumentId: null,
-        sourceWorkerPermissionId: null,
-        targetWorkerPermissionId: null,
         targetDocumentId: null,
         targetCopyWasCreated: false
       };

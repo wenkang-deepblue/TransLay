@@ -40,9 +40,37 @@ function createResponse(code, body) {
   };
 }
 
-test("prepareOutputPresentation copies and grants worker access through Drive REST", async () => {
+test("prepareOutputPresentation creates a SlidesApp copy without Drive REST or worker access", async () => {
   const context = await loadHostContext();
-  const fetches = [];
+  const removedDefaults = [];
+  const appendedSlides = [];
+  const sourceSlides = [
+    { getObjectId: () => "source-slide-1" },
+    { getObjectId: () => "source-slide-2" },
+  ];
+  const target = {
+    getId() {
+      return "target-doc";
+    },
+    getUrl() {
+      return "https://docs.google.com/presentation/d/target-doc/edit";
+    },
+    getSlides() {
+      return [
+        {
+          remove() {
+            removedDefaults.push("default-slide");
+          },
+        },
+      ];
+    },
+    appendSlide(slide) {
+      appendedSlides.push(slide.getObjectId());
+    },
+    saveAndClose() {
+      appendedSlides.push("saved");
+    },
+  };
   context.SlidesApp = {
     getActivePresentation() {
       return {
@@ -52,62 +80,37 @@ test("prepareOutputPresentation copies and grants worker access through Drive RE
         getName() {
           return "Source deck";
         },
+        getSlides() {
+          return sourceSlides;
+        },
       };
+    },
+    create(name) {
+      assert.equal(name, "Source deck (French)");
+      return target;
+    },
+    openById(id) {
+      assert.equal(id, "target-doc");
+      return target;
     },
   };
   context.UrlFetchApp = {
-    fetch(url, request) {
-      fetches.push({
-        url,
-        method: request.method,
-        payload: request.payload ? JSON.parse(request.payload) : null,
-      });
-      if (url === "https://www.googleapis.com/drive/v3/files/source-doc?supportsAllDrives=true&fields=parents") {
-        return createResponse(200, {});
-      }
-      if (url === "https://www.googleapis.com/drive/v3/files/source-doc/copy?supportsAllDrives=true&fields=id,webViewLink") {
-        return createResponse(200, {
-          id: "copy-doc",
-          webViewLink: "https://docs.google.com/presentation/d/copy-doc/edit",
-        });
-      }
-      if (url === "https://www.googleapis.com/drive/v3/files/copy-doc/permissions?supportsAllDrives=true&sendNotificationEmail=false&fields=id") {
-        return createResponse(200, { id: "target-permission" });
-      }
-      throw new Error("unexpected URL " + url);
+    fetch() {
+      throw new Error("prepareOutputPresentation must not call Drive REST");
     },
   };
 
   const prepared = context.prepareOutputPresentation("French");
-  assert.equal(prepared.documentId, "copy-doc");
-  assert.equal(prepared.documentUrl, "https://docs.google.com/presentation/d/copy-doc/edit");
-  assert.equal(prepared.targetWorkerPermissionId, "target-permission");
-  assert.deepEqual(fetches, [
-    {
-      url: "https://www.googleapis.com/drive/v3/files/source-doc?supportsAllDrives=true&fields=parents",
-      method: "get",
-      payload: null,
-    },
-    {
-      url: "https://www.googleapis.com/drive/v3/files/source-doc/copy?supportsAllDrives=true&fields=id,webViewLink",
-      method: "post",
-      payload: { name: "Source deck (French)" },
-    },
-    {
-      url: "https://www.googleapis.com/drive/v3/files/copy-doc/permissions?supportsAllDrives=true&sendNotificationEmail=false&fields=id",
-      method: "post",
-      payload: {
-        type: "user",
-        role: "writer",
-        emailAddress: "worker@example.com",
-      },
-    },
-  ]);
+  assert.equal(prepared.documentId, "target-doc");
+  assert.equal(prepared.documentUrl, "https://docs.google.com/presentation/d/target-doc/edit");
+  assert.equal(prepared.targetWorkerPermissionId, null);
+  assert.equal(prepared.accessMode, "user_oauth_only");
+  assert.deepEqual(removedDefaults, ["default-slide"]);
+  assert.deepEqual(appendedSlides, ["source-slide-1", "source-slide-2", "saved"]);
 });
 
-test("prepareOutputPresentation trashes copied file when worker grant fails", async () => {
+test("prepareOutputPresentation reports SlidesApp preparation failures without Drive REST", async () => {
   const context = await loadHostContext();
-  const fetches = [];
   context.SlidesApp = {
     getActivePresentation() {
       return {
@@ -119,131 +122,76 @@ test("prepareOutputPresentation trashes copied file when worker grant fails", as
         },
       };
     },
+    create() {
+      throw new Error("Slides create failed for source-doc");
+    },
   };
   context.UrlFetchApp = {
-    fetch(url, request) {
-      fetches.push({
-        url,
-        method: request.method,
-        payload: request.payload ? JSON.parse(request.payload) : null,
-      });
-      if (url === "https://www.googleapis.com/drive/v3/files/source-doc?supportsAllDrives=true&fields=parents") {
-        return createResponse(200, {});
-      }
-      if (url === "https://www.googleapis.com/drive/v3/files/source-doc/copy?supportsAllDrives=true&fields=id,webViewLink") {
-        return createResponse(200, {
-          id: "copy-doc",
-          webViewLink: "https://docs.google.com/presentation/d/copy-doc/edit",
-        });
-      }
-      if (url === "https://www.googleapis.com/drive/v3/files/copy-doc/permissions?supportsAllDrives=true&sendNotificationEmail=false&fields=id") {
-        return createResponse(403, {
-          error: {
-            status: "PERMISSION_DENIED",
-            errors: [{ reason: "insufficientFilePermissions" }],
-            message: "Cannot share copied file.",
-          },
-        });
-      }
-      if (url === "https://www.googleapis.com/drive/v3/files/copy-doc?supportsAllDrives=true&fields=id,trashed") {
-        return createResponse(200, { id: "copy-doc", trashed: true });
-      }
-      throw new Error("unexpected URL " + url);
+    fetch() {
+      throw new Error("prepareOutputPresentation must not call Drive REST");
     },
   };
 
   assert.throws(
     () => context.prepareOutputPresentation("French"),
-    /Failed to grant worker access to the copied presentation/
+    { message: "Failed to prepare the new presentation" }
   );
-  assert.deepEqual(fetches, [
-    {
-      url: "https://www.googleapis.com/drive/v3/files/source-doc?supportsAllDrives=true&fields=parents",
-      method: "get",
-      payload: null,
-    },
-    {
-      url: "https://www.googleapis.com/drive/v3/files/source-doc/copy?supportsAllDrives=true&fields=id,webViewLink",
-      method: "post",
-      payload: { name: "Source deck (French)" },
-    },
-    {
-      url: "https://www.googleapis.com/drive/v3/files/copy-doc/permissions?supportsAllDrives=true&sendNotificationEmail=false&fields=id",
-      method: "post",
-      payload: {
-        type: "user",
-        role: "writer",
-        emailAddress: "worker@example.com",
-      },
-    },
-    {
-      url: "https://www.googleapis.com/drive/v3/files/copy-doc?supportsAllDrives=true&fields=id,trashed",
-      method: "patch",
-      payload: { trashed: true },
-    },
-  ]);
 });
 
-test("ensureCurrentPresentationWorkerAccess returns the Drive REST permission id", async () => {
+test("ensureCurrentPresentationReadyForUserOauthJob reads active Slides metadata without Drive REST", async () => {
   const context = await loadHostContext();
-  const fetches = [];
   context.SlidesApp = {
     getActivePresentation() {
       return {
         getId() {
           return "source-doc";
         },
+        getName() {
+          return "Source deck";
+        },
+        getSlides() {
+          return [{ getObjectId: () => "slide-1" }];
+        },
       };
     },
   };
   context.UrlFetchApp = {
-    fetch(url, request) {
-      fetches.push({
-        url,
-        method: request.method,
-        payload: request.payload ? JSON.parse(request.payload) : null,
-      });
-      if (url === "https://www.googleapis.com/drive/v3/files/source-doc?supportsAllDrives=true&fields=id,name,mimeType,capabilities(canEdit,canCopy,canShare)") {
-        return createResponse(200, {
-          id: "source-doc",
-          name: "Source deck",
-          mimeType: "application/vnd.google-apps.presentation",
-          capabilities: {
-            canEdit: true,
-            canCopy: true,
-            canShare: true,
-          },
-        });
-      }
-      if (url !== "https://www.googleapis.com/drive/v3/files/source-doc/permissions?supportsAllDrives=true&sendNotificationEmail=false&fields=id") {
-        throw new Error("unexpected URL " + url);
-      }
-      return createResponse(200, { id: "source-permission" });
+    fetch() {
+      throw new Error("source readiness must not call Drive REST");
     },
   };
 
-  const access = context.ensureCurrentPresentationWorkerAccess();
+  const access = context.ensureCurrentPresentationReadyForUserOauthJob();
   assert.deepEqual(JSON.parse(JSON.stringify(access)), {
     documentId: "source-doc",
     documentName: "Source deck",
-    sourceWorkerPermissionId: "source-permission",
+    sourceWorkerPermissionId: null,
+    accessMode: "user_oauth_only",
   });
-  assert.deepEqual(fetches, [
-    {
-      url: "https://www.googleapis.com/drive/v3/files/source-doc?supportsAllDrives=true&fields=id,name,mimeType,capabilities(canEdit,canCopy,canShare)",
-      method: "get",
-      payload: null,
+});
+
+test("ensureCurrentPresentationReadyForUserOauthJob hides low-level Slides errors", async () => {
+  const context = await loadHostContext();
+  context.SlidesApp = {
+    getActivePresentation() {
+      return {
+        getId() {
+          return "source-doc";
+        },
+        getName() {
+          return "Source deck";
+        },
+        getSlides() {
+          throw new Error("internal failure for source-doc");
+        },
+      };
     },
-    {
-      url: "https://www.googleapis.com/drive/v3/files/source-doc/permissions?supportsAllDrives=true&sendNotificationEmail=false&fields=id",
-      method: "post",
-      payload: {
-        type: "user",
-        role: "writer",
-        emailAddress: "worker@example.com",
-      },
-    },
-  ]);
+  };
+
+  assert.throws(
+    () => context.ensureCurrentPresentationReadyForUserOauthJob(),
+    { message: "Failed to read the current presentation for translation" }
+  );
 });
 
 test("cleanupPreparedPresentation trashes the prepared copy through Drive REST", async () => {

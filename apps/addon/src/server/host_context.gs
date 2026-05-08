@@ -89,63 +89,66 @@ function getSheetNames() {
 }
 
 /**
- * Grants the worker service account editor access to the currently open
- * presentation so backend extraction/write-back can access user-selected
- * test copies without any manual sharing step.
- * Returns the Drive permission id for Phase 4 persistence wiring; current
- * sidebar callers still ignore this value until the job contract is expanded.
+ * Verifies that the sidebar is running in an active Slides presentation for a
+ * user-OAuth-only job. The Add-on must not grant worker service-account access.
  */
-function ensureCurrentPresentationWorkerAccess() {
+function ensureCurrentPresentationReadyForUserOauthJob() {
   var presentation = SlidesApp.getActivePresentation();
   if (!presentation) {
     throw new Error('No active presentation found');
   }
 
   try {
-    var access = assertActivePresentationDriveFileAccess();
+    presentation.getSlides();
     return {
-      documentId: access.documentId,
-      documentName: access.documentName,
-      sourceWorkerPermissionId: grantWorkerAccess(access.documentId)
+      documentId: presentation.getId(),
+      documentName: presentation.getName(),
+      sourceWorkerPermissionId: null,
+      accessMode: 'user_oauth_only'
     };
   } catch (err) {
-    throw new Error('Failed to grant worker access to the current presentation: ' + err.message);
+    console.warn('Failed to read the current presentation for translation.');
+    throw new Error('Failed to read the current presentation for translation');
   }
 }
 
 /**
- * Creates a user-owned copy of the active presentation and grants the worker
- * service account editor access so backend write-back can target this file.
- *
- * This path only touches the currently active presentation and the freshly
- * copied destination file through the Drive REST adapter.
- * Returns the copied presentation ID, URL, and target worker permission id.
- * The permission id is intentionally exposed now so Phase 4/6 can persist and
- * submit it without changing this Drive orchestration again.
+ * Creates a user-owned copy of the active presentation through Slides APIs.
  */
 function prepareOutputPresentation(copyLabel) {
-  var presentation = SlidesApp.getActivePresentation();
-  if (!presentation) {
+  var source = SlidesApp.getActivePresentation();
+  if (!source) {
     throw new Error('No active presentation found');
   }
 
-  var sourceId = presentation.getId();
-  var sourceName = presentation.getName();
-  var copyName = sourceName + ' (' + copyLabel + ')';
-  var copiedFile = copyPresentationFile(sourceId, copyName);
-
   try {
-    copiedFile.targetWorkerPermissionId = grantWorkerAccess(copiedFile.documentId);
+    var target = createPresentationCopyWithSlidesApp_(source, copyLabel);
+    return {
+      documentId: target.getId(),
+      documentUrl: target.getUrl(),
+      targetWorkerPermissionId: null,
+      accessMode: 'user_oauth_only'
+    };
   } catch (err) {
-    try {
-      trashDriveFile(copiedFile.documentId);
-    } catch (cleanupErr) {
-      console.error('Failed to trash copied presentation: ' + cleanupErr.message);
-    }
-    throw new Error('Failed to grant worker access to the copied presentation: ' + err.message);
+    console.warn('Failed to prepare the new presentation.');
+    throw new Error('Failed to prepare the new presentation');
+  }
+}
+
+function createPresentationCopyWithSlidesApp_(source, copyLabel) {
+  var target = SlidesApp.create(source.getName() + ' (' + copyLabel + ')');
+  var defaultSlides = target.getSlides();
+  for (var i = defaultSlides.length - 1; i >= 0; i--) {
+    defaultSlides[i].remove();
   }
 
-  return copiedFile;
+  var sourceSlides = source.getSlides();
+  for (var s = 0; s < sourceSlides.length; s++) {
+    target.appendSlide(sourceSlides[s]);
+  }
+
+  target.saveAndClose();
+  return SlidesApp.openById(target.getId());
 }
 
 /**
