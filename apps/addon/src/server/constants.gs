@@ -1,7 +1,6 @@
 // API base URL — production domain, Portal and API co-located
 var API_BASE_URL = 'https://your-domain.example.com/api';
 var PORTAL_BASE_URL = 'https://your-domain.example.com';
-var WORKER_SERVICE_ACCOUNT_EMAIL = 'YOUR_WORKER_SERVICE_ACCOUNT_EMAIL';
 
 // Entitlement cache TTL (seconds) — frozen decision
 var ENTITLEMENT_CACHE_TTL = 300;

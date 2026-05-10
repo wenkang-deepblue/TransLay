@@ -432,53 +432,6 @@
     .duplicate-actions .btn {
       margin-top: 0;
     }
-    .round2-probe-panel {
-      display: none;
-      margin-bottom: 14px;
-      padding: 10px 12px;
-      border: 1px solid #dadce0;
-      border-radius: 8px;
-      background: #f8f9fa;
-      color: #202124;
-      font-size: 12px;
-    }
-    .round2-probe-panel.visible {
-      display: block;
-    }
-    .round2-probe-title {
-      font-size: 12px;
-      font-weight: 700;
-      color: #174ea6;
-      margin-bottom: 8px;
-    }
-    .round2-probe-panel .btn {
-      margin-top: 6px;
-      padding: 8px 10px;
-      font-size: 12px;
-    }
-    .round2-probe-output {
-      display: none;
-      margin-top: 10px;
-      padding: 8px;
-      border-radius: 6px;
-      background: #ffffff;
-      color: #3c4043;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size: 10px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      word-break: break-word;
-      max-height: 220px;
-      overflow: auto;
-    }
-    .round2-probe-output.visible {
-      display: block;
-    }
-    .round2-probe-output.error {
-      background: #fce8e6;
-      color: #c5221f;
-    }
-
     /* ── Confirm dialog ── */
     .dialog-overlay {
       display: none;
@@ -654,26 +607,6 @@
         </button>
       </div>
     </div>
-    <div class="round2-probe-panel" id="round2ProbePanel">
-      <div class="round2-probe-title">Round 2 Probe: temporary feasibility actions</div>
-      <button class="btn btn-secondary round2-probe-btn" onclick="runRound2ProbeActiveSlidesContext()" type="button">
-        Round 2 Probe: Probe active Slides context
-      </button>
-      <button class="btn btn-secondary round2-probe-btn" onclick="runRound2ProbeCreateTargetWithSlidesApp()" type="button">
-        Round 2 Probe: Probe create target with SlidesApp
-      </button>
-      <button class="btn btn-secondary round2-probe-btn" onclick="runRound2ProbeSubmitAppendJob()" type="button">
-        Round 2 Probe: Submit probe append job
-      </button>
-      <button class="btn btn-secondary round2-probe-btn" onclick="runRound2ProbeSubmitCreateNewFileJob()" type="button">
-        Round 2 Probe: Submit probe create-new-file job
-      </button>
-      <button class="btn btn-secondary round2-probe-btn" onclick="runRound2ProbeUserOauthFailureBehavior()" type="button">
-        Round 2 Probe: Probe user-OAuth failure behavior
-      </button>
-      <pre class="round2-probe-output" id="round2ProbeOutput"></pre>
-    </div>
-
     <!-- Source Language -->
     <div class="section">
       <div class="section-label">Source Language</div>
@@ -794,7 +727,7 @@
       documentName: null,
       isSupported: false,
       slideCount: 0,
-      currentSlideIndex: 1,
+      currentSlideIndex: null,
       entitlement: null,
       entitlementFetchedAt: 0,
       entitlementCacheTtl: 300,
@@ -843,7 +776,7 @@
       state.documentName = data.documentName;
       state.isSupported = data.isSupported;
       state.slideCount = data.slideCount || 0;
-      state.currentSlideIndex = data.currentSlideIndex || 1;
+      state.currentSlideIndex = normalizeSlideIndex(data.currentSlideIndex);
       state.presetLanguages = data.presetLanguages || [];
       state.entitlementCacheTtl = data.entitlementCacheTtl || 300;
       state.jobPollIntervalMs = data.jobPollIntervalMs || 3000;
@@ -882,120 +815,8 @@
       refreshEntitlement(false, {
         onSettled: function() {
           showMainView();
-          refreshRound2ProbeAvailability();
         }
       });
-    }
-
-    function refreshRound2ProbeAvailability() {
-      var panel = document.getElementById('round2ProbePanel');
-      if (
-        !panel ||
-        typeof google === 'undefined' ||
-        !google.script ||
-        !google.script.run
-      ) {
-        return;
-      }
-      google.script.run
-        .withSuccessHandler(function(enabled) {
-          if (enabled) {
-            panel.classList.add('visible');
-          } else {
-            panel.classList.remove('visible');
-          }
-        })
-        .withFailureHandler(function() {
-          panel.classList.remove('visible');
-        })
-        .transLayRound2ProbeIsEnabled();
-    }
-
-    function setRound2ProbeButtonsDisabled(disabled) {
-      var buttons = document.querySelectorAll('.round2-probe-btn');
-      for (var i = 0; i < buttons.length; i++) {
-        buttons[i].disabled = disabled;
-      }
-    }
-
-    function setRound2ProbeOutput(message, payload, isError) {
-      var output = document.getElementById('round2ProbeOutput');
-      if (!output) return;
-      var lines = ['Round 2 Probe: ' + message];
-      if (payload !== undefined) {
-        lines.push(JSON.stringify(payload, null, 2));
-      }
-      output.textContent = lines.join('\n');
-      output.classList.add('visible');
-      if (isError) {
-        output.classList.add('error');
-      } else {
-        output.classList.remove('error');
-      }
-    }
-
-    function runRound2ProbeAction(actionName, serverFunctionName) {
-      setRound2ProbeButtonsDisabled(true);
-      setRound2ProbeOutput(actionName + ' running...', undefined, false);
-      var runner = google.script.run
-        .withSuccessHandler(function(result) {
-          setRound2ProbeButtonsDisabled(false);
-          setRound2ProbeOutput(actionName + ' completed.', result, false);
-        })
-        .withFailureHandler(function(err) {
-          setRound2ProbeButtonsDisabled(false);
-          setRound2ProbeOutput(actionName + ' failed: ' + (err.message || String(err)), undefined, true);
-        });
-
-      if (serverFunctionName === 'transLayRound2ProbeActiveSlidesContext') {
-        runner.transLayRound2ProbeActiveSlidesContext();
-      } else if (serverFunctionName === 'transLayRound2ProbeCreateTargetWithSlidesApp') {
-        runner.transLayRound2ProbeCreateTargetWithSlidesApp();
-      } else if (serverFunctionName === 'transLayRound2ProbeSubmitAppendJob') {
-        runner.transLayRound2ProbeSubmitAppendJob();
-      } else if (serverFunctionName === 'transLayRound2ProbeSubmitCreateNewFileJob') {
-        runner.transLayRound2ProbeSubmitCreateNewFileJob();
-      } else if (serverFunctionName === 'transLayRound2ProbeUserOauthFailureBehavior') {
-        runner.transLayRound2ProbeUserOauthFailureBehavior();
-      } else {
-        setRound2ProbeButtonsDisabled(false);
-        setRound2ProbeOutput(actionName + ' failed: unknown Round 2 Probe action.', undefined, true);
-      }
-    }
-
-    function runRound2ProbeActiveSlidesContext() {
-      runRound2ProbeAction(
-        'Round 2 Probe: Probe active Slides context',
-        'transLayRound2ProbeActiveSlidesContext'
-      );
-    }
-
-    function runRound2ProbeCreateTargetWithSlidesApp() {
-      runRound2ProbeAction(
-        'Round 2 Probe: Probe create target with SlidesApp',
-        'transLayRound2ProbeCreateTargetWithSlidesApp'
-      );
-    }
-
-    function runRound2ProbeSubmitAppendJob() {
-      runRound2ProbeAction(
-        'Round 2 Probe: Submit probe append job',
-        'transLayRound2ProbeSubmitAppendJob'
-      );
-    }
-
-    function runRound2ProbeSubmitCreateNewFileJob() {
-      runRound2ProbeAction(
-        'Round 2 Probe: Submit probe create-new-file job',
-        'transLayRound2ProbeSubmitCreateNewFileJob'
-      );
-    }
-
-    function runRound2ProbeUserOauthFailureBehavior() {
-      runRound2ProbeAction(
-        'Round 2 Probe: Probe user-OAuth failure behavior',
-        'transLayRound2ProbeUserOauthFailureBehavior'
-      );
     }
 
     // ── Language dropdown ──
@@ -1193,6 +1014,17 @@
       hideDuplicateAction();
       resetSubmissionUiState();
 
+      if (state.hostType === 'slides' && document.getElementById('rangeMode').value === 'current') {
+        refreshCurrentSlideIndexForSubmission(function() {
+          buildAndPreviewTranslationSubmission();
+        });
+        return;
+      }
+
+      buildAndPreviewTranslationSubmission();
+    }
+
+    function buildAndPreviewTranslationSubmission() {
       var submissionData = buildTranslationSubmission({ forceResubmit: false });
       if (!submissionData) {
         setPreparingSubmission(false);
@@ -1200,6 +1032,26 @@
       }
 
       previewTranslationSubmission(submissionData);
+    }
+
+    function refreshCurrentSlideIndexForSubmission(onSuccess) {
+      google.script.run
+        .withSuccessHandler(function(currentSlideIndex) {
+          var normalized = normalizeSlideIndex(currentSlideIndex);
+          if (!normalized) {
+            setPreparingSubmission(false);
+            showError('Unable to determine the current slide. Select a slide in Google Slides™ and try again.');
+            return;
+          }
+          state.currentSlideIndex = normalized;
+          onSuccess();
+        })
+        .withFailureHandler(function(err) {
+          setPreparingSubmission(false);
+          var detail = err && err.message ? ' ' + err.message : '';
+          showError('Unable to determine the current slide. Select a slide in Google Slides™ and try again.' + detail);
+        })
+        .getCurrentSlideIndex();
     }
 
     function previewTranslationSubmission(submissionData) {
@@ -1301,7 +1153,11 @@
       var rangeMode = document.getElementById('rangeMode').value;
       var rangeExpression = null;
       if (rangeMode === 'current') {
-        rangeExpression = String(state.currentSlideIndex || 1);
+        if (!state.currentSlideIndex) {
+          showError('Unable to determine the current slide. Select a slide in Google Slides™ and try again.');
+          return null;
+        }
+        rangeExpression = String(state.currentSlideIndex);
       } else if (rangeMode === 'custom') {
         rangeExpression = document.getElementById('rangeExpression').value.trim();
         if (!rangeExpression) {
@@ -1365,6 +1221,15 @@
       return Number.isInteger(value)
         ? String(value)
         : value.toFixed(1);
+    }
+
+    function normalizeSlideIndex(value) {
+      var numeric = Number(value);
+      if (!isFinite(numeric)) {
+        return null;
+      }
+      var integer = Math.floor(numeric);
+      return integer > 0 ? integer : null;
     }
 
     function buildSequentialSlideIndices(count) {
@@ -1467,7 +1332,6 @@
                 return;
               }
 
-              activeSubmission.sourceDocumentId = sourceDocumentId;
               if (activeSubmission.cancelRequested) {
                 finishSubmissionCanceled(jobRequest.output_mode);
                 return;
@@ -1481,28 +1345,21 @@
 
               if (outputMode === 'create_new_file') {
                 google.script.run
-                  .withSuccessHandler(function(prepared) {
-                    activeSubmission = getActiveSubmission(submission.token);
-                    if (!activeSubmission) {
-                      state.currentOutputDocumentId = prepared.documentId;
-                      if (!state.activeSubmission) {
-                        setTranslating(false);
-                        hideProgress();
-                      }
-                      showCreateNewFileSubmissionFailure(
-                        prepared.documentId,
-                        'The submission was no longer active before the job could start.'
-                      );
-                      return;
-                    }
+	                  .withSuccessHandler(function(prepared) {
+	                    activeSubmission = getActiveSubmission(submission.token);
+	                    if (!activeSubmission) {
+	                      if (!state.activeSubmission) {
+	                        setTranslating(false);
+	                        hideProgress();
+	                      }
+	                      return;
+	                    }
 
-                    activeSubmission.targetDocumentId = prepared.documentId;
-                    activeSubmission.targetCopyWasCreated = true;
                     jobRequest.target_document_id = prepared.documentId;
                     state.currentOutputDocumentId = prepared.documentId;
 
                     if (activeSubmission.cancelRequested) {
-                      finishSubmissionCanceled(jobRequest.output_mode, prepared.documentId);
+                      finishSubmissionCanceled(jobRequest.output_mode);
                       return;
                     }
 
@@ -1575,9 +1432,11 @@
       );
     }
 
-    function handleDuplicateCancel() {
-      hideDuplicateAction();
-    }
+	    function handleDuplicateCancel() {
+	      hideDuplicateAction();
+	      clearError();
+	      hideResult();
+	    }
 
     function submitJob(jobRequest, submissionToken) {
       google.script.run
@@ -1640,13 +1499,7 @@
             }
           } else if (msg.indexOf('[CONCURRENT_JOB_RUNNING]') !== -1) {
             showSubmissionError(jobRequest, 'A translation job is already in progress. Please wait for it to finish.');
-          } else if (msg.indexOf('[DRIVE_CLEANUP_REQUIRED]') !== -1) {
-            showSubmissionError(jobRequest, 'A previous temporary access cleanup is still pending for this presentation. Please contact support if it keeps blocking new translations.');
           } else if (msg.indexOf('[IDEMPOTENT_REPLAY]') !== -1) {
-            showSubmissionError(
-              jobRequest,
-              'This translation has already been submitted. You can resubmit it, but resubmitting will consume your usage quota.'
-            );
             showDuplicateAction(
               'This translation has already been submitted. You can also submit it again, but resubmitting will consume your usage quota.',
               {
@@ -1804,13 +1657,13 @@
                 : (isFullyBilledCompletion ? 'Completed' : (resp.status === 'completed_with_warnings' ? 'Completed with warnings' : 'Completed')),
               ''
             );
-            showResult(
-              true,
-              normalizeCompletionMessage(resp.message || 'Translation completed successfully.', resp),
-              resolveOutputDocumentUrl(resp),
-              resp.warnings || [],
-              resp
-            );
+	            showResult(
+	              true,
+	              normalizeCompletionMessage(resp.message || 'Translation completed successfully.', resp),
+	              hasCountedQuota(resp) ? resolveOutputDocumentUrl(resp) : null,
+	              resp.warnings || [],
+	              resp
+	            );
             refreshEntitlement(true);
             return;
           } else if (resp.status === 'canceled') {
@@ -1824,13 +1677,13 @@
             stopPolling();
             setTranslating(false);
             hideProgress();
-            showResult(
-              false,
-              resp.message || 'Translation failed.',
-              resolveOutputDocumentUrl(resp),
-              resp.warnings || [],
-              resp
-            );
+	            showResult(
+	              false,
+	              resp.message || 'Translation failed.',
+	              hasCountedQuota(resp) ? resolveOutputDocumentUrl(resp) : null,
+	              resp.warnings || [],
+	              resp
+	            );
             return;
           }
           // In progress — render and schedule next poll at the steady cadence.
@@ -2339,15 +2192,37 @@
       renderResultTaskId(resultMeta);
     }
 
-    function showCanceledResult(resp) {
-      var message = resp.message || 'Translation canceled.';
-      if (resp.output_mode === 'create_new_file') {
-        // Keep this conservative because canceled backend paths can have
-        // different guarantees about whether a prepared target survived.
-        message += ' The created presentation may remain in your Drive.';
-      }
-      showResult(false, message, resolveOutputDocumentUrl(resp), [], resp);
-    }
+	    function showCanceledResult(resp) {
+	      var message = resp.message || 'Translation canceled.';
+	      var hasDeliveredSlides = hasCountedQuota(resp);
+	      if (resp.output_mode === 'create_new_file' && hasDeliveredSlides) {
+	        // Canceled terminal jobs can still have delivered slides in a target deck.
+	        message += ' The created presentation may remain in your Drive.';
+	      }
+	      var outputUrl = hasDeliveredSlides ? resolveOutputDocumentUrl(resp) : null;
+	      showResult(false, message, outputUrl, [], resp);
+	    }
+
+	    function hasCountedQuota(resultMeta) {
+	      if (!resultMeta) {
+	        return false;
+	      }
+	      return getCountedQuotaUnits(resultMeta) > 0;
+	    }
+
+	    function getCountedQuotaUnits(resultMeta) {
+	      if (!resultMeta) {
+	        return 0;
+	      }
+	      var keys = ['net_billed_slides', 'total_units_billed', 'total_billed_units'];
+	      for (var i = 0; i < keys.length; i++) {
+	        var value = resultMeta[keys[i]];
+	        if (typeof value === 'number' && isFinite(value)) {
+	          return value;
+	        }
+	      }
+	      return 0;
+	    }
 
     function shouldDisplayCompletedWithoutWarnings(resultMeta) {
       if (!resultMeta) {
@@ -2611,48 +2486,20 @@
       return 'https://docs.google.com/presentation/d/' + encodeURIComponent(documentId) + '/edit';
     }
 
-    function hasCreatedTargetForSubmission(jobRequest) {
-      return Boolean(
-        jobRequest &&
-        jobRequest.output_mode === 'create_new_file' &&
-        jobRequest.target_document_id
-      );
-    }
-
-    function sanitizeSubmissionFailureMessage(message) {
-      var text = String(message || 'The translation job could not be started.')
-        .replace(/\[[A-Z_]+(?::[^\]]+)?\]\s*/g, '')
+	    function sanitizeSubmissionFailureMessage(message) {
+	      var text = String(message || 'The translation job could not be started.')
+	        .replace(/\[[A-Z_]+(?::[^\]]+)?\]\s*/g, '')
         .replace(/\s+/g, ' ')
         .trim();
       if (!text) {
         return 'The translation job could not be started.';
       }
       return text.length > 180 ? text.slice(0, 177) + '...' : text;
-    }
+	    }
 
-    function showSubmissionError(jobRequest, message) {
-      if (hasCreatedTargetForSubmission(jobRequest)) {
-        showCreateNewFileSubmissionFailure(jobRequest.target_document_id, message);
-        return;
-      }
-      showError(message);
-    }
-
-    function showCreateNewFileSubmissionFailure(targetDocumentId, reason) {
-      var targetUrl = buildPresentationUrl(targetDocumentId);
-      var message = 'The new presentation was created, but the translation job was not started.';
-      if (reason) {
-        message += ' Reason: ' + sanitizeSubmissionFailureMessage(reason);
-      }
-      message += ' You can open the created presentation below.';
-      showResult(
-        false,
-        message,
-        targetUrl,
-        [],
-        null
-      );
-    }
+	    function showSubmissionError(jobRequest, message) {
+	      showError(message);
+	    }
 
     function showError(msg) {
       var banner = document.getElementById('errorBanner');
@@ -2667,6 +2514,8 @@
     }
 
     function showDuplicateAction(message, duplicateSubmission) {
+      clearError();
+      hideResult();
       document.getElementById('duplicateMessage').textContent = message;
       state.pendingDuplicateSubmission = duplicateSubmission || null;
       document.getElementById('duplicateAction').classList.add('visible');
@@ -2756,10 +2605,7 @@
       state.activeSubmission = {
         token: state.submissionSeq,
         outputMode: outputMode,
-        cancelRequested: false,
-        sourceDocumentId: null,
-        targetDocumentId: null,
-        targetCopyWasCreated: false
+        cancelRequested: false
       };
       updateCancelButton();
       return state.activeSubmission;
@@ -2776,7 +2622,7 @@
       updateCancelButton();
     }
 
-    function finishSubmissionCanceled(outputMode, targetDocumentId) {
+    function finishSubmissionCanceled(outputMode) {
       clearActiveSubmission();
       state.pauseRequested = false;
       state.pauseRequestInFlight = false;
@@ -2786,16 +2632,6 @@
       state.cancelRequestInFlight = false;
       setTranslating(false);
       hideProgress();
-      if (outputMode === 'create_new_file' && targetDocumentId) {
-        showResult(
-          false,
-          'Translation canceled before submission completed. No translation job was started. The new presentation was already created and remains in your Drive.',
-          buildPresentationUrl(targetDocumentId),
-          [],
-          null
-        );
-        return;
-      }
       showCanceledResult({
         status: 'canceled',
         message: 'Translation canceled before submission completed.',

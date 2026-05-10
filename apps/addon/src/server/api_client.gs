@@ -56,43 +56,6 @@ function previewJob(previewRequest) {
 }
 
 /**
- * Registers Drive preparation metadata that must be cleaned up if the sidebar
- * is closed before the backend accepts a job.
- * @param {Object} cleanupRequest
- * @returns {Object}
- */
-function registerPreparedDriveCleanup(cleanupRequest) {
-  var token = getGoogleToken();
-  var response = UrlFetchApp.fetch(API_BASE_URL + '/jobs/prepared-cleanup', {
-    method: 'post',
-    contentType: 'application/json',
-    headers: _authHeaders(token),
-    payload: JSON.stringify(cleanupRequest),
-    muteHttpExceptions: true
-  });
-  return _handleResponse(response);
-}
-
-/**
- * Clears previously registered Drive preparation cleanup metadata.
- * @param {string} documentId
- * @returns {Object}
- */
-function clearPreparedDriveCleanup(documentId) {
-  var token = getGoogleToken();
-  var response = UrlFetchApp.fetch(API_BASE_URL + '/jobs/prepared-cleanup/clear', {
-    method: 'post',
-    contentType: 'application/json',
-    headers: _authHeaders(token),
-    payload: JSON.stringify({
-      document_id: documentId
-    }),
-    muteHttpExceptions: true
-  });
-  return _handleResponse(response);
-}
-
-/**
  * Polls job status from the control plane.
  * @param {string} jobId
  * @returns {Object} JobStatusResponse
@@ -102,40 +65,6 @@ function getJobStatus(jobId) {
   var response = UrlFetchApp.fetch(API_BASE_URL + '/jobs/' + jobId, {
     method: 'get',
     headers: _authHeaders(token),
-    muteHttpExceptions: true
-  });
-  return _handleResponse(response);
-}
-
-/**
- * Retries temporary Drive worker permission cleanup for a terminal job.
- * @param {string} jobId
- * @returns {Object} DriveCleanupRetryResponse
- */
-function retryJobDriveCleanup(jobId) {
-  var token = getGoogleToken();
-  var response = UrlFetchApp.fetch(API_BASE_URL + '/jobs/' + jobId + '/drive-cleanup', {
-    method: 'post',
-    headers: _authHeaders(token),
-    muteHttpExceptions: true
-  });
-  return _handleResponse(response);
-}
-
-/**
- * Retries the latest pending temporary Drive cleanup for a presentation.
- * @param {string} documentId
- * @returns {Object} DriveCleanupRetryResponse
- */
-function retryPendingDriveCleanup(documentId) {
-  var token = getGoogleToken();
-  var response = UrlFetchApp.fetch(API_BASE_URL + '/jobs/cleanup-pending', {
-    method: 'post',
-    contentType: 'application/json',
-    headers: _authHeaders(token),
-    payload: JSON.stringify({
-      document_id: documentId
-    }),
     muteHttpExceptions: true
   });
   return _handleResponse(response);

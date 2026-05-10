@@ -62,14 +62,13 @@ function getInitData() {
     isSupported: isSupported,
     presetLanguages: PRESET_LANGUAGES,
     slideCount: 0,
-    currentSlideIndex: 1,
+    currentSlideIndex: null,
     sheetNames: [],
     entitlementCacheTtl: ENTITLEMENT_CACHE_TTL,
     jobPollIntervalMs: JOB_POLL_INTERVAL_MS
   };
 
-  // C6: getSlideCount/getCurrentSlideIndex now throw on error;
-  // catch here so sidebar still loads with defaults
+  // Keep the sidebar usable when host metadata lookup fails.
   if (hostType === HOST_TYPE_SLIDES) {
     try {
       result.slideCount = getSlideCount();
@@ -111,7 +110,7 @@ function getOfficialWebsiteUrl(redirectPath) {
 }
 
 /**
- * C7: Idempotency key generation uses google_subject_id from the control plane.
+ * Idempotency key generation uses google_subject_id from the control plane.
  * The Add-on generates a client-side key for deduplication, but the real
  * idempotency enforcement happens server-side with google_subject_id.
  * We use a stable hash of the request parameters as the key.

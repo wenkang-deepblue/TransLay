@@ -59,7 +59,7 @@ function getSlideCount() {
 
 /**
  * Returns the 1-based index of the currently selected slide.
- * Falls back to 1 only if selection API is unavailable (not on error).
+ * Throws when the current slide cannot be determined.
  */
 function getCurrentSlideIndex() {
   var presentation = SlidesApp.getActivePresentation();
@@ -67,16 +67,20 @@ function getCurrentSlideIndex() {
     throw new Error('No active presentation found');
   }
   var selection = presentation.getSelection();
-  if (!selection) return 1;
+  if (!selection) {
+    throw new Error('No current slide selection found');
+  }
   var page = selection.getCurrentPage();
-  if (!page) return 1;
+  if (!page) {
+    throw new Error('No current slide page found');
+  }
   var slides = presentation.getSlides();
   for (var i = 0; i < slides.length; i++) {
     if (slides[i].getObjectId() === page.getObjectId()) {
       return i + 1;
     }
   }
-  return 1;
+  throw new Error('Current slide is not part of the active presentation');
 }
 
 /**
@@ -103,7 +107,6 @@ function ensureCurrentPresentationReadyForUserOauthJob() {
     return {
       documentId: presentation.getId(),
       documentName: presentation.getName(),
-      sourceWorkerPermissionId: null,
       accessMode: 'user_oauth_only'
     };
   } catch (err) {
@@ -126,7 +129,6 @@ function prepareOutputPresentation(copyLabel) {
     return {
       documentId: target.getId(),
       documentUrl: target.getUrl(),
-      targetWorkerPermissionId: null,
       accessMode: 'user_oauth_only'
     };
   } catch (err) {
@@ -149,50 +151,4 @@ function createPresentationCopyWithSlidesApp_(source, copyLabel) {
 
   target.saveAndClose();
   return SlidesApp.openById(target.getId());
-}
-
-/**
- * Deletes a previously prepared output presentation when job submission fails
- * before the backend accepts the task.
- */
-function cleanupPreparedPresentation(documentId) {
-  if (!documentId) return;
-
-  try {
-    trashDriveFile(documentId);
-  } catch (err) {
-    console.error('Failed to cleanup prepared presentation: ' + err.message);
-  }
-}
-
-/**
- * Cleans up source and target Drive preparation when submission stops before
- * the backend accepts the job. Best-effort and safe to call repeatedly.
- */
-function cleanupPreparedTranslationSubmission(sourceDocumentId, sourcePermissionId, targetDocumentId, targetPermissionId, targetWasCopiedByAddon) {
-  if (targetDocumentId && targetPermissionId) {
-    try {
-      revokeWorkerPermission(targetDocumentId, targetPermissionId);
-    } catch (err) {
-      console.error('Failed to revoke prepared target worker permission: ' + err.message);
-    }
-  }
-
-  if (targetDocumentId && targetWasCopiedByAddon === true) {
-    try {
-      trashDriveFile(targetDocumentId);
-    } catch (err) {
-      console.error('Failed to trash prepared target presentation: ' + err.message);
-    }
-  } else if (targetDocumentId) {
-    console.warn('Skipped prepared target trash because add-on copy ownership was not confirmed.');
-  }
-
-  if (sourceDocumentId && sourcePermissionId) {
-    try {
-      revokeWorkerPermission(sourceDocumentId, sourcePermissionId);
-    } catch (err) {
-      console.error('Failed to revoke prepared source worker permission: ' + err.message);
-    }
-  }
 }

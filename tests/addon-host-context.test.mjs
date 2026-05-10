@@ -4,10 +4,6 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
 async function loadHostContext() {
-  const driveApiSource = await readFile(
-    new URL("../apps/addon/src/server/drive_api.gs", import.meta.url),
-    "utf8"
-  );
   const hostContextSource = await readFile(
     new URL("../apps/addon/src/server/host_context.gs", import.meta.url),
     "utf8"
@@ -21,23 +17,10 @@ async function loadHostContext() {
     getGoogleToken() {
       return "user-token";
     },
-    WORKER_SERVICE_ACCOUNT_EMAIL: "worker@example.com",
   };
   vm.createContext(context);
-  vm.runInContext(driveApiSource, context);
   vm.runInContext(hostContextSource, context);
   return context;
-}
-
-function createResponse(code, body) {
-  return {
-    getResponseCode() {
-      return code;
-    },
-    getContentText() {
-      return body === undefined ? "" : JSON.stringify(body);
-    },
-  };
 }
 
 test("prepareOutputPresentation creates a SlidesApp copy without Drive REST or worker access", async () => {
@@ -103,7 +86,6 @@ test("prepareOutputPresentation creates a SlidesApp copy without Drive REST or w
   const prepared = context.prepareOutputPresentation("French");
   assert.equal(prepared.documentId, "target-doc");
   assert.equal(prepared.documentUrl, "https://docs.google.com/presentation/d/target-doc/edit");
-  assert.equal(prepared.targetWorkerPermissionId, null);
   assert.equal(prepared.accessMode, "user_oauth_only");
   assert.deepEqual(removedDefaults, ["default-slide"]);
   assert.deepEqual(appendedSlides, ["source-slide-1", "source-slide-2", "saved"]);
@@ -165,7 +147,6 @@ test("ensureCurrentPresentationReadyForUserOauthJob reads active Slides metadata
   assert.deepEqual(JSON.parse(JSON.stringify(access)), {
     documentId: "source-doc",
     documentName: "Source deck",
-    sourceWorkerPermissionId: null,
     accessMode: "user_oauth_only",
   });
 });
@@ -194,106 +175,55 @@ test("ensureCurrentPresentationReadyForUserOauthJob hides low-level Slides error
   );
 });
 
-test("cleanupPreparedPresentation trashes the prepared copy through Drive REST", async () => {
+test("getCurrentSlideIndex returns the selected slide position", async () => {
   const context = await loadHostContext();
-  const fetches = [];
-  context.UrlFetchApp = {
-    fetch(url, request) {
-      fetches.push({
-        url,
-        method: request.method,
-        payload: request.payload ? JSON.parse(request.payload) : null,
-      });
-      return createResponse(200, { id: "copy-doc", trashed: true });
+  const slides = [
+    { getObjectId: () => "slide-1" },
+    { getObjectId: () => "slide-2" },
+    { getObjectId: () => "slide-3" },
+  ];
+  context.SlidesApp = {
+    getActivePresentation() {
+      return {
+        getSelection() {
+          return {
+            getCurrentPage() {
+              return { getObjectId: () => "slide-3" };
+            },
+          };
+        },
+        getSlides() {
+          return slides;
+        },
+      };
     },
   };
 
-  context.cleanupPreparedPresentation("copy-doc");
-
-  assert.deepEqual(fetches, [
-    {
-      url: "https://www.googleapis.com/drive/v3/files/copy-doc?supportsAllDrives=true&fields=id,trashed",
-      method: "patch",
-      payload: { trashed: true },
-    },
-  ]);
+  assert.equal(context.getCurrentSlideIndex(), 3);
 });
 
-test("cleanupPreparedTranslationSubmission revokes prepared permissions and trashes target", async () => {
+test("getCurrentSlideIndex fails instead of defaulting to slide one", async () => {
   const context = await loadHostContext();
-  const fetches = [];
-  context.UrlFetchApp = {
-    fetch(url, request) {
-      fetches.push({ url, method: request.method });
-      if (url === "https://www.googleapis.com/drive/v3/files/target-doc/permissions/target-permission?supportsAllDrives=true") {
-        return createResponse(204);
-      }
-      if (url === "https://www.googleapis.com/drive/v3/files/target-doc?supportsAllDrives=true&fields=id,trashed") {
-        return createResponse(200, { id: "target-doc", trashed: true });
-      }
-      if (url === "https://www.googleapis.com/drive/v3/files/source-doc/permissions/source-permission?supportsAllDrives=true") {
-        return createResponse(204);
-      }
-      throw new Error("unexpected URL " + url);
+  const slides = [{ getObjectId: () => "slide-1" }];
+  context.SlidesApp = {
+    getActivePresentation() {
+      return {
+        getSelection() {
+          return {
+            getCurrentPage() {
+              return null;
+            },
+          };
+        },
+        getSlides() {
+          return slides;
+        },
+      };
     },
   };
 
-  context.cleanupPreparedTranslationSubmission(
-    "source-doc",
-    "source-permission",
-    "target-doc",
-    "target-permission",
-    true
+  assert.throws(
+    () => context.getCurrentSlideIndex(),
+    { message: "No current slide page found" }
   );
-
-  assert.deepEqual(fetches, [
-    {
-      url: "https://www.googleapis.com/drive/v3/files/target-doc/permissions/target-permission?supportsAllDrives=true",
-      method: "delete",
-    },
-    {
-      url: "https://www.googleapis.com/drive/v3/files/target-doc?supportsAllDrives=true&fields=id,trashed",
-      method: "patch",
-    },
-    {
-      url: "https://www.googleapis.com/drive/v3/files/source-doc/permissions/source-permission?supportsAllDrives=true",
-      method: "delete",
-    },
-  ]);
-});
-
-test("cleanupPreparedTranslationSubmission does not trash unconfirmed target documents", async () => {
-  const context = await loadHostContext();
-  const fetches = [];
-  context.UrlFetchApp = {
-    fetch(url, request) {
-      fetches.push({ url, method: request.method });
-      if (url === "https://www.googleapis.com/drive/v3/files/target-doc/permissions/target-permission?supportsAllDrives=true") {
-        return createResponse(204);
-      }
-      if (url === "https://www.googleapis.com/drive/v3/files/source-doc/permissions/source-permission?supportsAllDrives=true") {
-        return createResponse(204);
-      }
-      throw new Error("unexpected URL " + url);
-    },
-  };
-
-  context.cleanupPreparedTranslationSubmission(
-    "source-doc",
-    "source-permission",
-    "target-doc",
-    "target-permission",
-    false
-  );
-
-  assert.deepEqual(fetches, [
-    {
-      url: "https://www.googleapis.com/drive/v3/files/target-doc/permissions/target-permission?supportsAllDrives=true",
-      method: "delete",
-    },
-    {
-      url: "https://www.googleapis.com/drive/v3/files/source-doc/permissions/source-permission?supportsAllDrives=true",
-      method: "delete",
-    },
-  ]);
 });
