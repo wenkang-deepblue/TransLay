@@ -1046,10 +1046,9 @@
           state.currentSlideIndex = normalized;
           onSuccess();
         })
-        .withFailureHandler(function(err) {
+        .withFailureHandler(function() {
           setPreparingSubmission(false);
-          var detail = err && err.message ? ' ' + err.message : '';
-          showError('Unable to determine the current slide. Select a slide in Google Slides™ and try again.' + detail);
+          showError('Unable to determine the current slide. Select a slide in Google Slides™ and try again.');
         })
         .getCurrentSlideIndex();
     }
@@ -1345,15 +1344,15 @@
 
               if (outputMode === 'create_new_file') {
                 google.script.run
-	                  .withSuccessHandler(function(prepared) {
-	                    activeSubmission = getActiveSubmission(submission.token);
-	                    if (!activeSubmission) {
-	                      if (!state.activeSubmission) {
-	                        setTranslating(false);
-	                        hideProgress();
-	                      }
-	                      return;
-	                    }
+                  .withSuccessHandler(function(prepared) {
+                    activeSubmission = getActiveSubmission(submission.token);
+                    if (!activeSubmission) {
+                      if (!state.activeSubmission) {
+                        setTranslating(false);
+                        hideProgress();
+                      }
+                      return;
+                    }
 
                     jobRequest.target_document_id = prepared.documentId;
                     state.currentOutputDocumentId = prepared.documentId;
@@ -1432,11 +1431,11 @@
       );
     }
 
-	    function handleDuplicateCancel() {
-	      hideDuplicateAction();
-	      clearError();
-	      hideResult();
-	    }
+    function handleDuplicateCancel() {
+      hideDuplicateAction();
+      clearError();
+      hideResult();
+    }
 
     function submitJob(jobRequest, submissionToken) {
       google.script.run
@@ -1657,13 +1656,13 @@
                 : (isFullyBilledCompletion ? 'Completed' : (resp.status === 'completed_with_warnings' ? 'Completed with warnings' : 'Completed')),
               ''
             );
-	            showResult(
-	              true,
-	              normalizeCompletionMessage(resp.message || 'Translation completed successfully.', resp),
-	              hasCountedQuota(resp) ? resolveOutputDocumentUrl(resp) : null,
-	              resp.warnings || [],
-	              resp
-	            );
+            showResult(
+              true,
+              normalizeCompletionMessage(resp.message || 'Translation completed successfully.', resp),
+              hasCountedQuota(resp) ? resolveOutputDocumentUrl(resp) : null,
+              resp.warnings || [],
+              resp
+            );
             refreshEntitlement(true);
             return;
           } else if (resp.status === 'canceled') {
@@ -1677,13 +1676,13 @@
             stopPolling();
             setTranslating(false);
             hideProgress();
-	            showResult(
-	              false,
-	              resp.message || 'Translation failed.',
-	              hasCountedQuota(resp) ? resolveOutputDocumentUrl(resp) : null,
-	              resp.warnings || [],
-	              resp
-	            );
+            showResult(
+              false,
+              resp.message || 'Translation failed.',
+              hasCountedQuota(resp) ? resolveOutputDocumentUrl(resp) : null,
+              resp.warnings || [],
+              resp
+            );
             return;
           }
           // In progress — render and schedule next poll at the steady cadence.
@@ -2192,37 +2191,37 @@
       renderResultTaskId(resultMeta);
     }
 
-	    function showCanceledResult(resp) {
-	      var message = resp.message || 'Translation canceled.';
-	      var hasDeliveredSlides = hasCountedQuota(resp);
-	      if (resp.output_mode === 'create_new_file' && hasDeliveredSlides) {
-	        // Canceled terminal jobs can still have delivered slides in a target deck.
-	        message += ' The created presentation may remain in your Drive.';
-	      }
-	      var outputUrl = hasDeliveredSlides ? resolveOutputDocumentUrl(resp) : null;
-	      showResult(false, message, outputUrl, [], resp);
-	    }
+    function showCanceledResult(resp) {
+      var message = resp.message || 'Translation canceled.';
+      var hasDeliveredSlides = hasCountedQuota(resp);
+      if (resp.output_mode === 'create_new_file' && hasDeliveredSlides) {
+        // Canceled terminal jobs can still have delivered slides in a target deck.
+        message += ' The created presentation may remain in your Drive.';
+      }
+      var outputUrl = hasDeliveredSlides ? resolveOutputDocumentUrl(resp) : null;
+      showResult(false, message, outputUrl, [], resp);
+    }
 
-	    function hasCountedQuota(resultMeta) {
-	      if (!resultMeta) {
-	        return false;
-	      }
-	      return getCountedQuotaUnits(resultMeta) > 0;
-	    }
+    function hasCountedQuota(resultMeta) {
+      if (!resultMeta) {
+        return false;
+      }
+      return getCountedQuotaUnits(resultMeta) > 0;
+    }
 
-	    function getCountedQuotaUnits(resultMeta) {
-	      if (!resultMeta) {
-	        return 0;
-	      }
-	      var keys = ['net_billed_slides', 'total_units_billed', 'total_billed_units'];
-	      for (var i = 0; i < keys.length; i++) {
-	        var value = resultMeta[keys[i]];
-	        if (typeof value === 'number' && isFinite(value)) {
-	          return value;
-	        }
-	      }
-	      return 0;
-	    }
+    function getCountedQuotaUnits(resultMeta) {
+      if (!resultMeta) {
+        return 0;
+      }
+      var keys = ['net_billed_slides', 'total_units_billed', 'total_billed_units'];
+      for (var i = 0; i < keys.length; i++) {
+        var value = resultMeta[keys[i]];
+        if (typeof value === 'number' && isFinite(value)) {
+          return value;
+        }
+      }
+      return 0;
+    }
 
     function shouldDisplayCompletedWithoutWarnings(resultMeta) {
       if (!resultMeta) {
@@ -2486,20 +2485,20 @@
       return 'https://docs.google.com/presentation/d/' + encodeURIComponent(documentId) + '/edit';
     }
 
-	    function sanitizeSubmissionFailureMessage(message) {
-	      var text = String(message || 'The translation job could not be started.')
-	        .replace(/\[[A-Z_]+(?::[^\]]+)?\]\s*/g, '')
+    function sanitizeSubmissionFailureMessage(message) {
+      var text = String(message || 'The translation job could not be started.')
+        .replace(/\[[A-Z_]+(?::[^\]]+)?\]\s*/g, '')
         .replace(/\s+/g, ' ')
         .trim();
       if (!text) {
         return 'The translation job could not be started.';
       }
       return text.length > 180 ? text.slice(0, 177) + '...' : text;
-	    }
+    }
 
-	    function showSubmissionError(jobRequest, message) {
-	      showError(message);
-	    }
+    function showSubmissionError(jobRequest, message) {
+      showError(message);
+    }
 
     function showError(msg) {
       var banner = document.getElementById('errorBanner');

@@ -541,14 +541,14 @@ test("job handler does not surface refunded metadata for unsafe-excluded slides"
     ]
   );
 
-	  assert.deepEqual(response, {
-	    job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
-	    status: "failed",
-	    error: "JOB_INTERNAL_ERROR",
-	    message: "Translation failed.",
-	    total_billed_units: 12,
-	    skipped_slide_indices: [5],
-	    gross_billed_slides: 1,
+  assert.deepEqual(response, {
+    job_id: "0f7ea113-2d74-4d13-a2c2-8d325d3fb7b8",
+    status: "failed",
+    error: "JOB_INTERNAL_ERROR",
+    message: "Translation failed.",
+    total_billed_units: 12,
+    skipped_slide_indices: [5],
+    gross_billed_slides: 1,
     refunded_slides: 1,
     net_billed_slides: 0,
   });

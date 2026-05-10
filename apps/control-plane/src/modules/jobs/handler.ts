@@ -1307,30 +1307,30 @@ function buildJobStatusResponse(
     return response;
   }
 
-	  if (job.status === "failed" || job.status === "rolled_back") {
-	    const hasDeliveredSlides = job.net_billed_slides > 0;
-	    const normalizedWarnings = mergeWarningsWithSlideResults(
-	      normalizeWarnings(job.warnings),
-	      slideResults
-	    );
+  if (job.status === "failed" || job.status === "rolled_back") {
+    const hasDeliveredSlides = job.net_billed_slides > 0;
+    const normalizedWarnings = mergeWarningsWithSlideResults(
+      normalizeWarnings(job.warnings),
+      slideResults
+    );
     const slideSummary = summarizeTerminalSlideResults(slideResults);
     const response: JobFailedResponse = {
       job_id: job.id,
       status: "failed",
       error: job.error_code ?? "JOB_INTERNAL_ERROR",
-	      message: buildFailedMessage(
-	        job.error_message ??
-	          (job.status === "rolled_back"
-	            ? "Translation output was rolled back."
-	            : "Translation failed."),
-	        normalizedWarnings,
-	        slideSummary,
-	        slideResults
-	      ),
-	      ...(hasDeliveredSlides && job.output_document_url
-	        ? { output_document_url: job.output_document_url }
-	        : {}),
-	      total_billed_units: job.total_units_billed,
+      message: buildFailedMessage(
+        job.error_message ??
+          (job.status === "rolled_back"
+            ? "Translation output was rolled back."
+            : "Translation failed."),
+        normalizedWarnings,
+        slideSummary,
+        slideResults
+      ),
+      ...(hasDeliveredSlides && job.output_document_url
+        ? { output_document_url: job.output_document_url }
+        : {}),
+      total_billed_units: job.total_units_billed,
       gross_billed_slides: job.gross_billed_slides,
       refunded_slides: job.refunded_slides,
       net_billed_slides: job.net_billed_slides,
