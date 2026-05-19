@@ -73,7 +73,7 @@ function DemoSection({ t }) {
           <div className="card" style={{padding: 20, maxWidth: 1020, margin: "0 auto"}}>
             <div style={{aspectRatio: "16/9", borderRadius: 14, overflow: "hidden", background: "linear-gradient(135deg, #eaf1ff, #f5f8ff)", border: "1px solid var(--line)", display: "grid", placeItems: "center", position: "relative"}}>
               <iframe
-                src="https://www.youtube-nocookie.com/embed/w-kC7X5ps94"
+                src="https://www.youtube-nocookie.com/embed/YOUR_YOUTUBE_VIDEO_ID"
                 title="TransLay product demo"
                 style={{width: "100%", height: "100%", border: 0}}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -90,7 +90,7 @@ function DemoSection({ t }) {
             <Reveal key={i} delay={i * 80}>
               <div className="card" style={{padding: 18}}>
                 <div style={{borderRadius: 12, overflow: "hidden", background: "linear-gradient(135deg, #f0f5ff, #fafbff)", border: "1px solid var(--line)"}}>
-                  <img src={`assets/translay-${i}.png?v=20260429`} alt={screenshotLabels[i - 1]} style={{display: "block", width: "100%", height: "auto"}} loading="eager" decoding="sync" />
+                  <img src={`assets/translay-${i}.png?v=20260513`} alt={screenshotLabels[i - 1]} style={{display: "block", width: "100%", height: "auto"}} loading="eager" decoding="sync" />
                 </div>
                 <div style={{fontSize: 13, color: "var(--text-mute)", textAlign: "center", marginTop: 10}}>{screenshotLabels[i - 1]}</div>
               </div>

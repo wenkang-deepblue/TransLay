@@ -36,7 +36,8 @@
       flex-shrink: 0;
     }
     .header-logo-inline.visible { display: block; }
-    .header-logo-inline svg {
+    .header-logo-inline svg,
+    .header-logo-inline img {
       width: 100%;
       height: 100%;
       display: block;
@@ -781,10 +782,15 @@
       state.entitlementCacheTtl = data.entitlementCacheTtl || 300;
       state.jobPollIntervalMs = data.jobPollIntervalMs || 3000;
 
-      if (data.logoInlineSvg) {
+      if (data.logoDataUri) {
         var logoEl = document.getElementById('headerLogoInline');
-        // Trusted constant from assets.gs only. Never assign user-controlled HTML here.
-        logoEl.innerHTML = data.logoInlineSvg;
+        var logoImg = document.createElement('img');
+        logoImg.src = data.logoDataUri;
+        logoImg.alt = '';
+        logoImg.width = 32;
+        logoImg.height = 32;
+        logoEl.textContent = '';
+        logoEl.appendChild(logoImg);
         logoEl.classList.add('visible');
       }
 

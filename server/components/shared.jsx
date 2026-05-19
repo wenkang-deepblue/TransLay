@@ -124,10 +124,25 @@ function AnimatedBG() {
 }
 
 // ============ Brand mark ============
+function BrandMarkSvg({ className = "brand-mark-image" }) {
+  return (
+    <svg className={className} viewBox="0 0 680 680" aria-hidden="true" focusable="false">
+      <rect fill="#1a2346" width="680" height="680" rx="148" ry="148" />
+      <path fill="#2d3d70" d="M117,112h446c22.6,0,41,18.4,41,41h0c0,22.6-18.4,41-41,41H117c-22.6,0-41-18.4-41-41h0c0-22.6,18.4-41,41-41Z" />
+      <path fill="#2d3d70" d="M117,302h446c22.6,0,41,18.4,41,41h0c0,22.6-18.4,41-41,41H117c-22.6,0-41-18.4-41-41h0c0-22.6,18.4-41,41-41Z" />
+      <path fill="#2d3d70" d="M117,492h446c22.6,0,41,18.4,41,41h0c0,22.6-18.4,41-41,41H117c-22.6,0-41-18.4-41-41h0c0-22.6,18.4-41,41-41Z" />
+      <rect fill="#47dcbe" x="76" y="112" width="379.1" height="82" rx="41" ry="41" />
+      <path fill="#f8fafc" d="M265.5,112h0c22.6,0,41,17.8,41,47.3v369.4c0,29.6-18.4,45.3-41,45.3h0c-22.6,0-41-15.7-41-45.3V159.3c0-29.6,18.4-47.3,41-47.3Z" />
+      <path fill="#ffb254" d="M428,238h0c22.6,0,41,19.7,41,49v238c0,29.3-18.4,49-41,49h0c-22.6,0-41-19.7-41-49v-238c0-29.3,18.4-49,41-49Z" />
+      <rect fill="#ffb254" x="392" y="492" width="212" height="82" rx="41" ry="41" />
+    </svg>
+  );
+}
+
 function BrandMark() {
   return (
     <span className="brand-mark" aria-hidden>
-      <img className="brand-mark-image" src="assets/TransLay-logo_48px.png?v=20260428" alt="" />
+      <BrandMarkSvg />
     </span>
   );
 }
@@ -411,5 +426,5 @@ function Footer({ t }) {
 }
 
 Object.assign(window, {
-  SUPPORT_EMAIL, SUPPORT_SUBJECT, GOOGLE_TRADEMARK_NOTICE, getSupportMailtoHref, useI18n, useTheme, getBrowserLang, Reveal, AnimatedBG, BrandMark, AccountShell, SettingsDropdown, TopBar, Footer,
+  SUPPORT_EMAIL, SUPPORT_SUBJECT, GOOGLE_TRADEMARK_NOTICE, getSupportMailtoHref, useI18n, useTheme, getBrowserLang, Reveal, AnimatedBG, BrandMarkSvg, BrandMark, AccountShell, SettingsDropdown, TopBar, Footer,
 });

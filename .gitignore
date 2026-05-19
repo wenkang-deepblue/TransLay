@@ -65,7 +65,9 @@ exports/
 *.ai
 *.svg
 !apps/addon/assets/TransLay-logo_48px.svg
+!apps/addon/assets/TransLay-logo.svg
 !server/assets/TransLay-logo_48px.svg
+!server/assets/TransLay-logo.svg
 
 #Load test
 *load_test*.py

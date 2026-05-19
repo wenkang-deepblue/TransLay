@@ -269,7 +269,7 @@ function TransLaySidebarMock({ variant = 1 }) {
       </div>
       <div className="sidebar-mock-body">
         <div className="sidebar-mock-logo">
-          <img className="sidebar-mock-logo-image" src="assets/TransLay-logo_48px.png?v=20260428" alt="" />
+          <BrandMarkSvg className="sidebar-mock-logo-image" />
           <strong style={{fontSize: 15}}>TransLay</strong>
         </div>
         <div style={{padding: "10px 12px", background: "#f3f5f9", borderRadius: 6, marginTop: 12, fontSize: 11, color:"#333"}}>
