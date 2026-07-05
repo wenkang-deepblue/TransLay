@@ -1,36 +1,52 @@
-# Docs
-Docs/
-
-# AUD Files
-*AUD*.*
-
-# DS_Store
+# OS files
 .DS_Store
 
 # Python
 __pycache__/
+.venv/
+venv/
 
-# node
+# Node.js
 node_modules/
-.firebase/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Build artifacts
 dist/
 **/tsconfig.tsbuildinfo
+coverage/
+.nyc_output/
+.cache/
+.turbo/
+
+# Firebase
+.firebase/
+
+# Logs
+*.log
 
 # Environment
 .env
 .env.local
 .env.*.local
-.*aud*/
-.gitleaks.toml
-.githooks/
 
-#tmp
+# Temporary files
 tmp/
+temp/
 
-#Configuration
+# Local configuration and credentials
+.firebaserc
 **/.clasp.json
+**/.clasprc.json
+service-account*.json
+*-service-account.json
+credentials*.json
+client_secret*.json
+
+# Generated Apps Script payload captures
+apps-script-api-response*.json
+apps-script-payload*.json
 
 # Database export artifacts
 *.dump
@@ -45,9 +61,6 @@ tmp/
 *.db
 *.db-journal
 *.psql
-023*.sql
-024*.sql
-025*.sql
 
 # Local database / test data directories
 .pgdata/
@@ -61,17 +74,8 @@ db-dumps/
 backups/
 exports/
 
-#Assests
+# Design source files
 *.ai
-*.svg
-!apps/addon/assets/TransLay-logo_48px.svg
-!apps/addon/assets/TransLay-logo.svg
-!server/assets/TransLay-logo_48px.svg
-!server/assets/TransLay-logo.svg
 
-#Load test
-*load_test*.py
-sync_logo*.py
-
-# Domain Verification
+# Domain verification
 google[a-f0-9]*.html

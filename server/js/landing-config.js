@@ -2,9 +2,6 @@
   const GOOGLE_CLIENT_ID_META = "translay-google-client-id";
   let publicConfig = {
     googleWebClientId: "",
-    billingProvider: "",
-    paddleEnvironment: "sandbox",
-    paddleClientToken: "",
     creditSkus: {
       slides: {
         minUnits: 18,
@@ -51,37 +48,6 @@
           if (typeof payload?.google_web_client_id === "string") {
             publicConfig.googleWebClientId = payload.google_web_client_id.trim();
           }
-          if (typeof payload?.billing_provider === "string") {
-            publicConfig.billingProvider = payload.billing_provider.trim();
-          }
-          if (typeof payload?.paddle_environment === "string") {
-            publicConfig.paddleEnvironment = payload.paddle_environment.trim() || "sandbox";
-          }
-          if (typeof payload?.paddle_client_token === "string") {
-            publicConfig.paddleClientToken = payload.paddle_client_token.trim();
-          }
-          const slidesCreditSku = payload?.credit_skus?.slides;
-          if (slidesCreditSku && typeof slidesCreditSku === "object") {
-            publicConfig.creditSkus.slides = {
-              minUnits:
-                Number.isInteger(slidesCreditSku.min_units) && slidesCreditSku.min_units > 0
-                  ? slidesCreditSku.min_units
-                  : publicConfig.creditSkus.slides.minUnits,
-              maxUnits:
-                Number.isInteger(slidesCreditSku.max_units) && slidesCreditSku.max_units > 0
-                  ? slidesCreditSku.max_units
-                  : publicConfig.creditSkus.slides.maxUnits,
-              amountCents:
-                Number.isInteger(slidesCreditSku.amount_cents) && slidesCreditSku.amount_cents > 0
-                  ? slidesCreditSku.amount_cents
-                  : publicConfig.creditSkus.slides.amountCents,
-              minimumChargeAmountCents:
-                Number.isInteger(slidesCreditSku.minimum_charge_amount_cents) &&
-                slidesCreditSku.minimum_charge_amount_cents > 0
-                  ? slidesCreditSku.minimum_charge_amount_cents
-                  : publicConfig.creditSkus.slides.minimumChargeAmountCents,
-            };
-          }
         }
       } catch (_) {
         // Keep graceful fallback to empty config.
@@ -98,15 +64,6 @@
     load: loadPublicConfig,
     getGoogleClientId() {
       return publicConfig.googleWebClientId || readMetaContent(GOOGLE_CLIENT_ID_META);
-    },
-    getBillingProvider() {
-      return publicConfig.billingProvider;
-    },
-    getPaddleEnvironment() {
-      return publicConfig.paddleEnvironment || "sandbox";
-    },
-    getPaddleClientToken() {
-      return publicConfig.paddleClientToken;
     },
     getCreditSku(sku) {
       return publicConfig.creditSkus[sku] || null;

@@ -1,5 +1,5 @@
 // Features, demo, pricing, FAQ, CTA sections
-const FAQ_SUPPORT_EMAIL = "translay@example.com";
+const FAQ_SUPPORT_EMAIL = "support@translay.example.com";
 const FAQ_SUPPORT_SUBJECT = "TransLay Support Needed";
 
 function FeatureIcon({ name }) {

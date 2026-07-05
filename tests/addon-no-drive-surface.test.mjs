@@ -35,7 +35,7 @@ test("No-Drive manifest has no Drive scopes or file-scope entry surface", async 
   const manifest = JSON.parse(
     await readFile(new URL("../apps/addon/appsscript.json", import.meta.url), "utf8")
   );
-  assert.deepEqual(manifest.urlFetchWhitelist, ["https://your-domain.example.com/"]);
+  assert.deepEqual(manifest.urlFetchWhitelist, ["https://translay.example.com/"]);
   assert.ok(manifest.oauthScopes.includes("https://www.googleapis.com/auth/presentations"));
   assert.equal(
     manifest.oauthScopes.some((scope) => scope === "https://www.googleapis.com/auth/drive" || scope === "https://www.googleapis.com/auth/drive.file"),

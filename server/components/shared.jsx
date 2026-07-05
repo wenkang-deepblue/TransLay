@@ -1,6 +1,6 @@
 // Shared primitives used across TransLay landing page
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
-const SUPPORT_EMAIL = "translay@example.com";
+const SUPPORT_EMAIL = "support@translay.example.com";
 const SUPPORT_SUBJECT = "TransLay Support Needed";
 const GOOGLE_TRADEMARK_NOTICE = "Google Slides™, Google Docs™ and Google Sheets™ are trademarks of Google LLC";
 

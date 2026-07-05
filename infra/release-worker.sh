@@ -4,15 +4,31 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-PROJECT_ID="${PROJECT_ID:-YOUR_GCP_PROJECT_ID}"
-REGION="${REGION:-us-central1}"
-REPOSITORY="${REPOSITORY:-translay-repo}"
-SERVICE_NAME="${SERVICE_NAME:-YOUR_WORKER_SERVICE}"
-QUEUE_NAME="${QUEUE_NAME:-YOUR_CLOUD_TASKS_QUEUE}"
+PROJECT_ID="${PROJECT_ID:-}"
+REGION="${REGION:-}"
+REPOSITORY="${REPOSITORY:-}"
+SERVICE_NAME="${SERVICE_NAME:-}"
+QUEUE_NAME="${QUEUE_NAME:-}"
 CLOUDBUILD_CONFIG="${WORKSPACE_ROOT}/cloudbuild-worker.yaml"
-WORKER_SERVICE_ACCOUNT="${WORKER_SERVICE_ACCOUNT:-YOUR_WORKER_SERVICE@${PROJECT_ID}.iam.gserviceaccount.com}"
+WORKER_SERVICE_ACCOUNT="${WORKER_SERVICE_ACCOUNT:-}"
 GIT_SHA="$(git -C "${WORKSPACE_ROOT}" rev-parse --short HEAD 2>/dev/null || echo "nogit")"
 IMAGE_TAG="${IMAGE_TAG:-worker-$(date +%Y%m%d-%H%M%S)-${GIT_SHA}}"
+
+require_env() {
+  local name="$1"
+  local value="${!name:-}"
+  if [[ -z "${value}" || "${value}" == YOUR_* ]]; then
+    echo "Error: set ${name} explicitly before running this script." >&2
+    exit 1
+  fi
+}
+
+require_env PROJECT_ID
+require_env REGION
+require_env REPOSITORY
+require_env SERVICE_NAME
+require_env QUEUE_NAME
+require_env WORKER_SERVICE_ACCOUNT
 
 if ! command -v gcloud >/dev/null 2>&1; then
   echo "Error: gcloud is required but was not found in PATH." >&2

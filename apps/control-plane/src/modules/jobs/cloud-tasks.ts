@@ -1,20 +1,16 @@
-import { CloudTasksClient } from "@google-cloud/tasks";
 import type { AppConfig } from "@translay/shared-config";
+import {
+  buildCloudTaskName,
+  buildCloudTasksQueueName,
+  createCloudTasksHttpTask,
+  deleteCloudTask,
+} from "@translay/shared-config/dist/cloud-tasks";
 import type { JobExecutionStage, TaskPayload, JobId } from "@translay/shared-contracts";
 
-let tasksClient: CloudTasksClient | null = null;
 type StageTaskKind = "stage" | "lease-retry" | "resume";
 
-function getClient(): CloudTasksClient {
-  if (!tasksClient) {
-    tasksClient = new CloudTasksClient();
-  }
-  return tasksClient;
-}
-
 export function getTaskName(config: AppConfig, taskId: string): string {
-  const client = getClient();
-  return client.taskPath(
+  return buildCloudTaskName(
     config.gcpProjectId,
     config.cloudTasks.location,
     config.cloudTasks.queueName,
@@ -55,9 +51,7 @@ export async function enqueueJob(
     throw new Error("CLOUD_TASKS_INVOKER_SA is not configured — cannot enqueue job");
   }
 
-  const client = getClient();
-
-  const parent = client.queuePath(
+  const parent = buildCloudTasksQueueName(
     config.gcpProjectId,
     config.cloudTasks.location,
     config.cloudTasks.queueName
@@ -75,32 +69,16 @@ export async function enqueueJob(
     buildStageTaskId(jobId, stage, stageAttempt, options.taskKind)
   );
 
-  try {
-    await client.createTask({
-      parent,
-      task: {
-        name: taskName,
-        httpRequest: {
-          httpMethod: "POST",
-          url: `${workerUrl}/tasks/translate`,
-          headers: { "Content-Type": "application/json" },
-          body: Buffer.from(JSON.stringify(payload)).toString("base64"),
-          oidcToken: {
-            serviceAccountEmail: invokerSa,
-            audience: config.cloudTasks.audience,
-          },
-        },
-        dispatchDeadline: {
-          seconds: stage === "authority" ? 1800 : 900,
-        },
-      },
-    });
-  } catch (error) {
-    const err = error as { code?: number };
-    if (err.code !== 6) {
-      throw error;
-    }
-  }
+  await createCloudTasksHttpTask({
+    parent,
+    name: taskName,
+    url: `${workerUrl}/tasks/translate`,
+    headers: { "Content-Type": "application/json" },
+    payload,
+    serviceAccountEmail: invokerSa,
+    audience: config.cloudTasks.audience,
+    dispatchDeadlineSeconds: stage === "authority" ? 1800 : 900,
+  });
   return taskName;
 }
 
@@ -117,14 +95,5 @@ export async function deleteQueuedJob(config: AppConfig, queuedTaskName?: string
   if (!queuedTaskName) {
     return;
   }
-  const client = getClient();
-  try {
-    await client.deleteTask({ name: queuedTaskName });
-  } catch (error) {
-    const err = error as { code?: number };
-    if (err.code === 5) {
-      return;
-    }
-    throw error;
-  }
+  await deleteCloudTask(queuedTaskName);
 }

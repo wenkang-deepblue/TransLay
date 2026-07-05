@@ -1,6 +1,6 @@
-// API base URL — production domain, Portal and API co-located
-var API_BASE_URL = 'https://your-domain.example.com/api';
-var PORTAL_BASE_URL = 'https://your-domain.example.com';
+// Self-hosted sample URL. Replace before pushing your Apps Script project.
+var API_BASE_URL = 'https://translay.example.com/api';
+var PORTAL_BASE_URL = 'https://translay.example.com';
 
 // Entitlement cache TTL (seconds) — frozen decision
 var ENTITLEMENT_CACHE_TTL = 300;

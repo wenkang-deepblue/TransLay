@@ -64,7 +64,7 @@ function makeConfig(): AppConfig {
       cookieName: "__session",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
-    domain: "your-domain.example.com",
+    domain: "translay.example.com",
     publicAuth: {
       googleWebClientId: "google-client-id",
       googleIdTokenAudiences: ["google-client-id"],

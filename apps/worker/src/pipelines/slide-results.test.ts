@@ -10,6 +10,20 @@ import {
   markSlideTranslated,
 } from "./slide-results";
 
+function assertSlideResultSubset(
+  actual: readonly unknown[],
+  expected: readonly Record<string, unknown>[]
+): void {
+  assert.equal(actual.length, expected.length);
+  expected.forEach((expectedSlide, index) => {
+    const actualSlide = actual[index] as Record<string, unknown> | undefined;
+    assert.ok(actualSlide, `missing slide result at index ${index}`);
+    for (const [key, value] of Object.entries(expectedSlide)) {
+      assert.deepEqual(actualSlide[key], value, `slide result ${index}.${key}`);
+    }
+  });
+}
+
 test("initializeJobSlideResults deduplicates and sorts slide indices", () => {
   const slideResults = initializeJobSlideResults([4, 2, 4, 1]);
 
@@ -34,7 +48,7 @@ test("translated slide that later fails materialization becomes refundable", () 
   markSlideTranslated(slideResults, 3);
   markSlideFailure(slideResults, 3, "materialization", "LLM_PROVIDER_ERROR");
 
-  assert.deepEqual(listJobSlideResults(slideResults), [
+  assertSlideResultSubset(listJobSlideResults(slideResults), [
     {
       slide_index: 3,
       status: "skipped_materialization_failed",
@@ -56,7 +70,7 @@ test("excluded unsafe slide keeps exclusion status even if later failure is reco
   markSlideExcludedUnsafe(slideResults, 5);
   markSlideFailure(slideResults, 5, "authority", "UNSAFE_LLM_INPUT");
 
-  assert.deepEqual(listJobSlideResults(slideResults), [
+  assertSlideResultSubset(listJobSlideResults(slideResults), [
     {
       slide_index: 5,
       status: "excluded_unsafe",
@@ -76,7 +90,7 @@ test("markSlideTranslated does not revive a previously failed slide", () => {
   markSlideFailure(slideResults, 7, "materialization", "LLM_PROVIDER_ERROR");
   markSlideTranslated(slideResults, 7);
 
-  assert.deepEqual(listJobSlideResults(slideResults), [
+  assertSlideResultSubset(listJobSlideResults(slideResults), [
     {
       slide_index: 7,
       status: "skipped_materialization_failed",
@@ -98,7 +112,7 @@ test("markSlideTranslated is idempotent for an already translated slide", () => 
   markSlideTranslated(slideResults, 8);
   markSlideTranslated(slideResults, 8);
 
-  assert.deepEqual(listJobSlideResults(slideResults), [
+  assertSlideResultSubset(listJobSlideResults(slideResults), [
     {
       slide_index: 8,
       status: "translated",

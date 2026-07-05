@@ -8,13 +8,12 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "@google-cloud/tasks": "^6.2.1",
     "@translay/shared-config": "*",
     "@translay/shared-contracts": "*",
     "@translay/shared-domain": "*",
     "express": "^4.21.0",
     "google-auth-library": "^10.6.2",
-    "googleapis": "^144.0.0",
+    "googleapis": "^173.0.0",
     "ioredis": "^5.10.1",
     "pg": "^8.20.0"
   },

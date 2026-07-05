@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ID="${PROJECT_ID:-YOUR_GCP_PROJECT_ID}"
+PROJECT_ID="${PROJECT_ID:-}"
 CONFIG_PATH="${CONFIG_PATH:-${SCRIPT_DIR}/track-d-observability.config.json}"
 DASHBOARD_TEMPLATE_PATH="${DASHBOARD_TEMPLATE_PATH:-${SCRIPT_DIR}/track-d-dashboard.json}"
 NOTIFICATION_CHANNELS_RAW="${TRACK_D_NOTIFICATION_CHANNELS:-}"
@@ -15,6 +15,11 @@ cleanup() {
 }
 
 trap cleanup EXIT
+
+if [[ -z "${PROJECT_ID}" || "${PROJECT_ID}" == YOUR_* ]]; then
+  echo "Error: set PROJECT_ID explicitly before running this script." >&2
+  exit 1
+fi
 
 for required_cmd in gcloud python3; do
   if ! command -v "${required_cmd}" >/dev/null 2>&1; then

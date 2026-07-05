@@ -1,18 +1,14 @@
-import { CloudTasksClient } from "@google-cloud/tasks";
 import type { WorkerConfig } from "@translay/shared-config";
+import {
+  buildCloudTaskName,
+  buildCloudTasksQueueName,
+  createCloudTasksHttpTask,
+} from "@translay/shared-config/dist/cloud-tasks";
 import type { JobExecutionStage, JobId, TaskPayload } from "@translay/shared-contracts";
 
-let tasksClient: CloudTasksClient | null = null;
 const STAGE_BUSY_RETRY_FALLBACK_DELAY_MS = 30_000;
 const STAGE_BUSY_RETRY_AFTER_LEASE_GRACE_MS = 2_000;
 type StageTaskKind = "stage" | "lease-retry";
-
-function getClient(): CloudTasksClient {
-  if (!tasksClient) {
-    tasksClient = new CloudTasksClient();
-  }
-  return tasksClient;
-}
 
 function buildStageTaskId(
   jobId: JobId | string,
@@ -27,8 +23,7 @@ function buildStageTaskId(
 }
 
 function getTaskName(config: WorkerConfig, taskId: string): string {
-  const client = getClient();
-  return client.taskPath(
+  return buildCloudTaskName(
     config.gcpProjectId,
     config.cloudTasks.location,
     config.cloudTasks.queueName,
@@ -50,8 +45,7 @@ export async function enqueueStageTask(
     throw new Error("WORKER_URL is not configured — cannot enqueue follow-up stage");
   }
 
-  const client = getClient();
-  const parent = client.queuePath(
+  const parent = buildCloudTasksQueueName(
     config.gcpProjectId,
     config.cloudTasks.location,
     config.cloudTasks.queueName
@@ -68,35 +62,17 @@ export async function enqueueStageTask(
     buildStageTaskId(jobId, stage, stageAttempt, options.taskKind)
   );
 
-  try {
-    await client.createTask({
-      parent,
-      task: {
-        name: taskName,
-        httpRequest: {
-          httpMethod: "POST",
-          url: `${config.cloudTasks.workerUrl}/tasks/translate`,
-          headers: { "Content-Type": "application/json" },
-          body: Buffer.from(JSON.stringify(payload)).toString("base64"),
-          oidcToken: {
-            serviceAccountEmail: config.cloudTasks.invokerServiceAccount,
-            audience: config.cloudTasks.audience,
-          },
-        },
-        dispatchDeadline: {
-          seconds: stage === "authority" ? 1800 : 900,
-        },
-        scheduleTime: options.scheduleTime
-          ? { seconds: Math.floor(options.scheduleTime.getTime() / 1000) }
-          : undefined,
-      },
-    });
-  } catch (error) {
-    const err = error as { code?: number };
-    if (err.code !== 6) {
-      throw error;
-    }
-  }
+  await createCloudTasksHttpTask({
+    parent,
+    name: taskName,
+    url: `${config.cloudTasks.workerUrl}/tasks/translate`,
+    headers: { "Content-Type": "application/json" },
+    payload,
+    serviceAccountEmail: config.cloudTasks.invokerServiceAccount,
+    audience: config.cloudTasks.audience,
+    dispatchDeadlineSeconds: stage === "authority" ? 1800 : 900,
+    scheduleTime: options.scheduleTime,
+  });
 
   return taskName;
 }

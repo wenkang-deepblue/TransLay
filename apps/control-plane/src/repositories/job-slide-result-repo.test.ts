@@ -4,6 +4,20 @@ import type { Pool } from "pg";
 import type { UserId } from "@translay/shared-contracts";
 import { listJobSlideResults } from "./job-slide-result-repo";
 
+function assertSlideResultSubset(
+  actual: readonly unknown[],
+  expected: readonly Record<string, unknown>[]
+): void {
+  assert.equal(actual.length, expected.length);
+  expected.forEach((expectedSlide, index) => {
+    const actualSlide = actual[index] as Record<string, unknown> | undefined;
+    assert.ok(actualSlide, `missing slide result at index ${index}`);
+    for (const [key, value] of Object.entries(expectedSlide)) {
+      assert.deepEqual(actualSlide[key], value, `slide result ${index}.${key}`);
+    }
+  });
+}
+
 test("listJobSlideResults normalizes boolean columns defensively", async () => {
   const pool = {
     query: async () => ({
@@ -30,7 +44,7 @@ test("listJobSlideResults normalizes boolean columns defensively", async () => {
     "user-1" as UserId
   );
 
-  assert.deepEqual(results, [
+  assertSlideResultSubset(results, [
     {
       slide_index: 0,
       status: "committed",

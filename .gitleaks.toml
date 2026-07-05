@@ -1,0 +1,4 @@
+title = "TransLay secret scanning"
+
+[extend]
+useDefault = true

@@ -9,22 +9,6 @@ test("landingConfigHandler returns the public Google Web client ID", () => {
     publicAuth: {
       googleWebClientId: "1234567890-example.apps.googleusercontent.com",
     },
-    billing: {
-      providerName: "paddle",
-      paddle: {
-        environment: "sandbox",
-        clientToken: "test_client_token",
-        apiKey: "pdl_test_api_key",
-        creditSkus: {
-          slides: {
-            minUnits: 18,
-            maxUnits: 100,
-            amountCents: 4,
-            minimumChargeAmountCents: 70,
-          },
-        },
-      },
-    },
   } as unknown as AppConfig;
 
   let body: unknown = null;
@@ -46,17 +30,6 @@ test("landingConfigHandler returns the public Google Web client ID", () => {
 
   assert.deepEqual(body, {
     google_web_client_id: "1234567890-example.apps.googleusercontent.com",
-    billing_provider: "paddle",
-    paddle_environment: "sandbox",
-    paddle_client_token: "test_client_token",
-    credit_skus: {
-      slides: {
-        min_units: 18,
-        max_units: 100,
-        amount_cents: 4,
-        minimum_charge_amount_cents: 70,
-      },
-    },
   });
   assert.equal(cacheControl, "public, max-age=300");
 });

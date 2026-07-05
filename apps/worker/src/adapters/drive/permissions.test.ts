@@ -513,14 +513,24 @@ function captureDriveRequest(options: {
   url?: string;
   method?: string;
   params?: unknown;
-  headers?: Record<string, string>;
+  headers?: Headers | Record<string, string>;
   timeout?: number;
 }) {
   return {
     url: options.url ?? "",
     method: options.method ?? "",
     params: options.params,
-    authorization: options.headers?.Authorization,
+    authorization: readAuthorizationHeader(options.headers),
     timeout: options.timeout,
   };
+}
+
+function readAuthorizationHeader(headers: Headers | Record<string, string> | undefined): string | undefined {
+  if (!headers) {
+    return undefined;
+  }
+  if (headers instanceof Headers) {
+    return headers.get("authorization") ?? undefined;
+  }
+  return headers.Authorization ?? headers.authorization;
 }

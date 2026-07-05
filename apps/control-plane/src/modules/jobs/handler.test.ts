@@ -2364,7 +2364,7 @@ test("createJobHandler returns JOB_QUEUE_BUSY when the global in-flight gate is 
       cookieName: "__session",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
-    domain: "your-domain.example.com",
+    domain: "translay.example.com",
     publicAuth: {
       googleWebClientId: "",
       googleIdTokenAudiences: [],
@@ -2558,7 +2558,7 @@ test("createJobHandler returns CONCURRENT_JOB_RUNNING when atomic admission sees
       cookieName: "__session",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
-    domain: "your-domain.example.com",
+    domain: "translay.example.com",
     publicAuth: {
       googleWebClientId: "",
       googleIdTokenAudiences: [],

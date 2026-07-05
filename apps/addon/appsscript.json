@@ -5,7 +5,7 @@
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
   "urlFetchWhitelist": [
-    "https://your-domain.example.com/"
+    "https://translay.example.com/"
   ],
   "oauthScopes": [
     "https://www.googleapis.com/auth/presentations",

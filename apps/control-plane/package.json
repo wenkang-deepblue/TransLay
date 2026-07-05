@@ -8,7 +8,6 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "@google-cloud/tasks": "^6.2.1",
     "@translay/shared-config": "*",
     "@translay/shared-contracts": "*",
     "@translay/shared-domain": "*",

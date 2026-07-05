@@ -238,7 +238,7 @@ export function loadConfig() {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
 
-    domain: optionalEnv("PRODUCTION_DOMAIN", "your-domain.example.com"),
+    domain: optionalEnv("PRODUCTION_DOMAIN", "translay.example.com"),
 
     publicAuth: {
       googleWebClientId,

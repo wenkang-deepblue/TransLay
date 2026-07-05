@@ -1,9 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_ID="${PROJECT_ID:-YOUR_GCP_PROJECT_ID}"
-REGION="${REGION:-us-central1}"
-SERVICE_NAME="${SERVICE_NAME:-YOUR_WORKER_SERVICE}"
+PROJECT_ID="${PROJECT_ID:-}"
+REGION="${REGION:-}"
+SERVICE_NAME="${SERVICE_NAME:-}"
+
+require_env() {
+  local name="$1"
+  local value="${!name:-}"
+  if [[ -z "${value}" || "${value}" == YOUR_* ]]; then
+    echo "Error: set ${name} explicitly before running this script." >&2
+    exit 1
+  fi
+}
+
+require_env PROJECT_ID
+require_env REGION
+require_env SERVICE_NAME
 
 if ! command -v gcloud >/dev/null 2>&1; then
   echo "Error: gcloud is required but was not found in PATH." >&2
