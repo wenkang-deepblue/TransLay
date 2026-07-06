@@ -74,7 +74,6 @@ Also confirm:
 - Logs from smoke tests do not contain slide source text, translated text, speaker notes, comments, OAuth tokens, or provider raw output.
 - The worker has no public `allUsers` or `allAuthenticatedUsers` invoker binding.
 - `ALLOW_UNSIGNED_TASKS=false` outside isolated local development.
-- `DEBUG_CAPTURE_LLM_OUTPUTS=false` outside isolated local development.
 
 ## Apps Script Notes
 

@@ -38,9 +38,7 @@ function createConfig(): WorkerConfig {
       allowUnsignedTasks: false,
     },
     debug: {
-      captureLlmOutputs: false,
       allowDevTestRawOutputPersistence: false,
-      llmOutputRetentionHours: 72,
     },
     security: {
       kmsKeyName: null,

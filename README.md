@@ -971,7 +971,6 @@ Before publishing your fork or deploying a public instance:
 - Do not commit `.env`, `.clasp.json`, `.clasprc.json`, service account keys, database dumps, or generated API payloads.
 - Do not hard-code GCP project IDs, project numbers, Cloud SQL instance names, Redis IPs, OAuth client IDs, or private domains.
 - Keep KMS enabled for production-like host OAuth token encryption.
-- Keep `DEBUG_CAPTURE_LLM_OUTPUTS=false` in production-like environments.
 - Keep `ALLOW_UNSIGNED_TASKS=false` outside local development.
 - Confirm Cloud Run worker is not publicly invokable.
 - Confirm Cloud Tasks uses an OIDC token and a dedicated invoker service account.

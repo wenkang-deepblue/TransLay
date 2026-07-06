@@ -154,18 +154,3 @@ test("loadWorkerConfig rejects unsigned task bypass outside development", () => 
     /ALLOW_UNSIGNED_TASKS is only allowed in development/
   );
 });
-
-test("loadWorkerConfig forces raw LLM output capture off in production", () => {
-  const config = withEnv(
-    {
-      NODE_ENV: "production",
-      CLOUD_TASKS_AUDIENCE: "https://worker.example.com/tasks/translate",
-      CLOUD_TASKS_INVOKER_SA: "worker-invoker@example.com",
-      WORKER_URL: "https://worker.example.com",
-      DEBUG_CAPTURE_LLM_OUTPUTS: "true",
-    },
-    () => loadWorkerConfig()
-  );
-
-  assert.equal(config.debug.captureLlmOutputs, false);
-});

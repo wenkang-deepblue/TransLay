@@ -38,10 +38,6 @@ import {
   replaceJobLayoutSemanticHintsForSlide,
 } from "../repositories/job-layout-semantic-hint-repo";
 import {
-  insertLlmDebugOutput,
-  purgeExpiredLlmDebugOutputs,
-} from "../repositories/llm-debug-output-repo";
-import {
   getActivePlanForUser,
   getUsageBeforeJob,
   insertUsageLedger,
@@ -80,10 +76,7 @@ import {
   translateDeckAuthorityWithVertexGemini,
 } from "../providers/vertex-gemini-authority";
 import { requestSlideLayoutSemanticsWithVertexGemini } from "../providers/vertex-gemini-layout";
-import {
-  sanitizeLlmDebugCaptureEvent,
-  type LlmDebugCaptureFn,
-} from "../providers/llm-debug";
+import type { LlmDebugCaptureFn } from "../providers/llm-debug";
 import {
   scanNodesForPromptInjectionRisk,
   scanSlidesForPromptInjectionRisk,
@@ -715,10 +708,9 @@ async function runAuthorityStage(
     job.target_language_input;
   const targetLanguageForModel = resolveModelTargetLanguage(job.target_language_input);
   console.log(`Job ${job_id} route selected: ${route.provider}/${route.model}`);
-  const llmDebugCapture = createLlmDebugCapture(pool, config, job_id);
-  if (config.debug.captureLlmOutputs) {
-    await purgeExpiredLlmDebugOutputs(pool, config.debug.llmOutputRetentionHours);
-  }
+  // The llm_debug_outputs table and its raw-output capture path were removed;
+  // debug capture is permanently disabled.
+  const llmDebugCapture: LlmDebugCaptureFn | undefined = undefined;
   let writeResult: WriteBackResult = {
     outputUrl: "",
     committedUnits: 0,
@@ -3272,24 +3264,6 @@ function startSpeakerNotesTranslationTasks(
   }
 
   return tasks;
-}
-
-function createLlmDebugCapture(
-  pool: Pool,
-  config: WorkerConfig,
-  jobId: string
-): LlmDebugCaptureFn | undefined {
-  if (!config.debug.captureLlmOutputs) {
-    return undefined;
-  }
-
-  return async (event) => {
-    await insertLlmDebugOutput(
-      pool,
-      jobId,
-      sanitizeLlmDebugCaptureEvent(event, config.nodeEnv)
-    );
-  };
 }
 
 function computeProvisionallyBilledUnits(

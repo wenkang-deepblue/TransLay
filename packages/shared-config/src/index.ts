@@ -349,13 +349,10 @@ export function loadWorkerConfig() {
   );
   const allowUnsignedTasks = optionalBooleanEnv("ALLOW_UNSIGNED_TASKS", false);
   const kmsKeyName = process.env.KMS_KEY_NAME ?? null;
-  const captureLlmOutputs = optionalBooleanEnv("DEBUG_CAPTURE_LLM_OUTPUTS", false);
   const allowDevTestRawOutputPersistence = optionalBooleanEnv(
     "DEBUG_ALLOW_DEV_TEST_RAW_OUTPUT_PERSISTENCE",
     false
   );
-  const productionLikeNodeEnv = nodeEnv === "production" || nodeEnv === "staging";
-
   if (nodeEnv === "production" && !cloudTasksAudience) {
     throw new Error("CLOUD_TASKS_AUDIENCE is required in production");
   }
@@ -368,17 +365,9 @@ export function loadWorkerConfig() {
     throw new Error("WORKER_URL is required in production");
   }
 
-  if (productionLikeNodeEnv && captureLlmOutputs) {
-    console.warn(
-      "DEBUG_CAPTURE_LLM_OUTPUTS is ignored in production-like environments."
-    );
-  }
-
   if (allowUnsignedTasks && nodeEnv !== "development") {
     throw new Error("ALLOW_UNSIGNED_TASKS is only allowed in development");
   }
-
-  const effectiveCaptureLlmOutputs = productionLikeNodeEnv ? false : captureLlmOutputs;
 
   return {
     port: optionalIntEnv("PORT", 8081),
@@ -419,16 +408,9 @@ export function loadWorkerConfig() {
       allowUnsignedTasks,
     },
 
-    // Development-only debugging toggle. raw model output capture is a temporary
-    // development/testing escape hatch and must be removed or disabled before
-    // production hardening is finalized.
+    // Development-only debugging toggle.
     debug: {
-      captureLlmOutputs: effectiveCaptureLlmOutputs,
       allowDevTestRawOutputPersistence,
-      llmOutputRetentionHours: requireIntEnv(
-        "DEBUG_LLM_OUTPUT_RETENTION_HOURS",
-        optionalEnv("DEBUG_LLM_OUTPUT_RETENTION_HOURS", "72")
-      ),
     },
 
     security: {

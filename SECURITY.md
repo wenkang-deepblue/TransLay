@@ -39,6 +39,5 @@ Before deploying a fork:
 - Keep real `.env`, `.firebaserc`, `.clasp.json`, `.clasprc.json`, service account keys, database dumps, and generated API payloads out of Git.
 - Keep Cloud Run worker private and invoke it only through Cloud Tasks OIDC.
 - Keep KMS enabled for production-like host OAuth token encryption.
-- Keep `DEBUG_CAPTURE_LLM_OUTPUTS=false` outside isolated local development.
 - Confirm logs do not contain source slide text, translated text, speaker notes, comments, or OAuth tokens.
 - Run `npm run security:secrets` before public pushes.
